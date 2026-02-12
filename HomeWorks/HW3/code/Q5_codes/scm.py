@@ -681,7 +681,7 @@ class Health_SCM(SCM):
         self.soft_interv = [False, False, False, False]
 
         # Derive mean/std from the raw CSV so counterfactual scaling matches preprocessing
-        df = pd.read_csv(os.path.join('data', 'health.csv'))
+        df = pd.read_csv(os.path.join('HomeWorks/HW3/code/q5_codes', 'data', 'health.csv'))
         raw = df[['age', 'insulin', 'blood_glucose', 'blood_pressure']].values.astype(float)
         self.mean = torch.Tensor(raw.mean(axis=0))
         self.std = torch.Tensor(raw.std(axis=0))

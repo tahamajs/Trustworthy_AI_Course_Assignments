@@ -69,9 +69,9 @@
 \newcommand{\course}{Trusted Artificial Intelligence}
 \newcommand{\instructor}{Dr. Mostafa Tavasolipour}
 \newcommand{\semester}{Spring 2024}
-\newcommand{\assignment}{1}
-\newcommand{\authorname}{Your Name}
-\newcommand{\studentid}{StudentID}
+\newcommand{\assignment}{4}
+\newcommand{\authorname}{taha majlesi - 810101504}
+\newcommand{\studentid}{810101504}
 \newcommand{\affiliation}{Department of Electrical and Computer Engineering, University of Tehran}
 
 % --- Helpers --------------------------------------------------------------
@@ -153,19 +153,47 @@ Quantitative tables and qualitative figures.
   \caption{Training curves (export your notebook plots to `template/figures/`).}
 \end{figure}
 
+% --- Summary results (placeholders filled from notebook demos) -----------------
+\subsection{Summary of main results (placeholders)}
 \begin{table}[H]
   \centering
-  \caption{Summary of main results}
-  \begin{tabular}{lcc}
+  \caption{Fairness: Base vs Fair model (placeholders)}
+  \begin{tabular}{lccc}
     \toprule
-    Model & Test accuracy (SVHN) & Test accuracy (MNIST) \\
+    Model & Accuracy & Disparate Impact & Zemel-proxy \\
     \midrule
-    Baseline ResNet18 & 0.00 & 0.00 \\
-    +Augmentations & 0.00 & 0.00 \\
-    Pretrained Feat. Extractor & 0.00 & 0.00 \\
+    Base classifier (Logistic) & 0.85 (placeholder) & 0.70 (placeholder) & 0.12 (placeholder) \\
+    Fair model (Promotion/Demotion) & 0.83 (placeholder) & 0.95 (placeholder) & 0.06 (placeholder) \\
     \bottomrule
   \end{tabular}
 \end{table}
+
+\subsection{Neural Cleanse (Q1) — reconstruction summary}
+\begin{figure}[H]
+  \centering
+  \IfFileExists{figures/trigger_reconstructed.png}{\includegraphics[width=0.45\textwidth]{figures/trigger_reconstructed.png}}{%
+    \fbox{\parbox[c][4.3cm][c]{0.45\textwidth}{\centering\small\itshape \texttt{trigger\_reconstructed.png} (missing)}} }
+  \caption{Reconstructed trigger for detected attacked class (placeholder image).}
+  \label{fig:trigger}
+\end{figure}
+
+\begin{table}[H]
+  \centering
+  \caption{Neural Cleanse: model metrics (placeholders)}
+  \begin{tabular}{lcc}
+    \toprule
+    Metric & Before cleansing & After unlearning \\
+    \midrule
+    Clean accuracy & 0.99 (placeholder) & 0.98 (placeholder) \\
+    Attack Success Rate (ASR) & 0.92 (placeholder) & 0.05 (placeholder) \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\subsection{Privacy (Q2) — Laplace examples}
+Example Laplace-calculation results are shown in the notebook (see `code/notebook.ipynb`). Placeholder values used in the report: average-income (noisy) = 50234.1 (placeholder).
+
+% --- end of results placeholders -------------------------------------------------
 
 \section{Discussion}
 Interpret the results and propose next steps.

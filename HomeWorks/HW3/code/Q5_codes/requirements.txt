@@ -6,5 +6,5 @@ matplotlib
 seaborn
 scipy
 cvxpy
-sklearn
+scikit-learn
 tensorboard

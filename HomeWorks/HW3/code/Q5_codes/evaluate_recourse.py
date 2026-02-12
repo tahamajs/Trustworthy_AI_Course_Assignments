@@ -100,7 +100,7 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
 
-    parser.add_argument('--dataset', type=str, choices=['compas', 'bail', 'adult', 'german', 'loan'])
+    parser.add_argument('--dataset', type=str, choices=['compas', 'bail', 'adult', 'german', 'loan', 'health'])
     parser.add_argument('--model', type=str, default='lin', choices=['lin', 'mlp'])
     parser.add_argument('--trainer', type=str, choices=['ERM', 'ALLR', 'AF', 'ROSS'])
     parser.add_argument('--lambd', type=float, default=0)

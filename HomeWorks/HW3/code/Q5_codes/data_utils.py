@@ -209,7 +209,7 @@ def process_german_data():
 
 
 def process_health_data():
-    df = pd.read_csv('data/health.csv')
+    df = pd.read_csv('HomeWorks/HW3/code/q5_codes/data/health.csv')
 
     X_health = df[['age', 'insulin', 'blood_glucose', 'blood_pressure']].values
     Y_health = df['category'].values
@@ -240,7 +240,7 @@ def process_health_data():
     raw_min = raw.min(axis=0)
     raw_max = raw.max(axis=0)
     feature_limits = np.array([raw_min, raw_max]).T
-    feature_limits = (feature_limits - scaler.mean_) / scaler.scale_
+    feature_limits = (feature_limits - scaler.mean_[:, np.newaxis]) / scaler.scale_[:, np.newaxis]
 
 
 

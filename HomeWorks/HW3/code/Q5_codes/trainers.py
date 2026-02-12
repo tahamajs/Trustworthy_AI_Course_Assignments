@@ -26,7 +26,7 @@ def mcc_scores(probs, Y_test, N=101):
     thresholds = np.linspace(0, 1, N)
     mccscores = np.zeros(N)
     for i in range(N):
-        yp = (probs >= thresholds[i]).astype(np.int)
+        yp = (probs >= thresholds[i]).astype(int)
         mccscores[i] = matthews_corrcoef(Y_test, yp)
     return thresholds, mccscores
 

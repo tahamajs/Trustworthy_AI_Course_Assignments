@@ -1,7 +1,7 @@
 """ Trains and saves the decision-making classifiers.
 
 Accepts the following parameters:
-    --dataset (str)   ['adult', 'compas', 'german', 'loan', 'bail']
+    --dataset (str)   ['adult', 'compas', 'german', 'loan', 'bail', 'health']
     --model (default='lin')  either 'lin' for Linear Regression or 'mlp' for a neural network classifier
     --trainer (default='ERM')  one of ['ERM', 'AF', 'ALLR', 'ROSS']
     --epochs (int)  number of epochs for which to train the model
@@ -20,10 +20,11 @@ import trainers
 import numpy as np
 import torch
 import utils
+import os
 
 
 def train(dataset, trainer, model, train_epochs, lambd, random_seed, learning_rate=0.01, verbose=True, tb_folder=None,
-          save_dir=None, save_freq=10000):
+          save_model=False, save_freq=10000):
     # For the TensorBoard logs
     if tb_folder is not None:
         tb_folder += utils.get_tensorboard_name(dataset, trainer, lambd, model, train_epochs, learning_rate, random_seed)
@@ -31,6 +32,11 @@ def train(dataset, trainer, model, train_epochs, lambd, random_seed, learning_ra
     # Set the relevant random seeds
     np.random.seed(random_seed)
     torch.manual_seed(random_seed)
+
+    save_dir = None
+    if save_model:
+        save_dir = f'models/{dataset}_{trainer}_{model}_s{random_seed}'
+        os.makedirs('models', exist_ok=True)
 
     # Load the relevant dataset
     X, Y, constraints = data_utils.process_data(dataset)
@@ -75,7 +81,7 @@ if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--dataset', type=str, choices=['compas', 'bail', 'adult', 'german', 'loan'])
+    parser.add_argument('--dataset', type=str, choices=['compas', 'bail', 'adult', 'german', 'loan', 'health'])
     parser.add_argument('--model', type=str, default='lin', choices=['lin', 'mlp'])
     parser.add_argument('--trainer', type=str, default='ERM', choices=['ERM', 'ALLR', 'AF', 'ROSS'])
     parser.add_argument('--epochs', type=int)
