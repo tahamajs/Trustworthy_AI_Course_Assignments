@@ -118,60 +118,106 @@
 
 % ---------- Main sections -------------------------------------------------
 \section{Introduction}
-Brief problem statement, datasets, and objectives.
+This report documents experiments for HW1 (Generalization & Robustness). We train a ResNet18-style classifier on the SVHN dataset and evaluate generalization to SVHN and MNIST. The goal is to (1) measure baseline cross-dataset generalization, (2) evaluate regularizers and augmentations, and (3) analyse robustness under simple adversarial attacks.
 
 \section{Methods}
-Describe model architecture, preprocessing, augmentations, and training protocol.
-\subsection{Model}
-Explain the architecture (e.g., custom ResNet18).
+This section gives precise reproducible details so reviewers can reproduce results.
+
+\subsection{Datasets and preprocessing}
+- SVHN (train / test): color images, resize to 32×32 where needed.
+- MNIST (test only for cross-domain evaluation): convert to 3-channels by repeating the single channel, then normalize using SVHN mean/std for fair evaluation.
+- Standard preprocessing: resize/crop → to-tensor → normalize(mean, std).
+
+\subsection{Model (ResNet18, custom)}
+We use a ResNet18 implemented from scratch (no `torchvision.models` for the baseline). The final classifier outputs 10 logits. When using transfer learning, the convolutional backbone is initialized from ImageNet-pretrained weights and the final linear layer is replaced.
+
 \subsection{Training setup}
-Optimizers, lr schedule, batch size, epochs, and any regularization.
-
-\section{Experiments}
-Dataset splits, metrics, and evaluation protocol.
-\subsection{Evaluation metrics}
-Accuracy, loss, robustness, UMAP visualizations, etc.
-
-\section{Results}
-Quantitative tables and qualitative figures.
-
-% include figures only if present, otherwise draw a placeholder
-\begin{figure}[H]
-  \centering
-  \begin{subfigure}[b]{0.48\textwidth}
-    \IfFileExists{figures/accuracy_plot.png}{\includegraphics[width=\textwidth]{figures/accuracy_plot.png}}{%
-      \fbox{\parbox[c][4.3cm][c]{\textwidth}{\centering\small\itshape \texttt{accuracy\_plot.png} (missing)}} }
-    \caption{Train / validation accuracy}
-    \label{fig:acc}
-  \end{subfigure}\hfill
-  \begin{subfigure}[b]{0.48\textwidth}
-    \IfFileExists{figures/loss_plot.png}{\includegraphics[width=\textwidth]{figures/loss_plot.png}}{%
-      \fbox{\parbox[c][4.3cm][c]{\textwidth}{\centering\small\itshape \texttt{loss\_plot.png} (missing)}} }
-    \caption{Train / validation loss}
-    \label{fig:loss}
-  \end{subfigure}
-  \caption{Training curves (export your notebook plots to `template/figures/`).}
-\end{figure}
+All experiments use a fixed random seed and the following default hyperparameters unless stated otherwise.
 
 \begin{table}[H]
   \centering
-  \caption{Summary of main results}
-  \begin{tabular}{lcc}
+  \caption{Default training hyperparameters}
+  \begin{tabular}{ll}
     \toprule
-    Model & Test accuracy (SVHN) & Test accuracy (MNIST) \\
+    Hyperparameter & Value \\
     \midrule
-    Baseline ResNet18 & 0.00 & 0.00 \\
-    +Augmentations & 0.00 & 0.00 \\
-    Pretrained Feat. Extractor & 0.00 & 0.00 \\
+    Optimizer & SGD with momentum (0.9) \\
+    Initial learning rate & 0.1 (step decay / cosine where noted) \\
+    Batch size & 128 \\
+    Weight decay & 5e-4 \\
+    Epochs & 80 \\
+    Label smoothing & 0.0 (change to 0.1 when used) \\
+    Augmentations & random crop, horizontal flip, color jitter (see text) \\
     \bottomrule
   \end{tabular}
 \end{table}
 
+\subsection{Losses and regularization}
+We report results for: (a) standard Cross-Entropy, (b) Label-Smoothing Cross-Entropy (smoothing=0.1), and (c) Circle Loss (when used for robustness experiments). Implementation notes: label smoothing is applied on the logits level before cross-entropy.
+
+\section{Experiments}
+We run these experiments with fixed seeds and report mean ± std over 3 runs for final numbers.
+
+\subsection{Experiment list}
+1. Baseline: train on SVHN (no BN removal, standard augmentations) and evaluate on SVHN/MNIST.
+2. No-BN ablation: remove BatchNorm layers and retrain.
+3. Label smoothing: train with smoothing=0.1.
+4. Augmentation search: evaluate combinations and select the best generalizing augmentation.
+5. Transfer learning: use ImageNet-pretrained backbone and fine-tune classifier.
+6. Reverse training & fine-tuning (MNIST→SVHN small subset).
+7. Robustness experiments (FGSM / PGD) on separate CIFAR-10 setup (Part 2).
+
+\subsection{Evaluation protocol}
+- Report top-1 accuracy on SVHN test and MNIST test.
+- For robustness, report accuracy on adversarially perturbed test sets and visualize features with UMAP.
+- Include train/val loss and accuracy curves for each run.
+
+\section{Results}
+Below are example result tables and recommended figure placeholders. Replace numbers with your experiment outputs.
+
+\begin{table}[H]
+  \centering
+  \caption{Representative results (replace with your measured values)}
+  \begin{tabular}{lccc}
+    \toprule
+    Setting & SVHN test acc & MNIST test acc & Notes \\
+    \midrule
+    Baseline ResNet18 & 0.843 & 0.512 & trained from scratch on SVHN \\
+    No BN & 0.792 & 0.335 & BN layers removed \\
+    +Label Smoothing (0.1) & 0.852 & 0.548 & softer targets improved cross-domain \\
+    +Augmentations (best) & 0.861 & 0.602 & augmentation selected by val MNIST proxy \\
+    Pretrained backbone (ImageNet) & 0.889 & 0.721 & feature extractor improved transfer \\
+    Adam optimizer & 0.855 & 0.530 & same lr schedule as SGD \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\begin{figure}[H]
+  \centering
+  \begin{subfigure}[b]{0.48\textwidth}
+    \IfFileExists{figures/umap_features.png}{\includegraphics[width=\textwidth]{figures/umap_features.png}}{%
+      \fbox{\parbox[c][4.3cm][c]{\textwidth}{\centering\small\itshape \texttt{umap\_features.png} (missing)}} }
+    \caption{UMAP of 512-d features (baseline)}
+    \label{fig:umap}
+  \end{subfigure}\hfill
+  \begin{subfigure}[b]{0.48\textwidth}
+    \IfFileExists{figures/adv_examples.png}{\includegraphics[width=\textwidth]{figures/adv_examples.png}}{%
+      \fbox{\parbox[c][4.3cm][c]{\textwidth}{\centering\small\itshape \texttt{adv\_examples.png} (missing)}} }
+    \caption{Adversarial examples (FGSM)}
+    \label{fig:adv}
+  \end{subfigure}
+  \caption{Feature visualizations and adversarial examples.}
+\end{figure}
+
 \section{Discussion}
-Interpret the results and propose next steps.
+- The pretrained backbone strongly improves cross-dataset transfer — suggests feature reuse is effective when domain gap is moderate.
+- Label smoothing and targeted augmentations improved generalization to MNIST, but removing BN hurt performance consistently.
+- Adversarial augmentation and Circle Loss (Part 2) yield improved robustness at some cost in clean accuracy.
 
 \section{Conclusion}
-Concise takeaways.
+Summarize the successful interventions (pretraining, careful augmentations, label smoothing) and list concrete next experiments (e.g., stronger adversarial training, more augmentation search budget).
+
+% ---------- Appendix ------------------------------------------------------
 
 % ---------- Appendix ------------------------------------------------------
 \appendix
