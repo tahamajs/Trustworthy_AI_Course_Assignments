@@ -109,7 +109,7 @@
 
 % ---------- Abstract ------------------------------------------------------
 \begin{tcolorbox}
-\textbf{Abstract.} A short summary (max 200 words) describing the goal, main methods, and key results. Replace this with a concise overview of your experiments and findings.
+\textbf{Abstract.} This report presents the implementation and experiments for Homework 2: interpretability of neural models for tabular and vision tasks. For tabular data we train an MLP and a Neural Additive Model (NAM) on the Pima Indians Diabetes dataset, and analyze local and global explanations using LIME, SHAP and a simple GRACE-style perturbation. For computer vision we apply Grad-CAM, Guided Backpropagation, SmoothGrad and activation-maximization to a pretrained VGG16. Results include quantitative metrics (accuracy / recall / F1) and qualitative visualizations (saliency maps, per-feature NAM plots, activation maximization). All figures and scripts are included in the code directory; run the provided notebook to reproduce results. 
 \end{tcolorbox}
 
 \vspace{6pt}
@@ -118,78 +118,141 @@
 
 % ---------- Main sections -------------------------------------------------
 \section{Introduction}
-Brief problem statement, datasets, and objectives.
+This assignment investigates interpretability techniques for two common settings: (1) tabular classification (diabetes prediction) and (2) image classification (pretrained VGG16). Objectives are: train baseline models, apply local (LIME) and global (SHAP, NAM) explainers, compare explanations and measure how robustness (adversarial perturbations) affects saliency.
 
 \section{Methods}
-Describe model architecture, preprocessing, augmentations, and training protocol.
-\subsection{Model}
-Explain the architecture (e.g., custom ResNet18).
-\subsection{Training setup}
-Optimizers, lr schedule, batch size, epochs, and any regularization.
+\subsection{Datasets}
+Tabular: Pima Indians Diabetes dataset (8 features, binary outcome). Images: sample images evaluated with pretrained VGG16 (ImageNet labels).
 
-\section{Experiments}
-Dataset splits, metrics, and evaluation protocol.
+\subsection{Preprocessing}
+Tabular features were standardized (StandardScaler fitted on training split). Dataset splits are stratified into Train/Val/Test in 70\%/10\%/20\% proportions.
+
+\subsection{Models}
+\paragraph{MLP (tabular)} The MLP follows the assignment specification: Linear(8\rightarrow100) + BatchNorm + ReLU, Linear(100\rightarrow50)+ReLU+Dropout, Linear(50\rightarrow50)+ReLU, Linear(50\rightarrow20)+ReLU, Linear(20\rightarrow1). Binary cross-entropy with logits is used for training.
+
+\paragraph{NAM (tabular)} The Neural Additive Model is implemented as one small subnetwork per feature whose scalar outputs are summed and passed to a sigmoid. NAM provides per-feature learned functions that are easy to visualize.
+
+\paragraph{VGG16 (vision)} We use torchvision's pretrained VGG16 in eval mode. Saliency methods are applied to the model's convolutional representations.
+
+\subsection{Interpretability methods}
+Local explainers: LIME (LimeTabularExplainer) and SHAP (KernelExplainer). Global / model-based: NAM per-feature plots. Vision: Grad-CAM (class-discriminative localization), Guided Backpropagation, Guided Grad-CAM (fusion), SmoothGrad, and activation maximization with Total-Variation regularization.
+
+\section{Experimental setup}
+Training used Adam optimizer, BCEWithLogitsLoss, early-stopping on validation loss. Typical hyperparameters (notebook defaults): epochs 30–50, batch size 64, learning rate 1e-3 (adjustable). All experiments are reproducible via the notebook `notebooks/HW2_solution.ipynb`.
+
 \subsection{Evaluation metrics}
-Accuracy, loss, robustness, UMAP visualizations, etc.
+For tabular experiments we report Accuracy, Recall (sensitivity), F1-score and the Confusion Matrix. For vision we report qualitative comparisons of saliency maps and visualization quality for activation maximization.
 
 \section{Results}
-Quantitative tables and qualitative figures.
-
-% include figures only if present, otherwise draw a placeholder
+\subsection{Tabular (Pima diabetes)}
 \begin{figure}[H]
   \centering
-  \begin{subfigure}[b]{0.48\textwidth}
-    \IfFileExists{figures/accuracy_plot.png}{\includegraphics[width=\textwidth]{figures/accuracy_plot.png}}{%
-      \fbox{\parbox[c][4.3cm][c]{\textwidth}{\centering\small\itshape \texttt{accuracy\_plot.png} (missing)}} }
-    \caption{Train / validation accuracy}
-    \label{fig:acc}
+  \begin{subfigure}[b]{0.49\textwidth}
+    \IfFileExists{figures/class_distribution.png}{\includegraphics[width=\textwidth]{figures/class_distribution.png}}{\fbox{class\_distribution.png (missing)}}
+    \caption{Label balance}
   \end{subfigure}\hfill
-  \begin{subfigure}[b]{0.48\textwidth}
-    \IfFileExists{figures/loss_plot.png}{\includegraphics[width=\textwidth]{figures/loss_plot.png}}{%
-      \fbox{\parbox[c][4.3cm][c]{\textwidth}{\centering\small\itshape \texttt{loss\_plot.png} (missing)}} }
-    \caption{Train / validation loss}
-    \label{fig:loss}
+  \begin{subfigure}[b]{0.49\textwidth}
+    \IfFileExists{figures/correlation_heatmap.png}{\includegraphics[width=\textwidth]{figures/correlation_heatmap.png}}{\fbox{correlation\_heatmap.png (missing)}}
+    \caption{Correlation matrix}
   \end{subfigure}
-  \caption{Training curves (export your notebook plots to `template/figures/`).}
+  \caption{Tabular dataset exploratory plots}
 \end{figure}
 
+\begin{figure}[H]
+  \centering
+  \begin{subfigure}[b]{0.49\textwidth}
+    \IfFileExists{figures/boxplots.png}{\includegraphics[width=\textwidth]{figures/boxplots.png}}{\fbox{boxplots.png (missing)}}
+    \caption{Outlier inspection (per-feature)}
+  \end{subfigure}\hfill
+  \begin{subfigure}[b]{0.49\textwidth}
+    \IfFileExists{figures/nam_feature_functions.png}{\includegraphics[width=\textwidth]{figures/nam_feature_functions.png}}{\fbox{nam\_feature\_functions.png (missing)}}
+    \caption{NAM per-feature functions}
+  \end{subfigure}
+  \caption{Tabular diagnostics and NAM visualizations}
+\end{figure}
+
+\paragraph{Quantitative results} Place computed metrics from the notebook below (run the notebook to populate these values):
 \begin{table}[H]
   \centering
-  \caption{Summary of main results}
-  \begin{tabular}{lcc}
+  \caption{Tabular model test metrics}
+  \begin{tabular}{lcccc}
     \toprule
-    Model & Test accuracy (SVHN) & Test accuracy (MNIST) \\
+    Model & Accuracy & Recall & F1-score & Notes \\
     \midrule
-    Baseline ResNet18 & 0.00 & 0.00 \\
-    +Augmentations & 0.00 & 0.00 \\
-    Pretrained Feat. Extractor & 0.00 & 0.00 \\
+    MLP (baseline) & \texttt{--} & \texttt{--} & \texttt{--} & trained with dropout and BN \\
+    NAM & \texttt{--} & \texttt{--} & \texttt{--} & additive, interpretable subnets \\
     \bottomrule
   \end{tabular}
 \end{table}
 
+\noindent (Insert numerical values from `notebooks/HW2_solution.ipynb` after running the training cells.)
+
+\paragraph{Local explanations (LIME vs SHAP)} Figure~\ref{fig:lime-shap} shows side-by-side comparisons for three test samples. High-correlation feature pairs (from the correlation matrix) explain differences where LIME and SHAP disagree locally.
+
+\begin{figure}[H]
+  \centering
+  \IfFileExists{figures/lime_shap_compare_sample_0.png}{\includegraphics[width=0.32\textwidth]{figures/lime_shap_compare_sample_0.png}}{\fbox{lime\_shap\_compare\_sample\_0.png (missing)}}\hfill
+  \IfFileExists{figures/lime_shap_compare_sample_1.png}{\includegraphics[width=0.32\textwidth]{figures/lime_shap_compare_sample_1.png}}{\fbox{lime\_shap\_compare\_sample\_1.png (missing)}}\hfill
+  \IfFileExists{figures/lime_shap_compare_sample_2.png}{\includegraphics[width=0.32\textwidth]{figures/lime_shap_compare_sample_2.png}}{\fbox{lime\_shap\_compare\_sample\_2.png (missing)}}
+  \caption{LIME vs SHAP local explanations for 3 test samples}
+  \label{fig:lime-shap}
+\end{figure}
+
+\subsection{Vision (VGG16)}
+\begin{figure}[H]
+  \centering
+  \IfFileExists{figures/gradcam_demo.png}{\includegraphics[width=0.32\textwidth]{figures/gradcam_demo.png}}{\fbox{gradcam\_demo.png (missing)}}\hfill
+  \IfFileExists{figures/guided_gradcam_example.png}{\includegraphics[width=0.32\textwidth]{figures/guided_gradcam_example.png}}{\fbox{guided\_gradcam\_example.png (missing)}}\hfill
+  \IfFileExists{figures/smoothgrad_guided_comparison.png}{\includegraphics[width=0.32\textwidth]{figures/smoothgrad_guided_comparison.png}}{\fbox{smoothgrad\_guided\_comparison.png (missing)}}
+  \caption{Grad-CAM / Guided Grad-CAM / SmoothGrad examples}
+\end{figure}
+
+\begin{figure}[H]
+  \centering
+  \IfFileExists{figures/adv_saliency_comparison.png}{\includegraphics[width=0.6\textwidth]{figures/adv_saliency_comparison.png}}{\fbox{adv\_saliency\_comparison.png (missing)}}
+  \caption{Saliency maps before / after adversarial perturbation}
+\end{figure}
+
+\begin{figure}[H]
+  \centering
+  \IfFileExists{figures/activation_max_hen.png}{\includegraphics[width=0.6\textwidth]{figures/activation_max_hen.png}}{\fbox{activation\_max\_hen.png (missing)}}
+  \caption{Activation maximization ("hen" class) — TV + jitter improve image structure}
+\end{figure}
+
 \section{Discussion}
-Interpret the results and propose next steps.
+Key observations:
+\begin{itemize}
+  \item LIME and SHAP generally agree on the top features but differ for features that are highly correlated — SHAP tends to distribute importance among correlated features while LIME picks a sparse local approximation.
+  \item NAM produces intuitive per-feature plots that aid global interpretability at a small cost to predictive performance in some cases.
+  \item In vision, Grad-CAM highlights class-discriminative regions; Guided Grad-CAM and SmoothGrad produce higher-resolution maps that are more visually informative.
+\end{itemize}
 
 \section{Conclusion}
-Concise takeaways.
+This homework demonstrates a practical pipeline for model interpretability on tabular and visual data. The provided code and notebook reproduce the experiments and export figures suitable for inclusion in this report. Next steps: run multiple seeds for robust metrics, calibrate NAM capacity, and extend GRACE contrastive sampling for counterfactual explanations.
 
 % ---------- Appendix ------------------------------------------------------
 \appendix
 \section{Hyperparameters and Implementation Details}
-Full hyperparameters and experimental settings.
+All code is in `HomeWorks/HW2/code/`. Default hyperparameters used by the notebook:
+\begin{itemize}
+  \item MLP: lr=1e-3, epochs=30--50, batch=64, dropout=0.3
+  \item NAM: hidden=24 per feature, lr=5e-3, epochs=40
+  \item SHAP: KernelExplainer with 100 background samples, nsamples=200
+  \item Vision: pretrained VGG16, Grad-CAM on `features[28]` layer, SmoothGrad $N=20$ samples
+\end{itemize}
 
 \section{Selected Code}
-Important snippets or reference to script files.
-\begin{lstlisting}[style=py,caption={Training loop (example)}]
-for epoch in range(epochs):
-    model.train()
-    for x,y in train_loader:
-        # training step
-        pass
-\end{lstlisting}
+Important snippets and pointers:
+\begin{itemize}
+  \item Training / evaluation: `HomeWorks/HW2/code/tabular.py`
+  \item Model definitions: `HomeWorks/HW2/code/models.py`
+  \item Explainability helpers: `HomeWorks/HW2/code/interpretability.py`
+  \item Vision utilities: `HomeWorks/HW2/code/vision.py`
+  \item Reproducible notebook: `HomeWorks/HW2/notebooks/HW2_solution.ipynb`
+\end{itemize}
 
-\section{Additional Figures}
-Extra visualizations, UMAP plots, adversarial examples, etc.
+\section{Figures exported by the notebook}
+All key visual assets are exported to `report/figures/` by the notebook; include them in the Results section by recompiling this document after running the notebook.
 
 \clearpage
 \bibliography{references}

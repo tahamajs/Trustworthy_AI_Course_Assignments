@@ -109,7 +109,7 @@
 
 % ---------- Abstract ------------------------------------------------------
 \begin{tcolorbox}
-\textbf{Abstract.} A short summary (max 200 words) describing the goal, main methods, and key results. Replace this with a concise overview of your experiments and findings.
+\textbf{Abstract.} This report documents Homework 3: causal analysis and algorithmic recourse on small tabular datasets. We (1) estimate an SCM for health features, (2) train classifiers to predict health status, and (3) compare nearest-counterfactual explanations with causal algorithmic recourse (CAR) in terms of validity, cost and robustness. The repository contains reproducible code to preprocess data, fit models, learn/define SCMs, and compute recourse for selected individuals. (Replace placeholder tables/figures below with outputs from the `q5_codes/` scripts.)
 \end{tcolorbox}
 
 \vspace{6pt}
@@ -118,78 +118,136 @@
 
 % ---------- Main sections -------------------------------------------------
 \section{Introduction}
-Brief problem statement, datasets, and objectives.
+This homework studies causal interpretability and algorithmic recourse. The main dataset is \texttt{health.csv} (features: \textit{age}, \textit{insulin}, \textit{blood\_glucose}, \textit{blood\_pressure}; label: healthy=1 / unhealthy=0). Our goals:
+
+- Build a classifier that separates Healthy vs Unhealthy individuals.
+- Specify and fit a Structural Causal Model (SCM) for the health features.
+- Compare Nearest Counterfactual Explanations (distance-based) with Causal Algorithmic Recourse (SCM-aware) in terms of cost and robustness.
+
+This document describes methods, experiments (Q4–Q5), results (placeholders), and how to reproduce everything programmatically.
 
 \section{Methods}
-Describe model architecture, preprocessing, augmentations, and training protocol.
-\subsection{Model}
-Explain the architecture (e.g., custom ResNet18).
-\subsection{Training setup}
-Optimizers, lr schedule, batch size, epochs, and any regularization.
+\subsection{Data preprocessing}
+- Source: \texttt{HomeWorks/HW3/code/health.csv}.  
+- Features standardized (z-score).  
+- Only \textit{insulin} and \textit{blood\_glucose} treated as \textbf{actionable} for recourse (assignment requirement).
+- Train/test split used for classifier experiments: 80\% train / 20\% test (random seed documented in scripts).
 
-\section{Experiments}
-Dataset splits, metrics, and evaluation protocol.
+\subsection{Classifier models}
+We evaluate two classifier families (both implemented in `q5_codes/train_classifiers.py`):
+
+- Logistic Regression (linear baseline).  
+- Small MLP (one hidden layer, tanh activations) as a non-linear baseline.
+
+Default training hyperparameters (see Appendix for exact values): SGD/Adam, learning rate 0.01--0.1, 50--150 epochs depending on model type.
+
+\subsection{Structural Causal Model (Health\_SCM)}
+We assume a simple linear Additive Noise Model (ANM) over features ordered as: [age, insulin, blood\_glucose, blood\_pressure]. The forward equations used in the experiments (linearised for Jacobian calculations) are:
+
+- X2 (insulin) = w_{21} * age + U_2
+- X3 (blood\_glucose) = w_{31} * age + w_{32} * insulin + U_3
+- X4 (blood\_pressure) = w_{42} * insulin + w_{43} * blood\_glucose + U_4
+
+The SCM is implemented in `q5_codes/scm.py` as \texttt{Health\_SCM}; means and standard deviations are read from the raw CSV so counterfactual scaling matches preprocessing. The Jacobian used by causal recourse algorithms is computed analytically from the linear equations (see code comments).
+
+\subsection{Recourse methods}
+We compare:
+
+- Nearest Counterfactual (N-CF): find the minimal L1 change to the actionable features required to flip the classifier decision (ignoring causal links). Implemented in `recourse.py` (linear solver fallback).
+- Causal Algorithmic Recourse (CAR): searches for interventions on actionable features and propagates effects through the SCM; costs measured on actionable features in standardized space. Robust CAR (guards against small perturbations) is available and used for robustness checks.
+
+\section{Experimental setup}
 \subsection{Evaluation metrics}
-Accuracy, loss, robustness, UMAP visualizations, etc.
+- Classifier performance: accuracy, precision, recall on test set.
+- Recourse metrics (for each candidate):  
+  - Validity: whether counterfactual yields positive classification.  
+  - Cost: L1 norm of intervention (standardized space).  
+  - Robustness: whether recourse remains valid under small perturbations (epsilon-ball).
+
+\subsection{Q5 protocol (Health dataset)}
+1. Prepare data set with `process_health_data()` (only insulin & blood\_glucose actionable).  
+2. Train classifier(s) on the train split.  
+3. Select 10 ``unhealthy'' individuals from the test set and compute:  
+   - Nearest counterfactual explanations and their costs.  
+   - Causal recourse solutions using the SCM and report costs + validity.  
+4. Compare mean cost, fraction valid, and robust validity.
 
 \section{Results}
-Quantitative tables and qualitative figures.
+The repository includes utilities to export plots and CSVs — replace the placeholders in the figures and tables below with the outputs generated by `q5_codes/main.py`.
 
-% include figures only if present, otherwise draw a placeholder
-\begin{figure}[H]
-  \centering
-  \begin{subfigure}[b]{0.48\textwidth}
-    \IfFileExists{figures/accuracy_plot.png}{\includegraphics[width=\textwidth]{figures/accuracy_plot.png}}{%
-      \fbox{\parbox[c][4.3cm][c]{\textwidth}{\centering\small\itshape \texttt{accuracy\_plot.png} (missing)}} }
-    \caption{Train / validation accuracy}
-    \label{fig:acc}
-  \end{subfigure}\hfill
-  \begin{subfigure}[b]{0.48\textwidth}
-    \IfFileExists{figures/loss_plot.png}{\includegraphics[width=\textwidth]{figures/loss_plot.png}}{%
-      \fbox{\parbox[c][4.3cm][c]{\textwidth}{\centering\small\itshape \texttt{loss\_plot.png} (missing)}} }
-    \caption{Train / validation loss}
-    \label{fig:loss}
-  \end{subfigure}
-  \caption{Training curves (export your notebook plots to `template/figures/`).}
-\end{figure}
-
+\subsection{Classifier performance (health.csv)}
 \begin{table}[H]
   \centering
-  \caption{Summary of main results}
-  \begin{tabular}{lcc}
+  \caption{Classifier test metrics (replace with numbers from experiments)}
+  \begin{tabular}{lccc}
     \toprule
-    Model & Test accuracy (SVHN) & Test accuracy (MNIST) \\
+    Model & Accuracy & Precision & Recall \\
     \midrule
-    Baseline ResNet18 & 0.00 & 0.00 \\
-    +Augmentations & 0.00 & 0.00 \\
-    Pretrained Feat. Extractor & 0.00 & 0.00 \\
+    LogisticRegression & \texttt{TBD} & \texttt{TBD} & \texttt{TBD} \\
+    SmallMLP & \texttt{TBD} & \texttt{TBD} & \texttt{TBD} \\
     \bottomrule
   \end{tabular}
 \end{table}
 
+\subsection{Recourse comparison (10 individuals)}
+\begin{table}[H]
+  \centering
+  \caption{Nearest-CF vs Causal Recourse — mean cost and validity (10 samples)}
+  \begin{tabular}{lccc}
+    \toprule
+    Method & Mean cost (L1) & Validity (\%) & Robust validity (\%) \\
+    \midrule
+    Nearest CF & \texttt{TBD} & \texttt{TBD} & \texttt{TBD} \\
+    Causal Recourse (SCM) & \texttt{TBD} & \texttt{TBD} & \texttt{TBD} \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+% Placeholder figure: per-sample cost comparison
+\begin{figure}[H]
+  \centering
+  \IfFileExists{figures/recourse_costs.png}{\includegraphics[width=0.7\textwidth]{figures/recourse_costs.png}}{%
+    \fbox{\parbox[c][5cm][c]{0.7\textwidth}{\centering\small\itshape Place `recourse_costs.png` here (bar chart of costs per sample)}} }
+  \caption{Per-sample recourse cost: Nearest CF vs CAR.}
+\end{figure}
+
 \section{Discussion}
-Interpret the results and propose next steps.
+- Expected patterns: CAR should produce actions that respect causal constraints and often produce lower downstream cost when non-actionable features would otherwise need to change. Nearest-CF can be cheaper in raw L1 distance but may suggest infeasible or unrealistic changes once causal effects are considered.  
+- Robustness: SCM-aware recourse tends to be more robust if the SCM accurately captures causal propagation; however, misspecified SCMs can harm robustness.
 
 \section{Conclusion}
-Concise takeaways.
+We implemented and evaluated algorithmic recourse on the \texttt{health} dataset: preprocessing, classifier training, SCM specification (Health\_SCM), and recourse methods. Replace the placeholders in this report with concrete outputs produced by the included scripts; the Appendix gives exact commands to reproduce all results.
 
 % ---------- Appendix ------------------------------------------------------
 \appendix
-\section{Hyperparameters and Implementation Details}
-Full hyperparameters and experimental settings.
+\section{Hyperparameters and implementation details}
+Key defaults (edit in the scripts where needed):
+\begin{itemize}
+  \item Classifier: LogisticRegression / MLP (hidden=64, tanh)
+  \item Optimizer: Adam, lr=1e-2, batch size = 64, epochs = 50 (lin) / 150 (mlp)
+  \item Recourse (Differentiable): lr=0.1, lambd_init=1.0, outer_iters=100, inner_iters=50
+  \item Actionable features: insulin, blood\_glucose (indices 1,2)
+\end{itemize}
 
-\section{Selected Code}
-Important snippets or reference to script files.
-\begin{lstlisting}[style=py,caption={Training loop (example)}]
-for epoch in range(epochs):
-    model.train()
-    for x,y in train_loader:
-        # training step
-        pass
-\end{lstlisting}
+\section{Reproduce / run (commands)}
+Commands to reproduce the main experiments (run from repository root):
+\begin{verbatim}
+# Train classifiers (health)
+python HomeWorks/HW3/code/q5_codes/train_classifiers.py --dataset health --model lin
+python HomeWorks/HW3/code/q5_codes/train_classifiers.py --dataset health --model mlp
 
-\section{Additional Figures}
-Extra visualizations, UMAP plots, adversarial examples, etc.
+# Run recourse experiments for 10 unhealthy individuals (outputs to results/)
+python HomeWorks/HW3/code/q5_codes/main.py --dataset health --n 10
+
+# Rebuild the report PDF (from report/)
+cd HomeWorks/HW3/report && make pdf
+\end{verbatim}
+
+\section{Files of interest}
+- `HomeWorks/HW3/code/q5_codes/data_utils.py` — data preprocessing (see `process_health_data`).
+- `HomeWorks/HW3/code/q5_codes/scm.py` — `Health_SCM` implementation and Jacobian.
+- `HomeWorks/HW3/code/q5_codes/recourse.py` — recourse algorithms (linear + differentiable + CAR loop).
+- `HomeWorks/HW3/code/q5_codes/main.py` — driver script for Question 5 experiments.
 
 \clearpage
 \bibliography{references}

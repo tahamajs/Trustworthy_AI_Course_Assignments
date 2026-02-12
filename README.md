@@ -13,6 +13,7 @@ Top-level layout (important folders):
 - `.gitignore` — ignores virtualenvs, caches, editor files.
 
 Example — `HomeWorks/HW3/`:
+
 - `code/` — implementation and scripts (`q5_codes/` for question-specific code)
 - `dataset/` — data files used by the exercises
 - `description/README.md` — assignment text and PDFs
@@ -71,6 +72,7 @@ Example — `HomeWorks/HW3/`:
 ## 📫 Questions / Changes
 
 If you want me to:
+
 - add run scripts for a specific HW, or
 - move datasets into `dataset/`, or
 - open a PR and squash/merge the reorganization branch —
