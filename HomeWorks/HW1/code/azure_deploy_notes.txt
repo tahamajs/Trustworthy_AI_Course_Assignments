@@ -1,0 +1,14 @@
+(Optional) GPU job / SLURM example
+
+Example sbatch for full training on a GPU node:
+
+#!/bin/bash
+#SBATCH --job-name=hw1_svhn
+#SBATCH --gres=gpu:1
+#SBATCH --cpus-per-task=8
+#SBATCH --mem=32G
+#SBATCH --time=48:00:00
+
+source ~/.bashrc
+conda activate pytorch
+python train.py --dataset svhn --epochs 80 --batch-size 128 --lr 0.1 --optimizer sgd --save-dir checkpoints/svhn_baseline

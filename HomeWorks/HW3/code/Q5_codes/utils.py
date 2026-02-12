@@ -69,8 +69,8 @@ def get_tensorboard_name(dataset, trainer, lambd, model, train_epochs, learning_
 def get_scm(model_type, dataset):
     if model_type == 'mlp' and dataset == 'loan':
         return scm.SCM_Loan()
-    # if  dataset == 'health':
-    #     return scm.Health_SCM()
+    if dataset == 'health':
+        return scm.Health_SCM()
     scms = {'adult': scm.Learned_Adult_SCM, 'compas': scm.Learned_COMPAS_SCM}
     if dataset in scms.keys():
         scmm = scms[dataset](linear=model_type=='lin')

@@ -70,9 +70,9 @@
 \newcommand{\instructor}{Dr. Mostafa Tavasolipour}
 \newcommand{\semester}{Spring 2024}
 \newcommand{\assignment}{1}
-\newcommand{\authorname}{Your Name}
-\newcommand{\studentid}{StudentID}
-\newcommand{\affiliation}{Department of Electrical and Computer Engineering, University of Tehran}
+\newcommand{\authorname}{Taha Majlesi}
+\newcommand{\studentid}{810101504}
+\newcommand{\affiliation}{Department of Electrical and Computer Engineering, University of Tehran} 
 
 % --- Helpers --------------------------------------------------------------
 \newcommand{\figref}[1]{Figure~\ref{#1}}
@@ -109,8 +109,7 @@
 
 % ---------- Abstract ------------------------------------------------------
 \begin{tcolorbox}
-\textbf{Abstract.} A short summary (max 200 words) describing the goal, main methods, and key results. Replace this with a concise overview of your experiments and findings.
-\end{tcolorbox}
+\textbf{Abstract.} This report documents experiments on generalization and robustness for image classifiers. We implement a custom ResNet18 and evaluate cross-dataset generalization by training on SVHN and testing on SVHN and MNIST. We study regularizers (label smoothing, dropout/BatchNorm ablation), data augmentations, optimizer effects, and transfer learning; for robustness we evaluate FGSM/PGD attacks and explore Circle Loss and adversarial training. Results and figures in this document are structured for direct replacement with your measured outputs (tables currently contain example values to be replaced by your runs). Key methods cited include FGSM, PGD and Circle Loss.\end{tcolorbox}
 
 \vspace{6pt}
 \tableofcontents
@@ -153,7 +152,7 @@ All experiments use a fixed random seed and the following default hyperparameter
 \end{table}
 
 \subsection{Losses and regularization}
-We report results for: (a) standard Cross-Entropy, (b) Label-Smoothing Cross-Entropy (smoothing=0.1), and (c) Circle Loss (when used for robustness experiments). Implementation notes: label smoothing is applied on the logits level before cross-entropy.
+We report results for: (a) standard Cross-Entropy, (b) Label-Smoothing Cross-Entropy (smoothing=0.1), and (c) Circle Loss (when used for robustness experiments). Implementation notes: label smoothing is applied on the logits level before cross-entropy. Circle Loss and its use for metric-style supervision are implemented following Sun et al. \citep{sun2020circle}.
 
 \section{Experiments}
 We run these experiments with fixed seeds and report mean ± std over 3 runs for final numbers.
@@ -165,7 +164,7 @@ We run these experiments with fixed seeds and report mean ± std over 3 runs for
 4. Augmentation search: evaluate combinations and select the best generalizing augmentation.
 5. Transfer learning: use ImageNet-pretrained backbone and fine-tune classifier.
 6. Reverse training & fine-tuning (MNIST→SVHN small subset).
-7. Robustness experiments (FGSM / PGD) on separate CIFAR-10 setup (Part 2).
+7. Robustness experiments (FGSM / PGD) on separate CIFAR-10 setup (Part 2). Key adversarial methods used are FGSM and PGD \citep{goodfellow2015explaining, madry2018towards}.
 
 \subsection{Evaluation protocol}
 - Report top-1 accuracy on SVHN test and MNIST test.
@@ -177,7 +176,7 @@ Below are example result tables and recommended figure placeholders. Replace num
 
 \begin{table}[H]
   \centering
-  \caption{Representative results (replace with your measured values)}
+  \caption{Representative results (example values — replace with your measured outputs)}
   \begin{tabular}{lccc}
     \toprule
     Setting & SVHN test acc & MNIST test acc & Notes \\

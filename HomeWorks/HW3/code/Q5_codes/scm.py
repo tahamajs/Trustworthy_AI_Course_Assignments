@@ -7,6 +7,7 @@ import os
 import data_utils
 import numpy as np
 import torch
+import pandas as pd
 
 from itertools import chain, combinations  # for the powerset of actionable combinations of interventions
 
@@ -674,8 +675,16 @@ class Health_SCM(SCM):
 
         ##### complete the first part ######
 
-        self.actionable = []
-        self.soft_interv = []
+        # Only `insulin` and `blood_glucose` are actionable (indices 1 and 2)
+        self.actionable = [1, 2]
+        # Model interventions as hard interventions (we directly set the feature)
+        self.soft_interv = [False, False, False, False]
+
+        # Derive mean/std from the raw CSV so counterfactual scaling matches preprocessing
+        df = pd.read_csv(os.path.join('data', 'health.csv'))
+        raw = df[['age', 'insulin', 'blood_glucose', 'blood_pressure']].values.astype(float)
+        self.mean = torch.Tensor(raw.mean(axis=0))
+        self.std = torch.Tensor(raw.std(axis=0))
 
         ##### end of first part ######
 
@@ -683,12 +692,23 @@ class Health_SCM(SCM):
         assert self.linear, "Jacobian only used for linear SCM"
 
         w21 = 1/18
-        w31, w32 = 2 , 1.05
-        w42, w43 = 0.4 , 0.3
+        w31, w32 = 2.0, 1.05
+        w42, w43 = 0.4, 0.3
         
         ##### complete the second part ######
 
-        Jacobi = np.array([[]])
+        # Feature ordering: [age, insulin, blood_glucose, blood_pressure]
+        # Structural equations (linear ANM assumed):
+        #   X1 = age
+        #   X2 = w21 * X1 + U2
+        #   X3 = w31 * X1 + w32 * X2 + U3
+        #   X4 = w42 * X2 + w43 * X3 + U4
+        Jacobi = np.array([
+            [1.0,   0.0,   0.0,   0.0],
+            [w21,   1.0,   0.0,   0.0],
+            [w31,   w32,   1.0,   0.0],
+            [0.0,   w42,   w43,   1.0]
+        ])
 
         ##### end of the second part  ######
 

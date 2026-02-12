@@ -226,7 +226,8 @@ def process_health_data():
 
     ##### complete the first part ######
 
-    actionable = []
+    # Only Insulin and Blood Glucose are actionable (columns 1 and 2)
+    actionable = [1, 2]
 
     ##### end of first part ######
 
@@ -234,7 +235,12 @@ def process_health_data():
 
     ##### complete the second part ######
 
-    feature_limits = np.array([[-1, 1]]).repeat(X_health.shape[1], axis=0) * 1e10
+    # Compute raw min/max from the CSV and convert to standardized space used by the code
+    raw = df[['age', 'insulin', 'blood_glucose', 'blood_pressure']].values.astype(float)
+    raw_min = raw.min(axis=0)
+    raw_max = raw.max(axis=0)
+    feature_limits = np.array([raw_min, raw_max]).T
+    feature_limits = (feature_limits - scaler.mean_) / scaler.scale_
 
 
 
