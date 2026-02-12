@@ -1,62 +1,71 @@
-% Assignment LaTeX template — use for all homeworks
+% Beautiful assignment LaTeX template — polished layout for reports
 % Compile: make pdf  (or pdflatex + bibtex + pdflatex x2)
-\documentclass[12pt,a4paper]{article}
+\documentclass[11pt,a4paper]{article}
 
-% Page layout
+% --- Typography & layout ---------------------------------------------------
 \usepackage[utf8]{inputenc}
 \usepackage[T1]{fontenc}
-\usepackage{lmodern}
+\usepackage{mathpazo}          % nicer serif font (Palatino)
 \usepackage{microtype}
 \usepackage[a4paper,margin=1in]{geometry}
-\usepackage{setspace}
-\onehalfspacing
+\setlength{\headheight}{15pt} % avoids fancyhdr warning
 
-% Math & symbols
+% --- Useful packages -----------------------------------------------------
 \usepackage{amsmath,amssymb,mathtools}
 \usepackage{siunitx}
-
-% Figures, tables, captions
 \usepackage{graphicx}
 \usepackage{caption}
 \usepackage{subcaption}
 \usepackage{booktabs}
-\usepackage{multirow}
 \usepackage{float}
-
-% Code listings
-\usepackage{listings}
+\usepackage{tikz}              % drawing placeholders / decorations
+\usepackage{enumitem}         % compact lists
 \usepackage{xcolor}
-\lstset{
+\definecolor{accent}{HTML}{2A9D8F}
+\definecolor{heading}{HTML}{264653}
+
+% --- Section heading style ------------------------------------------------
+\usepackage{titlesec}
+\titleformat{\section}{\Large\bfseries\color{heading}}{\thesection}{1em}{}
+\titleformat{\subsection}{\bfseries\color{heading}}{\thesubsection}{0.5em}{}
+\titlespacing*{\section}{0pt}{12pt}{6pt}
+
+% --- Code listing style ---------------------------------------------------
+\usepackage{listings}
+\lstdefinestyle{py}{
+  language=Python,
   basicstyle=\ttfamily\small,
-  breaklines=true,
+  backgroundcolor=\color{gray!6},
   frame=single,
-  backgroundcolor=\color{gray!7},
-  keywordstyle=\color{blue},
-  commentstyle=\color{green!50!black},
-  stringstyle=\color{red!60!black},
+  framesep=4pt,
+  rulecolor=\color{gray!40},
+  keywordstyle=\color{blue!65!black},
+  commentstyle=\color{gray!55!black}\itshape,
+  stringstyle=\color{red!65!black},
   showstringspaces=false,
   numbers=left,
   numberstyle=\tiny\color{gray},
-  stepnumber=1,
-  numbersep=6pt,
+  breaklines=true,
+  captionpos=b,
 }
+\lstset{style=py}
 
-% Bibliography
-\usepackage{natbib}
-\bibliographystyle{plainnat}
+% --- Pretty abstract box --------------------------------------------------
+\usepackage{tcolorbox}
+\tcbset{colback=gray!7, colframe=accent, left=6pt, right=6pt, boxrule=0.8pt}
 
-% Hyperlinks
-\usepackage[hidelinks]{hyperref}
-
-% Header / footer
+% --- Header / footer -----------------------------------------------------
 \usepackage{fancyhdr}
 \pagestyle{fancy}
 \fancyhf{}
-\lhead{\course{} -- Assignment \assignment{}}
-\rhead{\authorname{}} 
-\cfoot{\thepage}
+\renewcommand{\headrulewidth}{0.6pt}
+\renewcommand{\footrulewidth}{0.0pt}
+\fancyhead[L]{\small\textbf{\course{}}}
+\fancyhead[C]{\small Assignment \assignment{}}
+\fancyhead[R]{\small \authorname{}}
+\fancyfoot[C]{\thepage}
 
-% Short metadata commands (customise in document preamble)
+% --- Metadata (edit these) ------------------------------------------------
 \newcommand{\course}{Trusted Artificial Intelligence}
 \newcommand{\instructor}{Dr. Mostafa Tavasolipour}
 \newcommand{\semester}{Spring 2024}
@@ -65,69 +74,83 @@
 \newcommand{\studentid}{StudentID}
 \newcommand{\affiliation}{Department of Electrical and Computer Engineering, University of Tehran}
 
-% Helpful macros
+% --- Helpers --------------------------------------------------------------
 \newcommand{\figref}[1]{Figure~\ref{#1}}
 \newcommand{\tabref}[1]{Table~\ref{#1}}
 \newcommand{\secref}[1]{Section~\ref{#1}}
-\newcommand{\codefile}[1]{\lstinputlisting[language=Python]{#1}}
+\newcommand{\codefile}[1]{\lstinputlisting[style=py]{#1}}
+\usepackage[hidelinks]{hyperref}
+\usepackage{natbib}
+\bibliographystyle{plainnat}
 
-% Document starts
+% --- Document -------------------------------------------------------------
 \begin{document}
 
-% Title page
+% ---------- Title page ----------------------------------------------------
 \begin{titlepage}
   \centering
-  {\scshape\LARGE University of Tehran \par}
+  {\LARGE\bfseries \course{} \par}
+  \vspace{1.2cm}
+  {\Huge\bfseries Homework \assignment{}\par}
+  \vspace{0.6cm}
+  {\large \semester{}\par}
+  \vspace{1.2cm}
+  {\Large\bfseries \authorname{}\par}
+  \vspace{0.2cm}
+  {\small ID: \studentid{} \quad | \quad \affiliation{}\par}
   \vspace{1.5cm}
-  {\huge\bfseries Homework \assignment{}: Project Report\par}
-  \vspace{1.0cm}
-  {\Large \course{}\par}
-  \vspace{1.0cm}
-  {\large Instructor: \instructor{}\par}
-  \vspace{1.0cm}
-  {\Large \authorname{} \quad | \quad ID: \studentid{}\par}
+  \begin{tikzpicture}
+    \draw[accent,line width=2pt] (0,0) -- (8,0);
+  \end{tikzpicture}
   \vfill
+  {\large Instructor: \instructor{}\par}
   {\small Submitted: \today\par}
 \end{titlepage}
 
-\begin{abstract}
-A concise abstract (max 200 words) summarising objectives, methods, and main results. Replace this with a short summary of your experiments and findings.
-\end{abstract}
+% ---------- Abstract ------------------------------------------------------
+\begin{tcolorbox}
+\textbf{Abstract.} A short summary (max 200 words) describing the goal, main methods, and key results. Replace this with a concise overview of your experiments and findings.
+\end{tcolorbox}
 
+\vspace{6pt}
 \tableofcontents
 \clearpage
 
+% ---------- Main sections -------------------------------------------------
 \section{Introduction}
-State the problem, datasets used, and the goal of the assignment. Keep this brief and focused.
+Brief problem statement, datasets, and objectives.
 
 \section{Methods}
-Describe model architectures, training procedure, hyperparameters, data preprocessing and augmentations. Use subsections for clarity.
+Describe model architecture, preprocessing, augmentations, and training protocol.
 \subsection{Model}
-Describe network architecture (e.g., ResNet18 — custom implementation).
+Explain the architecture (e.g., custom ResNet18).
 \subsection{Training setup}
-Optimizer, learning rate, batch size, number of epochs, and any regularizers.
+Optimizers, lr schedule, batch size, epochs, and any regularization.
 
 \section{Experiments}
-Explain datasets and experimental protocol (train/test splits, metrics).
+Dataset splits, metrics, and evaluation protocol.
 \subsection{Evaluation metrics}
-Accuracy, loss, robustness metrics, or others you used.
+Accuracy, loss, robustness, UMAP visualizations, etc.
 
 \section{Results}
-Present quantitative and qualitative results. Include plots exported from your notebooks.
+Quantitative tables and qualitative figures.
 
+% include figures only if present, otherwise draw a placeholder
 \begin{figure}[H]
   \centering
   \begin{subfigure}[b]{0.48\textwidth}
-    \includegraphics[width=\textwidth]{figures/accuracy_plot.png}
+    \IfFileExists{figures/accuracy_plot.png}{\includegraphics[width=\textwidth]{figures/accuracy_plot.png}}{%
+      \fbox{\parbox[c][4.3cm][c]{\textwidth}{\centering\small\itshape \texttt{accuracy\_plot.png} (missing)}} }
     \caption{Train / validation accuracy}
     \label{fig:acc}
-  \end{subfigure}
+  \end{subfigure}\hfill
   \begin{subfigure}[b]{0.48\textwidth}
-    \includegraphics[width=\textwidth]{figures/loss_plot.png}
+    \IfFileExists{figures/loss_plot.png}{\includegraphics[width=\textwidth]{figures/loss_plot.png}}{%
+      \fbox{\parbox[c][4.3cm][c]{\textwidth}{\centering\small\itshape \texttt{loss\_plot.png} (missing)}} }
     \caption{Train / validation loss}
     \label{fig:loss}
   \end{subfigure}
-  \caption{Example training curves — export plots from your notebook into the `figures/` folder.}
+  \caption{Training curves (export your notebook plots to `template/figures/`).}
 \end{figure}
 
 \begin{table}[H]
@@ -145,22 +168,19 @@ Present quantitative and qualitative results. Include plots exported from your n
 \end{table}
 
 \section{Discussion}
-Interpret the results, strengths/weaknesses, and propose next steps.
+Interpret the results and propose next steps.
 
 \section{Conclusion}
-One-paragraph takeaway summary of what you did and the main findings.
+Concise takeaways.
 
-\section*{Acknowledgements}
-(Optional) Acknowledge help, datasets or libraries used.
-
-\clearpage
+% ---------- Appendix ------------------------------------------------------
 \appendix
 \section{Hyperparameters and Implementation Details}
-Provide tables or bullet lists with full hyperparameter settings.
+Full hyperparameters and experimental settings.
 
 \section{Selected Code}
-Include important snippets or point to code files. Example: full training loop excerpt.
-\begin{lstlisting}[language=Python, caption={Training loop (example)}]
+Important snippets or reference to script files.
+\begin{lstlisting}[style=py,caption={Training loop (example)}]
 for epoch in range(epochs):
     model.train()
     for x,y in train_loader:
@@ -168,12 +188,9 @@ for epoch in range(epochs):
         pass
 \end{lstlisting}
 
-% To include a full file (e.g., train.py) use \codefile{path/to/train.py}
-
 \section{Additional Figures}
-Any extra plots, UMAP visualizations, or adversarial examples can be included here.
+Extra visualizations, UMAP plots, adversarial examples, etc.
 
 \clearpage
 \bibliography{references}
-
 \end{document}

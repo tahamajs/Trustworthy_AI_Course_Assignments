@@ -5,8 +5,8 @@
 \contentsline {section}{\numberline {3}Experiments}{2}{section.3}%
 \contentsline {subsection}{\numberline {3.1}Evaluation metrics}{2}{subsection.3.1}%
 \contentsline {section}{\numberline {4}Results}{2}{section.4}%
-\contentsline {section}{\numberline {5}Discussion}{3}{section.5}%
+\contentsline {section}{\numberline {5}Discussion}{2}{section.5}%
 \contentsline {section}{\numberline {6}Conclusion}{3}{section.6}%
-\contentsline {section}{\numberline {A}Hyperparameters and Implementation Details}{4}{appendix.A}%
-\contentsline {section}{\numberline {B}Selected Code}{4}{appendix.B}%
-\contentsline {section}{\numberline {C}Additional Figures}{4}{appendix.C}%
+\contentsline {section}{\numberline {A}Hyperparameters and Implementation Details}{3}{appendix.A}%
+\contentsline {section}{\numberline {B}Selected Code}{3}{appendix.B}%
+\contentsline {section}{\numberline {C}Additional Figures}{3}{appendix.C}%

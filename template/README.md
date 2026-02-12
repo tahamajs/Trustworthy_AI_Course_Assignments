@@ -1,24 +1,32 @@
-Assignment LaTeX template
+Beautiful assignment LaTeX template — usage notes
 
-Files created
-- `assignment_template.tex` — main template (edit metadata at top: \authorname, \studentid, \assignment, ...)
+Files included
+- `assignment_template.tex` — redesigned, modern template (edit metadata near the top)
 - `references.bib` — sample bibliography entries
-- `Makefile` — `make pdf` builds the PDF
+- `Makefile` — build with `make pdf`
 
-How to use
-1. Put figures exported from your notebooks in `template/figures/` (create the folder).
-2. Edit document metadata near the top of `assignment_template.tex`:
-   - `\authorname{}`, `\studentid{}`, `\assignment{}`
-3. Add citations to `references.bib` and cite with `\citep{key}`.
-4. Insert code snippets with `\begin{lstlisting}...\end{lstlisting}` or include a whole file with `\lstinputlisting{path/to/file.py}`.
-5. Build: `make pdf` (requires `pdflatex` + `bibtex` or `latexmk`)
+Quick start
+1. Edit metadata in `assignment_template.tex`: `\authorname{}`, `\studentid{}`, `\assignment{}`.
+2. (Optional) Place exported figures in `template/figures/` — the template will show a tasteful placeholder if an image is missing.
+3. Add citations to `references.bib` and use `\citep{key}`.
+4. Insert code via `\begin{lstlisting}...\end{lstlisting}` or `\lstinputlisting{path/to/file.py}`.
+5. Build: `make pdf` (needs `pdflatex` + `bibtex` or `latexmk`).
 
-Notes & tips
-- For syntax-highlighting using Pygments, consider replacing `listings` with `minted` (requires `-shell-escape`).
-- If you prefer XeLaTeX for special fonts: change documentclass options and compile with `xelatex`.
-- Keep images in `figures/` and refer to them in the LaTeX file (example provided).
+What changed in the visual update
+- Improved typography (Palatino), colored accents, and refined section headings.
+- Conditional figure placeholders (safe build even when example images are absent).
+- Cleaner code listings and a boxed abstract for better readability.
 
-Example workflow for notebook -> report
-- Export important plots from Jupyter (`.png`/`.pdf`) into `template/figures/`.
-- Copy key code blocks into the Appendix or `\lstinputlisting` the script files under `HW*/code/`.
-- Update `references.bib` with any papers or libraries you cite.
+Customization tips
+- Change the accent color: edit `\definecolor{accent}{HTML}{2A9D8F}` in the .tex file.
+- Swap font: change `\usepackage{mathpazo}` to another font package (e.g., `newpx` or `lmodern`).
+- Use `minted` for advanced code highlighting (requires `-shell-escape` and Python Pygments).
+
+Notes
+- Export critical plots from your notebooks into `template/figures/` to replace placeholders.
+- Keep `references.bib` updated with any papers or libraries you cite.
+
+If you want, I can:
+- switch to an IEEE / conference style, or
+- enable `minted` and add build instructions for `-shell-escape`.
+Tell me which and I’ll update the template.
