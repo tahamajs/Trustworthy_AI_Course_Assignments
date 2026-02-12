@@ -1,0 +1,25 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environment
+venv/
+.env/
+.envrc
+
+# Jupyter
+.ipynb_checkpoints
+
+# macOS
+.DS_Store
+
+# Logs
+*.log
+
+# Editor directories
+.vscode/
+.idea/
+
+# Python test cache
+.pytest_cache/
