@@ -1,0 +1,76 @@
+% Paper-format LaTeX template (IEEE-like)
+% Compile: make paper  (or pdflatex + bibtex + pdflatex x2)
+\documentclass[10pt,conference]{IEEEtran}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{microtype}
+\usepackage{graphicx}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage[hidelinks]{hyperref}
+\usepackage{siunitx}
+
+% metadata (edit below)
+\newcommand{\papertitle}{Homework \#\assignment{} — Trusted AI}
+\newcommand{\authorname}{Your Name}
+\newcommand{\studentid}{StudentID}
+\newcommand{\assignment}{1}
+\newcommand{\affiliation}{Dept. of ECE, University of Tehran}
+\newcommand{\instructor}{Dr. Mostafa Tavasolipour}
+
+% listings style
+\lstset{basicstyle=\ttfamily\footnotesize,breaklines=true,frame=single,backgroundcolor=\color{gray!6}}
+
+\title{\papertitle}
+\author{\IEEEauthorblockN{\authorname{} (ID: \studentid{})}\\
+\IEEEauthorblockA{\affiliation{} \\ Instructor: \instructor{}}}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+A short abstract (<=150 words) summarising the goals and main outcomes.
+\end{abstract}
+
+\begin{IEEEkeywords}
+Classification, Robustness, ResNet18, LaTeX template
+\end{IEEEkeywords}
+
+\section{Introduction}
+One-paragraph motivation and scope.
+
+\section{Methods}
+Describe model and training choices.
+
+\section{Experiments}
+Datasets, splits, and evaluation protocol.
+
+\section{Results}
+\subsection{Quantitative}
+Tables and numeric results.
+
+\subsection{Qualitative}
+\begin{figure}[!t]
+  \centering
+  \IfFileExists{figures/accuracy_plot.png}{\includegraphics[width=0.9\linewidth]{figures/accuracy_plot.png}}{\fbox{\parbox[c][3.0cm][c]{0.9\linewidth}{\centering\small\texttt{accuracy\_plot.png} (missing)}}}
+  \caption{Example training accuracy (replace with your plot).}
+  \label{fig:paper-acc}
+\end{figure}
+
+\section{Discussion}
+Interpretation and limitations.
+
+\section{Conclusion}
+Key takeaways and future work.
+
+\appendix
+\section{Training details}
+Hyperparameters and additional implementation notes.
+
+\bibliographystyle{IEEEtran}
+\bibliography{references}
+\end{document}
