@@ -162,6 +162,18 @@ source "$VENV/bin/activate"
 export MPLCONFIGDIR=/tmp/mplconfig
 \end{verbatim}
 
+\subsection{Datasets, Normalization, and Preprocessing}
+The experiments target SVHN, MNIST, and CIFAR10. MNIST is grayscale while SVHN/CIFAR10 are RGB, so all inputs are canonicalized to three channels in \texttt{datasets.py} using PIL conversion to avoid mismatched model expectations. Dataset-specific normalization statistics are applied in the transform pipeline to keep input scaling consistent with standard conventions and to stabilize optimization. Augmentation is intentionally conservative in the default configuration: random crop, horizontal flip (for applicable RGB datasets), and mild color jitter are enabled for training, while test transforms are deterministic. This conservative design avoids label-violating transforms (e.g., strong rotations for digits) and keeps the augmentation policy aligned with the theoretical constraints discussed later in this report.
+
+\subsection{Model and Optimization Hyperparameters}
+The custom ResNet18 follows the canonical 4-stage structure with block counts \([2,2,2,2]\), global average pooling, and a linear classifier head. BatchNorm can be toggled at the block level via \texttt{--use-bn} to enable the BN ablation experiment. Default optimization uses momentum SGD with a multi-step scheduler (decays at 50\% and 75\% of total epochs), while Adam is available as an explicit ablation. Loss options include standard cross entropy and label-smoothed cross entropy with a user-configurable smoothing strength. These hyperparameters are defined in \texttt{train.py} and are documented here so the experimental matrix is unambiguous and reproducible.
+
+\subsection{Attack and Evaluation Configuration}
+Adversarial evaluation uses FGSM and PGD with \(\ell_\infty\) constraints. The default demo configuration is \(\epsilon=8/255\), \(\alpha=2/255\), and \(7\) PGD iterations; both clean and adversarial accuracy are recorded. Robustness sweeps vary \(\epsilon\) over a configurable list to generate full perturbation-response curves rather than a single point estimate. A PGD-iteration sweep is included to test robustness sensitivity to attack optimization depth, which prevents overly optimistic conclusions under weak inner maximization. Calibration and selective prediction metrics (ECE, AURC, accuracy at 80/90\% coverage) are computed from the same prediction set used for plot generation to ensure cross-figure consistency.
+
+\subsection{Compute Budget and Run Modes}
+Two run modes are supported. The \textbf{demo} mode uses a limited number of batches and short horizons so that the entire pipeline can execute in minutes, which is essential for local verification and report generation. The \textbf{full-run} mode disables demo constraints and is intended for benchmark-quality numbers with long training horizons. This separation is deliberate: it allows the report to remain fully reproducible and evidence-backed in restricted environments while preserving a clear path to high-quality scientific results when compute is available.
+
 \subsection{Experiment Matrix}
 Table~\ref{tab:matrix} summarizes the compact run set used to generate report metrics and artifacts.
 
@@ -276,6 +288,30 @@ Macro F1 (\%) & 3.69 \\
 \end{table}
 
 Table~\ref{tab:diagmetrics} should be interpreted as a complete trust-diagnostic snapshot rather than isolated numbers. In this run, clean accuracy is \(22.66\%\), while top-5 rises to \(66.02\%\), indicating that the model captures partial ranking structure even when top-1 decisions remain weak. ECE is high (\(0.7734\)), so confidence quality is poor and should not be treated as decision-ready uncertainty without additional calibration work. AURC and the 80/90\% coverage operating points show that selective filtering does not yet produce a strong reliability lift, which is consistent with the fallback-data regime. Macro precision/recall/F1 expose class-conditional error imbalance that global accuracy alone would hide. In short, this table verifies that the report now measures and stores uncertainty quality, ranking quality, class-conditional quality, selective-prediction quality, and robustness quality in one reproducible evaluation contract.
+
+\subsection{Parameter Traceability Summary}
+To make the experimental configuration fully auditable, Table~\ref{tab:params} lists the key attack and evaluation settings used in the report pipeline. This explicit parameter summary eliminates ambiguity when reproducing robustness and calibration metrics and helps distinguish methodological differences from data-driven differences.
+
+\begin{table}[t]
+\caption{Key evaluation and attack parameters}
+\label{tab:params}
+\centering
+\footnotesize
+\begin{tabular}{lc}
+\toprule
+Parameter & Value \\
+\midrule
+FGSM/PGD \(\epsilon\) & \(8/255\) (demo default) \\
+PGD step size \(\alpha\) & \(2/255\) \\
+PGD iterations (default) & 7 \\
+Robustness sweep \(\epsilon\) list & \(0,2,4,8,12\) / 255 \\
+PGD-iteration sweep & \(\{1,2,4,7,10\}\) \\
+Calibration bins (ECE) & 10 \\
+Coverage points (selective) & 20 \\
+Top-k list & \(\{1,2,3,5\}\) \\
+\bottomrule
+\end{tabular}
+\end{table}
 
 \section{Plot-by-Plot Result Interpretation}
 \subsection{Training Curve Plot}
