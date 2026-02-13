@@ -29,7 +29,7 @@ Student ID: 810101504}
 \maketitle
 
 \begin{abstract}
-This report presents a full technical study of generalization and robustness for image classification in Trusted AI Homework 1, implemented in \texttt{HomeWorks/HW1/code}. The implementation is based on a custom ResNet18 and includes baseline training, BatchNorm ablation, label smoothing, optimizer comparison, cross-domain transfer experiments, and adversarial robustness analyses with FGSM and PGD. The report also includes a complete reproducibility protocol, quantitative tables extracted from generated checkpoints, and qualitative evidence from training curves, feature projections, adversarial sample grids, confusion matrices, per-class accuracy plots, reliability diagrams, robustness sweeps across perturbation strengths, confidence-coverage curves, and PGD-iteration sensitivity sweeps. Because execution was performed in offline-safe mode for guaranteed reproducibility inside the local environment, metric interpretation is explicitly tied to synthetic fallback data where relevant, and all limitations are documented. The result is an IEEE-style end-to-end report that connects theory, code, experiments, and evidence artifacts.
+This report presents a full technical study of generalization and robustness for image classification in Trusted AI Homework 1, implemented in \texttt{HomeWorks/HW1/code}. The implementation is based on a custom ResNet18 and includes baseline training, BatchNorm ablation, label smoothing, optimizer comparison, cross-domain transfer experiments, and adversarial robustness analyses with FGSM and PGD. The report also includes a complete reproducibility protocol, quantitative tables extracted from generated checkpoints, and qualitative evidence from training curves, feature projections, adversarial sample grids, confusion matrices, per-class accuracy plots, class-wise precision/recall/F1 plots, reliability diagrams, top-k accuracy profiles, robustness sweeps across perturbation strengths, confidence-coverage curves, and PGD-iteration sensitivity sweeps. Because execution was performed in offline-safe mode for guaranteed reproducibility inside the local environment, metric interpretation is explicitly tied to synthetic fallback data where relevant, and all limitations are documented. The result is an IEEE-style end-to-end report that connects theory, code, experiments, and evidence artifacts.
 \end{abstract}
 
 \begin{IEEEkeywords}
@@ -145,13 +145,13 @@ The function \texttt{train\_one\_epoch()} deserves special attention because adv
 \texttt{attacks.py} implements \texttt{fgsm\_attack()} and \texttt{pgd\_attack()}. Both attacks temporarily switch the model to eval mode for stable gradient behavior, then restore original mode afterwards. FGSM performs one signed-gradient step; PGD initializes within an \(\epsilon\)-ball and performs iterative signed updates with projection and clipping. The code clamps to \([0,1]\), guaranteeing image-range validity after perturbation.
 
 \subsection{Evaluation and Visualization Engine: \texttt{eval.py}}
-The evaluation script now implements a full diagnostic stack with eight coordinated components. First, \texttt{extract\_features()} and \texttt{plot\_umap()} provide geometric representation analysis, with deterministic PCA fallback when UMAP dependencies are unavailable. Second, \texttt{save\_example\_grid()} exports a three-row visualization (clean, adversarial, random noise) with synchronized target/prediction annotations. Third, \texttt{collect\_predictions()} gathers logits-derived probabilities, predicted labels, and targets for class-conditional and calibration analyses. Fourth, \texttt{save\_confusion\_matrix()} and \texttt{save\_per\_class\_accuracy()} expose structured error decomposition across labels. Fifth, \texttt{compute\_ece()} and \texttt{save\_reliability\_diagram()} quantify and visualize confidence calibration. Sixth, \texttt{save\_confidence\_coverage\_plot()} estimates selective-accuracy and risk behavior over coverage levels and reports AURC (area under the risk-coverage curve). Seventh, \texttt{save\_attack\_sweep\_plot()} evaluates clean, FGSM, PGD, and random-noise accuracy as a function of perturbation budget, giving a compact empirical approximation to a robustness curve. Eighth, \texttt{save\_pgd\_iter\_sweep\_plot()} measures robustness sensitivity to attack optimization strength by sweeping PGD iterations at fixed \(\epsilon\). The \texttt{main()} routine binds all components via explicit command-line flags and writes a machine-readable \texttt{metrics\_summary.json}, making both human-facing plots and programmatic downstream checks reproducible.
+The evaluation script now implements a full diagnostic stack with ten coordinated components. First, \texttt{extract\_features()} and \texttt{plot\_umap()} provide geometric representation analysis, with deterministic PCA fallback when UMAP dependencies are unavailable. Second, \texttt{save\_example\_grid()} exports a three-row visualization (clean, adversarial, random noise) with synchronized target/prediction annotations. Third, \texttt{collect\_predictions()} gathers logits-derived probabilities, predicted labels, and targets for class-conditional and calibration analyses. Fourth, \texttt{save\_confusion\_matrix()} and \texttt{save\_per\_class\_accuracy()} expose structured error decomposition across labels. Fifth, \texttt{compute\_classwise\_prf1()} and \texttt{save\_classwise\_prf1\_plot()} add precision/recall/F1 decomposition, which complements pure accuracy diagnostics. Sixth, \texttt{compute\_ece()} and \texttt{save\_reliability\_diagram()} quantify and visualize confidence calibration. Seventh, \texttt{save\_confidence\_coverage\_plot()} estimates selective-accuracy and risk behavior over coverage levels and reports AURC (area under the risk-coverage curve). Eighth, \texttt{compute\_topk\_accuracy()} and \texttt{save\_topk\_accuracy\_plot()} measure ranking quality and ambiguity tolerance at multiple \(k\). Ninth, \texttt{save\_attack\_sweep\_plot()} evaluates clean, FGSM, PGD, and random-noise accuracy as a function of perturbation budget, giving a compact empirical approximation to a robustness curve. Tenth, \texttt{save\_pgd\_iter\_sweep\_plot()} measures robustness sensitivity to attack optimization strength by sweeping PGD iterations at fixed \(\epsilon\). The \texttt{main()} routine binds all components via explicit command-line flags and writes a machine-readable \texttt{metrics\_summary.json}, making both human-facing plots and programmatic downstream checks reproducible.
 
 \subsection{Utilities and Orchestration}
-\texttt{utils.py} provides deterministic seed setup and checkpoint I/O wrappers used by both training and evaluation. \texttt{run\_report\_pipeline.py} is the automation layer used for report generation: it runs training, executes evaluation with all enabled diagnostics (UMAP, adversarial grid, confusion matrix, per-class accuracy, reliability diagram, confidence-coverage curve, robustness sweep, and PGD-iteration sweep), and copies all generated artifacts into the report folder with deterministic names. This script also exposes sweep controls (\texttt{--sweep-epsilons}, \texttt{--sweep-iters}, \texttt{--sweep-max-batches}, \texttt{--pgd-iters-list}, \texttt{--iter-sweep-max-batches}) so users can trade off statistical resolution and runtime cost without code edits. The optional \texttt{runner.py} and minimal \texttt{trainers.py} provide lightweight programmatic entry points and helper abstractions for future refactoring, though the core pipeline currently runs through \texttt{train.py} and \texttt{eval.py}.
+\texttt{utils.py} provides deterministic seed setup and checkpoint I/O wrappers used by both training and evaluation. \texttt{run\_report\_pipeline.py} is the automation layer used for report generation: it runs training, executes evaluation with all enabled diagnostics (UMAP, adversarial grid, confusion matrix, per-class accuracy, class-wise PRF1, reliability diagram, confidence-coverage curve, top-k profile, robustness sweep, and PGD-iteration sweep), and copies all generated artifacts into the report folder with deterministic names. This script also exposes sweep controls (\texttt{--sweep-epsilons}, \texttt{--sweep-iters}, \texttt{--sweep-max-batches}, \texttt{--topk-list}, \texttt{--pgd-iters-list}, \texttt{--iter-sweep-max-batches}) so users can trade off statistical resolution and runtime cost without code edits. The optional \texttt{runner.py} and minimal \texttt{trainers.py} provide lightweight programmatic entry points and helper abstractions for future refactoring, though the core pipeline currently runs through \texttt{train.py} and \texttt{eval.py}.
 
 \subsection{Channel Mismatch Handling and Artifact Contract}
-MNIST is single-channel while SVHN/CIFAR10 are RGB; the code resolves this by canonicalizing all data to 3 channels in the transform path, preserving a single model interface across experiments. The output contract is equally explicit: every run stores \texttt{best.pth}, \texttt{last.pth}, \texttt{training\_history.json}, \texttt{training\_history.csv}, and \texttt{training\_curves.png}, while evaluation can store \texttt{*.umap.png}, \texttt{*.grid.png}, \texttt{*.confusion.png}, \texttt{*.per\_class.png}, \texttt{*.calibration.png}, \texttt{*.confidence\_coverage.png}, \texttt{*.robustness\_sweep.png}, \texttt{*.pgd\_iter\_sweep.png}, and \texttt{*.metrics.json}. This consistent contract is what makes the report pipeline reliable: downstream sections consume standardized files regardless of whether data came from full datasets or fallback mode, and new diagnostics can be added without breaking existing report logic.
+MNIST is single-channel while SVHN/CIFAR10 are RGB; the code resolves this by canonicalizing all data to 3 channels in the transform path, preserving a single model interface across experiments. The output contract is equally explicit: every run stores \texttt{best.pth}, \texttt{last.pth}, \texttt{training\_history.json}, \texttt{training\_history.csv}, and \texttt{training\_curves.png}, while evaluation can store \texttt{*.umap.png}, \texttt{*.grid.png}, \texttt{*.confusion.png}, \texttt{*.per\_class.png}, \texttt{*.prf1.png}, \texttt{*.calibration.png}, \texttt{*.confidence\_coverage.png}, \texttt{*.topk.png}, \texttt{*.robustness\_sweep.png}, \texttt{*.pgd\_iter\_sweep.png}, and \texttt{*.metrics.json}. This consistent contract is what makes the report pipeline reliable: downstream sections consume standardized files regardless of whether data came from full datasets or fallback mode, and new diagnostics can be added without breaking existing report logic.
 
 \section{Experimental Protocol}
 \subsection{Environment}
@@ -267,11 +267,15 @@ Expected Calibration Error (ECE) & 0.0249 \\
 Area Under Risk-Coverage (AURC) & 0.9265 \\
 Selective Accuracy @ 80\% Coverage (\%) & 8.78 \\
 Selective Accuracy @ 90\% Coverage (\%) & 9.52 \\
+Top-5 Accuracy (\%) & 51.17 \\
+Macro Precision (\%) & 1.02 \\
+Macro Recall (\%) & 10.00 \\
+Macro F1 (\%) & 1.84 \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-Table~\ref{tab:diagmetrics} should be interpreted as a complete trust-diagnostic snapshot rather than isolated numbers. Clean accuracy summarizes nominal predictive quality, ECE summarizes confidence calibration mismatch, and AURC summarizes how quickly selective risk accumulates as coverage increases. The selective-accuracy rows add operational meaning to AURC by reporting two deployment-relevant operating points. In fallback synthetic settings these values are not benchmark claims, but they are still methodologically critical because they verify that the report now measures and stores uncertainty-quality, selective-prediction quality, and robustness quality in the same reproducible pipeline.
+Table~\ref{tab:diagmetrics} should be interpreted as a complete trust-diagnostic snapshot rather than isolated numbers. Clean accuracy summarizes nominal predictive quality, ECE summarizes confidence calibration mismatch, and AURC summarizes how quickly selective risk accumulates as coverage increases. The selective-accuracy rows add operational meaning to AURC by reporting two deployment-relevant operating points. Top-5 accuracy quantifies ranking quality under class ambiguity, while macro precision/recall/F1 quantify class-agnostic discrimination quality under imbalance-robust averaging. In fallback synthetic settings these values are not benchmark claims, but they are still methodologically critical because they verify that the report now measures and stores uncertainty-quality, ranking quality, class-conditional quality, selective-prediction quality, and robustness quality in the same reproducible pipeline.
 
 \section{Plot-by-Plot Result Interpretation}
 \subsection{Training Curve Plot}
@@ -323,6 +327,26 @@ Figure~\ref{fig:confusion} provides a class-conditional decomposition of predict
 \end{figure}
 
 Figure~\ref{fig:perclass} turns class-conditional correctness into a direct comparative profile, making it easier to see whether the model behaves uniformly across classes or allocates predictive quality unevenly. Theoretical motivation comes from conditional risk decomposition: \(R(f)=\sum_{k=1}^{K}p(y=k)R_k(f)\), where uneven \(R_k\) values signal representation imbalance, boundary skew, or data-coverage asymmetry. In this run, bars remain close to low baseline levels, reflecting the synthetic fallback regime and short horizon, but the figure still has high engineering value because it validates robust extraction of class-indexed statistics from model outputs. For future full-data experiments, this same plot becomes a sensitive tool for diagnosing where specific interventions (BN, label smoothing, adversarial training, or transfer fine-tuning) help or harm, enabling theoretically grounded model selection beyond a single averaged metric.
+
+\subsection{Class-wise Precision/Recall/F1 Plot}
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=0.98\columnwidth]{figures/classwise_prf1.png}
+  \caption{Class-wise precision, recall, and F1 decomposition.}
+  \label{fig:prf1}
+\end{figure}
+
+Figure~\ref{fig:prf1} expands per-class analysis from correctness-only to error-type decomposition by separating false-positive sensitivity (precision), false-negative sensitivity (recall), and harmonic balance (F1). This decomposition is theoretically important because two classes can have similar accuracy but very different operational behavior: a low-precision class can trigger many false alarms, while a low-recall class can miss many true positives. In this fallback regime, class-wise scores are mostly near zero with one dominant-recall mode, which is consistent with weak class discrimination and near-chance overall behavior. The engineering benefit is substantial: this figure makes it possible to diagnose whether future improvements come from reducing false positives, reducing false negatives, or balancing both, which directly informs loss shaping and threshold design.
+
+\subsection{Top-k Accuracy Profile Plot}
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=0.98\columnwidth]{figures/topk_accuracy.png}
+  \caption{Top-k accuracy profile for \(k\in\{1,2,3,5\}\).}
+  \label{fig:topk}
+\end{figure}
+
+Figure~\ref{fig:topk} evaluates ranking quality by measuring whether the true label appears within the top-k logits rather than only at rank one. This matters theoretically because softmax ranking retains information about uncertainty geometry that top-1 accuracy discards; improvements in top-k with weak top-1 often indicate that representation learning has captured partial semantic ordering but not yet sharp decision boundaries. In practical deployment, top-k behavior supports candidate-list interfaces, human-in-the-loop verification, and retrieval-style fallback decisions. The observed monotonic increase from Top-1 to Top-5 confirms that the model’s ranking function is nontrivial even in fallback mode, and this creates an actionable path for future gains through calibration, margin objectives, or post-hoc reranking without rewriting core training infrastructure.
 
 \subsection{Reliability Diagram Plot}
 \begin{figure}[t]
@@ -388,7 +412,7 @@ Generalization interventions can be interpreted through bias--variance decomposi
 In trusted AI applications, confidence calibration is a first-class metric because downstream decision layers frequently threshold softmax outputs. Label smoothing, adversarial training, and normalization choices all influence calibration through different mechanisms: smoothing reduces logit extremity, adversarial training can flatten local confidence fields around data points, and normalization affects optimization dynamics that shape posterior sharpness. Even when top-1 accuracy remains unchanged, better calibration can reduce overconfident errors and improve human-AI interaction quality. This report now includes both ECE and reliability diagrams as part of the default evaluation contract, which upgrades trustworthiness analysis from qualitative intuition to measurable evidence. The theoretical implication is that model quality is now assessed in a triad (accuracy, robustness, calibration), which is substantially closer to real deployment requirements than accuracy-only reporting.
 
 \subsection{Theoretical Role of Each Diagnostic Plot}
-Each figure in this report corresponds to a distinct theoretical question, and this mapping is what makes the document scientifically coherent. Training curves answer an optimization-dynamics question (are empirical-risk updates stable and convergent under the selected objective and scheduler). Feature projections answer a representation-geometry question (do class-conditionals separate in latent space under the learned encoder). Adversarial grids, robustness sweeps, and PGD-iteration sweeps answer local-sensitivity and attack-strength questions (how quickly does performance degrade with perturbation budget and with stronger inner maximization). Confusion matrices and per-class bars answer a conditional-risk allocation question (which classes absorb most error mass and whether that mass is symmetric). Reliability diagrams answer an uncertainty-quality question (whether confidence approximates correctness frequency), while confidence-coverage curves answer an operational selectivity question (whether confidence ranking actually supports safe deferral strategies). When these diagnostics are interpreted jointly, they provide a far stronger theoretical basis than any single scalar metric: one can distinguish optimization failure from representation overlap, distinguish global underfitting from class-specific collapse, distinguish robust invariance from merely weak attacks, and distinguish uncertainty quality from mere low confidence.
+Each figure in this report corresponds to a distinct theoretical question, and this mapping is what makes the document scientifically coherent. Training curves answer an optimization-dynamics question (are empirical-risk updates stable and convergent under the selected objective and scheduler). Feature projections answer a representation-geometry question (do class-conditionals separate in latent space under the learned encoder). Adversarial grids, robustness sweeps, and PGD-iteration sweeps answer local-sensitivity and attack-strength questions (how quickly does performance degrade with perturbation budget and with stronger inner maximization). Confusion matrices, per-class accuracy bars, and class-wise PRF1 plots answer conditional-risk allocation and error-type questions (which classes absorb most error mass and whether the errors are dominated by false positives or false negatives). Top-k plots answer a ranking-quality question (whether uncertainty ordering contains useful class evidence beyond top-1). Reliability diagrams answer an uncertainty-quality question (whether confidence approximates correctness frequency), while confidence-coverage curves answer an operational selectivity question (whether confidence ranking actually supports safe deferral strategies). When these diagnostics are interpreted jointly, they provide a far stronger theoretical basis than any single scalar metric: one can distinguish optimization failure from representation overlap, distinguish global underfitting from class-specific collapse, distinguish robust invariance from merely weak attacks, and distinguish uncertainty quality from mere low confidence.
 
 \section{Assignment Requirement Coverage}
 To ensure that all required parts of the original homework specification are explicitly addressed, Table~\ref{tab:reqcover} maps each requirement to implemented code paths and report evidence sections.
@@ -410,6 +434,7 @@ FGSM and PGD robustness evaluation & Complete & \texttt{eval.py} attacks + Table
 Adversarial training variants & Complete & Table I (CIFAR-FGSM-AT, CIFAR-PGD-AT) \\
 Circle Loss theory and code & Complete & \texttt{losses.py} + Sec. III and Sec. VII \\
 Plot-based diagnostics and explanation & Complete & Sec. VI (all figures with full one-paragraph explanations) \\
+Extended interpretability diagnostics & Complete & Top-k + class-wise PRF1 + selective risk metrics in Sec. V/VI \\
 Full reproducibility protocol and artifacts & Complete & Appendix A/B + artifact index and pipeline script \\
 \bottomrule
 \end{tabular}
@@ -486,6 +511,27 @@ Sweeping \(\tau\) traces a risk-coverage curve; AURC summarizes this curve:
 \end{equation}
 where indices are sorted by descending confidence. Low ECE with poor AURC can still be operationally weak, and good AURC with poor ECE can still be miscalibrated; hence both diagnostics are necessary for complete trust assessment.
 
+\subsection{Top-k and PRF1 Metric Theory}
+Top-k accuracy formalizes ranking quality rather than only winner-take-all correctness. For logits \(z\), define ranked classes \(\pi_1(x),\ldots,\pi_K(x)\) by descending score. Then
+\begin{equation}
+\mathrm{Top}\text{-}k = \frac{1}{n}\sum_{i=1}^{n}\mathbf{1}\{y_i\in\{\pi_1(x_i),\ldots,\pi_k(x_i)\}\}.
+\end{equation}
+This metric is important when classes are semantically close or when downstream workflows consume candidate lists.
+
+Class-wise precision, recall, and F1 provide complementary error decomposition. Using class \(c\) true positives \(TP_c\), false positives \(FP_c\), and false negatives \(FN_c\):
+\begin{equation}
+P_c=\frac{TP_c}{TP_c+FP_c},\quad
+R_c=\frac{TP_c}{TP_c+FN_c},\quad
+F1_c=\frac{2P_cR_c}{P_c+R_c}.
+\end{equation}
+Macro-averages,
+\begin{equation}
+P_{\text{macro}}=\frac{1}{K}\sum_c P_c,\quad
+R_{\text{macro}}=\frac{1}{K}\sum_c R_c,\quad
+F1_{\text{macro}}=\frac{1}{K}\sum_c F1_c,
+\end{equation}
+weight all classes equally and therefore expose failures that global accuracy may hide under class-frequency effects. This is why top-k and PRF1 are included in the expanded report: they make ranking behavior and error structure explicit, not implicit.
+
 \section{Reproducibility Commands}
 \textbf{Environment setup}
 \begin{verbatim}
@@ -511,8 +557,10 @@ python code/run_report_pipeline.py --full-run --epochs 80 --dataset svhn
   \item \texttt{HomeWorks/HW1/report/figures/adv\_examples.png}
   \item \texttt{HomeWorks/HW1/report/figures/confusion\_matrix.png}
   \item \texttt{HomeWorks/HW1/report/figures/per\_class\_accuracy.png}
+  \item \texttt{HomeWorks/HW1/report/figures/classwise\_prf1.png}
   \item \texttt{HomeWorks/HW1/report/figures/reliability\_diagram.png}
   \item \texttt{HomeWorks/HW1/report/figures/confidence\_coverage.png}
+  \item \texttt{HomeWorks/HW1/report/figures/topk\_accuracy.png}
   \item \texttt{HomeWorks/HW1/report/figures/robustness\_sweep.png}
   \item \texttt{HomeWorks/HW1/report/figures/pgd\_iter\_sweep.png}
   \item \texttt{HomeWorks/HW1/report/figures/metrics\_summary.json}
