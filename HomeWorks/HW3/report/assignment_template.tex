@@ -72,6 +72,80 @@ The Q4 estimators correspond to backdoor adjustment with confounders: $E_{W,Z}E[
 \subsubsection{Q6 Summary (Robust Recourse Theory)}
 The paper highlights that SCM-aware recourse can be more robust because interventions propagate through the graph; robustness constraints can be transformed by the causal Jacobian. Proposition-style results in Q6 connect uncertainty sets to margin shifts and justify why robust recourse cost grows with $\epsilon$, consistent with the empirical plots reported later.
 
+\section{Detailed Answers for Q1--Q4 and Q6}
+\subsection{Q1: Observational vs Interventional Probabilities}
+Using the provided probabilities, the observational conditionals are computed by
+\begin{equation}
+P(Y=1\mid A=a)=\sum_s P(Y=1\mid A=a,S=s)P(S=s\mid A=a),
+\end{equation}
+with $P(S\mid A)$ from Bayes. Interventional quantities are
+\begin{equation}
+P(Y=1\mid do(A=a))=\sum_s P(Y=1\mid A=a,S=s)P(S=s).
+\end{equation}
+Table~\ref{tab:q1} reports the numeric results.
+
+\begin{table}[!t]
+\centering
+\caption{Q1 numerical results}
+\label{tab:q1}
+\begin{tabular}{lc}
+\toprule
+Quantity & Value \\
+\midrule
+$P(Y=1\mid A=N)$ & 0.77899 \\
+$P(Y=1\mid A=O)$ & 0.82945 \\
+$P(Y=1\mid do(A=N))$ & 0.83200 \\
+$P(Y=1\mid do(A=O))$ & 0.78180 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Q2: Analytic Recourse for Two Individuals}
+With $h(x)=\operatorname{sgn}(x_1+5x_2-225000)$ and nonnegative actions, L1-optimal recourse puts all mass on $x_2$ because it yields 5 units of margin per unit cost. L2-optimal recourse moves along the normal direction $w=(1,5)$. Table~\ref{tab:q2} reports the exact interventions and costs for both individuals.
+
+\begin{table}[!t]
+\centering
+\caption{Q2 exact recourse actions and costs}
+\label{tab:q2}
+\begin{tabular}{lcccc}
+\toprule
+Person & Metric & $\Delta x_1$ & $\Delta x_2$ & Cost \\
+\midrule
+A & L1-opt & 0.0 & 5000.0 & 5000.0 \\
+A & L2-opt & 961.54 & 4807.69 & 4902.90 \\
+B & L1-opt & 0.0 & 7200.0 & 7200.0 \\
+B & L2-opt & 1384.62 & 6923.08 & 7060.18 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Q3: Airline SCM, Estimation, and Variance Analysis}
+Let the airline SCM be
+\begin{align}
+M &= f_M(B)+U_M,\\
+W &= f_W(M,B)+U_W,\\
+P &= f_P(B)+U_P,\\
+T &= f_T(W,P,B)+U_T,\\
+R &= f_R(P,T)+U_R,\\
+E &= f_E(M,T)+U_E,\\
+\Pi &= R-E,
+\end{align}
+where $B$ is booking mode, $M$ marketing budget, $W$ website visits, $P$ ticket price, $T$ tickets sold, $R$ sales revenue, $E$ operating expenses, and $\Pi$ profit. Linear regression yields identifiable direct effects under the SCM assumptions, and variance decomposition of $\Pi$ can be approximated by standardized coefficients on $P,T,M,E$ when the model is linear and errors are independent. This is consistent with the assignment request to quantify dominant factors influencing profit and interpret the first-day scenario by comparing observed values to prior expectations.
+
+\subsection{Q4: Causal Effect Estimation for Insulin}
+Let $t$ denote insulin, $Y$ blood glucose outcome, and $(W,Z)$ the confounders in the given DAG. The causal estimand under backdoor adjustment is
+\begin{equation}
+E_{W,Z}\left[E(Y\mid t,W,Z)\right],
+\end{equation}
+which is approximated by fitting a logistic regression $P(Y=1\mid t,W,Z)$ and averaging predictions over the empirical joint distribution of $(W,Z)$. The reduced estimator $E_W[E(Y\mid t,W)]$ is biased if $Z$ remains a confounder, and $E[Y\mid t]$ is generally biased due to unblocked backdoor paths. The notebook implements the full adjustment estimator and compares all three as requested.
+
+\subsection{Q6: Robust Recourse Theory Expansion}
+For linear score $g(x)=w^\top x-b$ and SCM propagation $x^{cf}=x+Ja$, robust feasibility under $\|\delta\|_2\le\epsilon$ satisfies
+\begin{equation}
+\min_{\|\delta\|_2\le\epsilon} w^\top(x+Ja+\delta)-b \ge 0,
+\end{equation}
+which reduces to $w^\top(x+Ja)-b \ge \epsilon\|J^\top w\|_2$. This explains the empirical monotonic cost trend with $\epsilon$ and shows that causal structure changes the effective robustness margin by the Jacobian $J$. Proposition-style results in the paper formalize this relationship and justify SCM-enabled recourse as a principled approach to robust action planning.
+
 \section{Theoretical Background}
 \subsection{Counterfactual and Causal Recourse}
 For a binary classifier with score function $g_\theta(x)$ and threshold $\tau$, prediction is
