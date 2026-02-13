@@ -1,25 +1,15 @@
-"""Fairness utilities for HW4 (Q3)
+"""Fairness utilities for HW4 (Q3 + bonus methods)."""
 
-Provides:
-- load_data(path)
-- accuracy(y_true, y_pred)
-- disparate_impact(y_true, y_pred, sensitive)  # ratio P(Y=1|protected)/P(Y=1|privileged)
-- zemel_proxy_fairness(X, y_pred, sensitive, n_clusters=5)  # a simple Zemel-style proxy
-- train_baseline_model(X_train, y_train)  # sklearn logistic regression
-- apply_promotion_demotion(X, y_proba, y_pred, sensitive, k)
-- retrain_with_swapped_labels(X, y, swap_idx)
+from __future__ import annotations
 
-Notes:
-- The ``zemel_proxy_fairness`` implemented here is a practical proxy (clustering-based) useful for the assignment
-  rather than a full reproduction of Zemel et al. 2013 training algorithm.
-"""
-from typing import Tuple
+from typing import Dict, Tuple
+
 import numpy as np
 import pandas as pd
-from sklearn.linear_model import LogisticRegression
 from sklearn.cluster import KMeans
-from sklearn.preprocessing import StandardScaler
+from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
 
 
 def load_data(path: str) -> Tuple[pd.DataFrame, pd.Series]:
@@ -34,7 +24,13 @@ def accuracy(y_true: np.ndarray, y_pred: np.ndarray) -> float:
     return float((y_true == y_pred).mean())
 
 
-def disparate_impact(y_true: np.ndarray, y_pred: np.ndarray, sensitive: np.ndarray, protected_value=0, privileged_value=1) -> float:
+def disparate_impact(
+    y_true: np.ndarray,
+    y_pred: np.ndarray,
+    sensitive: np.ndarray,
+    protected_value: int = 0,
+    privileged_value: int = 1,
+) -> float:
     # Disparate Impact = P(pred=1 | protected) / P(pred=1 | privileged)
     protected_mask = sensitive == protected_value
     privileged_mask = sensitive == privileged_value
@@ -56,7 +52,7 @@ def zemel_proxy_fairness(X: np.ndarray, y_pred: np.ndarray, sensitive: np.ndarra
     if X.shape[0] == 0:
         return 0.0
     k = min(n_clusters, X.shape[0])
-    km = KMeans(n_clusters=k, random_state=0)
+    km = KMeans(n_clusters=k, random_state=0, n_init=10)
     labels = km.fit_predict(X)
     diffs = []
     for c in np.unique(labels):
@@ -80,39 +76,46 @@ def zemel_proxy_fairness(X: np.ndarray, y_pred: np.ndarray, sensitive: np.ndarra
 def train_baseline_model(X: np.ndarray, y: np.ndarray) -> LogisticRegression:
     scaler = StandardScaler()
     Xs = scaler.fit_transform(X)
-    clf = LogisticRegression(max_iter=1000, solver='lbfgs')
+    clf = LogisticRegression(max_iter=1000, solver="lbfgs")
     clf.fit(Xs, y)
     # attach scaler for convenience
     clf._scaler = scaler
     return clf
 
 
-def apply_promotion_demotion(X: np.ndarray, y_proba: np.ndarray, y_true: np.ndarray, sensitive: np.ndarray, k: int) -> np.ndarray:
-    """Return indices to swap according to Promotion/Demotion scheme described in the assignment.
+def apply_promotion_demotion(
+    y_proba: np.ndarray,
+    y_pred: np.ndarray,
+    sensitive: np.ndarray,
+    k: int,
+) -> np.ndarray:
+    """Prediction-based Promotion/Demotion index selection.
 
-    - Promotion (CP): men with y=0, rank by ascending probability P(y=1) — pick top k to flip to 1
-    - Demotion (CD): women with y=1, rank by descending probability P(y=1) — pick top k to flip to 0
-
-    Returns a boolean index array `swap_mask` indicating rows whose labels should be flipped.
+    Locked rule:
+    - Promotion (CP): men with predicted label 0, ranked by ascending P(y=1).
+    - Demotion  (CD): women with predicted label 1, ranked by descending P(y=1).
     """
-    # assume sensitive: 1 == male (privileged), 0 == female (protected)
-    men_mask = (sensitive == 1)
-    women_mask = (sensitive == 0)
-    # promotion candidates: men with true label 0
-    prom_cand = np.where(men_mask & (y_true == 0))[0]
-    dem_cand = np.where(women_mask & (y_true == 1))[0]
+    if k < 0:
+        raise ValueError("k must be non-negative")
+    n = y_proba.shape[0]
+    if y_pred.shape[0] != n or sensitive.shape[0] != n:
+        raise ValueError("y_proba, y_pred, and sensitive must have the same length")
 
-    # rank
+    men_mask = sensitive == 1
+    women_mask = sensitive == 0
+    prom_cand = np.where(men_mask & (y_pred == 0))[0]
+    dem_cand = np.where(women_mask & (y_pred == 1))[0]
+
     prom_scores = y_proba[prom_cand]
     dem_scores = y_proba[dem_cand]
 
-    prom_order = prom_cand[np.argsort(prom_scores)]  # ascending -> take top (largest uplift probability)
-    dem_order = dem_cand[np.argsort(-dem_scores)]  # descending
+    prom_order = prom_cand[np.argsort(prom_scores)]
+    dem_order = dem_cand[np.argsort(-dem_scores)]
 
     k_prom = min(k, prom_order.size)
     k_dem = min(k, dem_order.size)
 
-    swap_idx = np.zeros(X.shape[0], dtype=bool)
+    swap_idx = np.zeros(n, dtype=bool)
     if k_prom > 0:
         swap_idx[prom_order[:k_prom]] = True
     if k_dem > 0:
@@ -127,14 +130,96 @@ def retrain_with_swapped_labels(X: np.ndarray, y: np.ndarray, swap_mask: np.ndar
     return clf
 
 
+def _group_label_reweighing(sensitive: np.ndarray, y: np.ndarray) -> np.ndarray:
+    """Kamiran-Calders style reweighing weights."""
+    n = y.shape[0]
+    weights = np.ones(n, dtype=float)
+    unique_s = np.unique(sensitive)
+    unique_y = np.unique(y)
+
+    p_s = {s: float((sensitive == s).mean()) for s in unique_s}
+    p_y = {label: float((y == label).mean()) for label in unique_y}
+
+    for s in unique_s:
+        for label in unique_y:
+            mask = (sensitive == s) & (y == label)
+            joint = float(mask.mean())
+            if joint <= 0:
+                continue
+            weights[mask] = (p_s[s] * p_y[label]) / joint
+    return weights
+
+
+def train_reweighed_model(X: np.ndarray, y: np.ndarray, sensitive: np.ndarray) -> LogisticRegression:
+    scaler = StandardScaler()
+    Xs = scaler.fit_transform(X)
+    sample_weight = _group_label_reweighing(sensitive=sensitive, y=y)
+    clf = LogisticRegression(max_iter=1000, solver="lbfgs")
+    clf.fit(Xs, y, sample_weight=sample_weight)
+    clf._scaler = scaler
+    clf._sample_weight = sample_weight
+    return clf
+
+
+def apply_group_thresholds(y_proba: np.ndarray, sensitive: np.ndarray, thresholds: Dict[int, float]) -> np.ndarray:
+    y_pred = np.zeros_like(y_proba, dtype=int)
+    for group in np.unique(sensitive):
+        thr = float(thresholds.get(int(group), 0.5))
+        mask = sensitive == group
+        y_pred[mask] = (y_proba[mask] >= thr).astype(int)
+    return y_pred
+
+
+def optimize_group_thresholds(
+    y_true: np.ndarray,
+    y_proba: np.ndarray,
+    sensitive: np.ndarray,
+    grid: np.ndarray | None = None,
+) -> Dict[int, float]:
+    """Brute-force threshold search minimizing fairness gap with mild accuracy regularization."""
+    if grid is None:
+        grid = np.linspace(0.1, 0.9, 33)
+
+    best_thresholds = {0: 0.5, 1: 0.5}
+    best_score = float("inf")
+
+    for t0 in grid:
+        for t1 in grid:
+            thresholds = {0: float(t0), 1: float(t1)}
+            pred = apply_group_thresholds(y_proba, sensitive, thresholds)
+            acc = accuracy(y_true, pred)
+            di = disparate_impact(y_true, pred, sensitive)
+            if not np.isfinite(di):
+                di_gap = 1.0
+            else:
+                di_gap = abs(1.0 - di)
+            score = di_gap + 0.2 * (1.0 - acc)
+            if score < best_score:
+                best_score = score
+                best_thresholds = thresholds
+    return best_thresholds
+
+
+def compute_fairness_metrics(
+    X_repr: np.ndarray,
+    y_true: np.ndarray,
+    y_pred: np.ndarray,
+    sensitive: np.ndarray,
+) -> Dict[str, float]:
+    return {
+        "accuracy": float(accuracy(y_true, y_pred)),
+        "disparate_impact": float(disparate_impact(y_true, y_pred, sensitive)),
+        "zemel_proxy": float(zemel_proxy_fairness(X_repr, y_pred, sensitive)),
+    }
+
+
 if __name__ == "__main__":
     # quick demo when run directly
     import os
     path = os.path.join(os.path.dirname(__file__), "data.csv")
     Xdf, y = load_data(path)
     sensitive = Xdf["gender"].to_numpy()
-    # drop categorical columns for demo
-    Xnum = Xdf.select_dtypes(include=[np.number]).to_numpy()
+    Xnum = Xdf.select_dtypes(include=[np.number]).drop(columns=["gender"]).to_numpy()
     Xtrain, Xtest, ytrain, ytest, sens_train, sens_test = train_test_split(
         Xnum, y.to_numpy(), sensitive, test_size=0.3, random_state=0
     )
@@ -142,6 +227,4 @@ if __name__ == "__main__":
     Xs_test = clf._scaler.transform(Xtest)
     yproba = clf.predict_proba(Xs_test)[:, 1]
     ypred = (yproba >= 0.5).astype(int)
-    print("Accuracy:", accuracy(ytest, ypred))
-    print("Disparate impact:", disparate_impact(ytest, ypred, sens_test))
-    print("Zemel-proxy fairness:", zemel_proxy_fairness(Xs_test, ypred, sens_test))
+    print(compute_fairness_metrics(Xs_test, ytest, ypred, sens_test))

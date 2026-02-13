@@ -19,32 +19,30 @@
 \usepackage{tabularx}
 \usepackage{longtable}
 \usepackage{array}
+\usepackage{multirow}
+\usepackage{listings}
+
 \definecolor{accent}{HTML}{2A9D8F}
 \definecolor{heading}{HTML}{264653}
+\definecolor{codebg}{HTML}{F7F7F7}
 
 \usepackage{titlesec}
 \titleformat{\section}{\Large\bfseries\color{heading}}{\thesection}{1em}{}
 \titleformat{\subsection}{\bfseries\color{heading}}{\thesubsection}{0.5em}{}
 \titlespacing*{\section}{0pt}{12pt}{6pt}
 
-\usepackage{listings}
-\lstdefinestyle{py}{
-  language=Python,
+\lstdefinestyle{plainstyle}{
   basicstyle=\ttfamily\small,
-  backgroundcolor=\color{gray!6},
+  backgroundcolor=\color{codebg},
   frame=single,
   framesep=4pt,
   rulecolor=\color{gray!40},
-  keywordstyle=\color{blue!65!black},
-  commentstyle=\color{gray!55!black}\itshape,
-  stringstyle=\color{red!65!black},
+  breaklines=true,
   showstringspaces=false,
   numbers=left,
-  numberstyle=\tiny\color{gray},
-  breaklines=true,
-  captionpos=b,
+  numberstyle=\tiny\color{gray}
 }
-\lstset{style=py}
+\lstset{style=plainstyle}
 
 \usepackage{tcolorbox}
 \tcbset{colback=gray!7, colframe=accent, left=6pt, right=6pt, boxrule=0.8pt}
@@ -54,9 +52,9 @@
 \fancyhf{}
 \renewcommand{\headrulewidth}{0.6pt}
 \renewcommand{\footrulewidth}{0.0pt}
-\fancyhead[L]{\small\textbf{\course{}}}
-\fancyhead[C]{\small Assignment \assignment{}}
-\fancyhead[R]{\small \authorname{}}
+\fancyhead[L]{\small\textbf{Trusted Artificial Intelligence}}
+\fancyhead[C]{\small Homework 3}
+\fancyhead[R]{\small Taha Majlesi}
 \fancyfoot[C]{\thepage}
 
 \newcommand{\course}{Trusted Artificial Intelligence}
@@ -66,11 +64,6 @@
 \newcommand{\authorname}{Taha Majlesi}
 \newcommand{\studentid}{810101504}
 \newcommand{\affiliation}{Department of Electrical and Computer Engineering, University of Tehran}
-
-\newcommand{\statusimplemented}{Implemented}
-\newcommand{\statusfallback}{Implemented with fallback}
-\newcommand{\statusna}{Not applicable}
-\newcolumntype{Y}{>{\raggedright\arraybackslash}X}
 
 \usepackage[hidelinks]{hyperref}
 \usepackage{natbib}
@@ -82,148 +75,372 @@
   \centering
   {\LARGE\bfseries \course{} \par}
   \vspace{1.2cm}
-  {\Huge\bfseries Homework \assignment{}\par}
+  {\Huge\bfseries Homework \assignment{} \par}
   \vspace{0.6cm}
-  {\large \semester{}\par}
+  {\large \semester{} \par}
   \vspace{1.2cm}
-  {\Large\bfseries \authorname{}\par}
+  {\Large\bfseries \authorname{} \par}
   \vspace{0.2cm}
-  {\small ID: \studentid{} \quad | \quad \affiliation{}\par}
+  {\small ID: \studentid{} \quad | \quad \affiliation{} \par}
   \vfill
-  {\large Instructor: \instructor{}\par}
-  {\small Submitted: \today\par}
+  {\large Instructor: \instructor{} \par}
+  {\small Submitted: \today \par}
 \end{titlepage}
 
 \begin{tcolorbox}
-\textbf{Abstract.} This report documents HW3 causal recourse implementations with full traceability from requirement to code path, command, metric, figure, and verification result. The report includes deterministic fallback labeling for missing external assets.
+\textbf{Abstract.}
+This report provides a complete long-form implementation report for the causal recourse part of HW3 (Question 5)
+using the health dataset. The pipeline is fully executable from local code, including: (1) constrained data
+processing and actionability, (2) classifier training for linear and MLP models, (3) completed health SCM and Jacobian,
+(4) recourse evaluation across robustness radii, and (5) automatic export of publication-ready report figures.
+
+The document includes direct answers to each Q5 sub-question, equations, implementation traceability (file-level),
+reproducibility commands, aggregated quantitative results over multiple seeds, and error analysis. In addition,
+Nearest Counterfactual and Causal Algorithmic Recourse are compared empirically under matched conditions.
 \end{tcolorbox}
 
 \vspace{6pt}
 \tableofcontents
 \clearpage
 
-\section{Introduction}
-HW3 covers structural causal modeling and algorithmic recourse. This report is organized so that each implementation can be audited without reading the codebase first.
+\section{Scope and Completion Statement}
+The practical deliverable in this repository is the causal recourse implementation located under
+\texttt{code/Q5\_codes}. This report therefore focuses on full completion of Question 5 requirements from the assignment,
+including data constraints, SCM completion, Jacobian completion, and quantitative comparison of recourse methods.
 
-\section{Architecture and Algorithm Design}
-\subsection{Classifier layer}
-Classifier and training abstractions are defined in \texttt{HomeWorks/HW3/code/q5\_codes/trainers.py} with \texttt{LogisticRegression}, \texttt{MLP}, and trainer variants.
-
-\subsection{SCM and recourse layer}
-SCM classes are defined in \texttt{scm.py} (including \texttt{Health\_SCM}) and recourse methods in \texttt{recourse.py} via \texttt{LinearRecourse}, \texttt{DifferentiableRecourse}, and \texttt{causal\_recourse}. Experiment orchestration is in \texttt{runner.py} and \texttt{main.py}.
-
-\section{Data and Preprocessing Pipeline}
-\texttt{data\_utils.py} handles health dataset loading and preparation through \texttt{process\_health\_data}. The benchmark driver uses fixed seeds and writes artifacts to \texttt{results/} and \texttt{models/}.
-
-\section{Implementation Coverage Matrix}
-\small
-\begin{longtable}{p{0.07\textwidth}p{0.12\textwidth}p{0.16\textwidth}p{0.12\textwidth}p{0.14\textwidth}p{0.11\textwidth}p{0.08\textwidth}p{0.10\textwidth}p{0.08\textwidth}}
-\toprule
-Task ID & Requirement & File & Function/Class & Command & Output Artifact & Metric & Figure/Table & Status \\
-\midrule
-\endfirsthead
-\toprule
-Task ID & Requirement & File & Function/Class & Command & Output Artifact & Metric & Figure/Table & Status \\
-\midrule
-\endhead
-C1 & Health data preprocessing & code/q5\_codes/data\_utils.py & process\_health\_data & python HomeWorks/HW3/code/q5\_codes/main.py --seed 0 & processed tensors in runtime pipeline & Sample count consistency & Table~\ref{tab:hw3-main} & \statusimplemented \\
-C2 & Classifier training & code/q5\_codes/train\_classifiers.py & train & python HomeWorks/HW3/code/q5\_codes/main.py --seed 0 & models/*.pth & Accuracy and MCC & Table~\ref{tab:hw3-main} & \statusimplemented \\
-C3 & SCM construction & code/q5\_codes/scm.py & Health\_SCM; get\_Jacobian & python HomeWorks/HW3/code/q5\_codes/main.py --seed 0 & SCM object and Jacobian paths & Recourse feasibility consistency & Section~\ref{sec:hw3-validation} & \statusimplemented \\
-C4 & Recourse generation & code/q5\_codes/recourse.py & causal\_recourse & python HomeWorks/HW3/code/q5\_codes/main.py --seed 0 & results/*.npy & Validity and L1 cost & Table~\ref{tab:hw3-main} & \statusimplemented \\
-C5 & Recourse evaluation & code/q5\_codes/evaluate\_recourse.py & eval\_recourse & python HomeWorks/HW3/code/q5\_codes/main.py --seed 0 & metrics/*.npy & Robust validity & Figure~\ref{fig:hw3-costs} & \statusimplemented \\
-F1 & Missing model artifacts & code/q5\_codes/runner.py & run\_benchmark & python HomeWorks/HW3/code/q5\_codes/main.py --seed 0 & deterministic rerun outputs & Smoke validity checks & Appendix~\ref{app:hw3-artifacts} & \statusfallback \\
-\bottomrule
-\end{longtable}
-\normalsize
-
-\section{Experiment Reproducibility}
-\subsection{Benchmark run}
-\textbf{Reproducibility Block}
+\subsection{What is completed}
+The following deliverables are complete and verified by executable runs:
 \begin{itemize}[leftmargin=1.2em]
-  \item Command: \texttt{python HomeWorks/HW3/code/q5\_codes/main.py --seed 0}
-  \item Seed and key hyperparameters: seed=0, model=lin baseline, N\_explain=5.
-  \item Input data source: local \texttt{HomeWorks/HW3/code/q5\_codes/data/health.csv}.
-  \item Output paths: \texttt{HomeWorks/HW3/code/q5\_codes/models} and \texttt{HomeWorks/HW3/code/q5\_codes/results}.
+  \item Health data processing constraints for actionable features and feature bounds.
+  \item End-to-end training and evaluation for linear and MLP classifiers.
+  \item Full \texttt{Health\_SCM} implementation with structural equations, inverse mapping, and Jacobian.
+  \item Recourse runs for 10 negatively classified instances under multiple robustness radii.
+  \item Automatic generation of report artifacts (figures and summary CSV tables).
+  \item PDF report build with included results and reproducibility commands.
 \end{itemize}
 
-\subsection{Classifier-only reproducibility}
-\textbf{Reproducibility Block}
+\subsection{Key modified files}
 \begin{itemize}[leftmargin=1.2em]
-  \item Command: \texttt{python HomeWorks/HW3/code/q5\_codes/train\_classifiers.py --dataset health --model lin}
-  \item Seed and key hyperparameters: seed=0, trainer=ERM, epochs from \texttt{utils.get\_train\_epochs}.
-  \item Input data source: processed health features.
-  \item Output paths: model checkpoints and metrics arrays under \texttt{models/} and \texttt{results/}.
+  \item \texttt{code/Q5\_codes/scm.py}
+  \item \texttt{code/Q5\_codes/evaluate\_recourse.py}
+  \item \texttt{code/Q5\_codes/utils.py}
+  \item \texttt{code/Q5\_codes/plot\_report\_figures.py}
+  \item \texttt{code/Q5\_codes/generate\_report\_artifacts.py}
+  \item \texttt{report/figures/*.png}
 \end{itemize}
 
-\section{Results and Evidence}
+\section{Problem Setup (Question 5)}
+Question 5 asks for two recourse styles on the health dataset:
+\begin{enumerate}
+  \item Nearest Counterfactual Explanation (SCM disabled / independently manipulable assumption).
+  \item Causal Algorithmic Recourse (SCM enabled; intervention effects propagate through causal structure).
+\end{enumerate}
+
+The classifier input variables are:
+\begin{itemize}[leftmargin=1.2em]
+  \item \texttt{age}
+  \item \texttt{insulin}
+  \item \texttt{blood\_glucose}
+  \item \texttt{blood\_pressure}
+\end{itemize}
+
+The target is \texttt{category} with label 0 = unhealthy, 1 = healthy.
+
+\section{Methodology and Equations}
+\subsection{Classifier objective}
+For a classifier score function $g_\theta(x)$ and threshold $\tau$, prediction is:
+\begin{equation}
+\hat{y} = \mathbb{I}[\sigma(g_\theta(x)) \ge \tau].
+\end{equation}
+
+Threshold $\tau$ is calibrated using max-MCC on the training split.
+
+\subsection{Nearest counterfactual recourse}
+For linear models, the recourse action $a$ solves:
+\begin{equation}
+\min_a \; \|c \odot a\|_1
+\quad\text{s.t.}\quad
+\langle w, x + a \rangle \ge b,
+\end{equation}
+plus actionability and bound constraints. In this mode, SCM is disabled and each feature can be modified only through
+its own action constraint.
+
+\subsection{Causal algorithmic recourse}
+With SCM enabled, interventions on actionable variables propagate via structural equations. For a factual instance
+$x^{(n)}$ and intervention $\delta$, counterfactual generation uses:
+\begin{equation}
+X_{\mathrm{cf}} = f\bigl(U(X), \delta\bigr),
+\end{equation}
+where $U(X)$ is obtained by abduction via inverse structural equations.
+
+\subsection{Health SCM used in this implementation}
+Feature order is $[\text{age},\text{insulin},\text{blood\_glucose},\text{blood\_pressure}]$.
+The completed linear structural equations are:
+\begin{align}
+X_1 &= U_1, \\
+X_2 &= w_{21} X_1 + U_2, \quad w_{21}=\frac{1}{18}, \\
+X_3 &= w_{31} X_1 + w_{32} X_2 + U_3, \quad w_{31}=2.0,\; w_{32}=1.05, \\
+X_4 &= w_{42} X_2 + w_{43} X_3 + U_4, \quad w_{42}=0.4,\; w_{43}=0.3.
+\end{align}
+
+The corresponding Jacobian is:
+\begin{equation}
+J =
+\begin{bmatrix}
+1 & 0 & 0 & 0 \\
+w_{21} & 1 & 0 & 0 \\
+w_{31} & w_{32} & 1 & 0 \\
+0 & w_{42} & w_{43} & 1
+\end{bmatrix}.
+\end{equation}
+
+\section{Direct Answers to Question 5 Sub-Questions}
+\subsection{Q5.1: Completing \texttt{process\_health\_data}}
+Implemented behavior:
+\begin{itemize}[leftmargin=1.2em]
+  \item Actionable features: only \texttt{insulin} and \texttt{blood\_glucose}.
+  \item Non-actionable features: \texttt{age}, \texttt{blood\_pressure}.
+  \item Feature bounds: interventions are clamped to observed dataset min/max for bounded variables.
+\end{itemize}
+This is encoded in preprocessing constraints consumed by recourse algorithms.
+
+\subsection{Q5.2: Running for 10 unhealthy individuals and reporting cost}
+Using $N_{\text{explain}}=10$ on health data, the linear ERM model with SCM enabled reports:
+\begin{itemize}[leftmargin=1.2em]
+  \item Seed 0, $\epsilon=0$: valid recourse rate = 1.00, mean valid cost $\approx 0.909$.
+\end{itemize}
+Across seeds 0,1,2 (aggregated):
+\begin{itemize}[leftmargin=1.2em]
+  \item Mean valid cost (lin-ERM, $\epsilon=0$): \textbf{0.889}.
+\end{itemize}
+Interpretation: this cost is the mean magnitude of actionable intervention (L1 norm) needed to flip prediction
+from unhealthy to healthy while respecting actionability and feasibility constraints.
+
+\subsection{Q5.3: Completing \texttt{Health\_SCM}}
+The class was completed with:
+\begin{itemize}[leftmargin=1.2em]
+  \item Structural equations \texttt{self.f}.
+  \item Inverse equations \texttt{self.inv\_f} for abduction.
+  \item Actionability definition: \texttt{[1,2]} (insulin and blood glucose).
+  \item Hard intervention semantics for actionable variables.
+\end{itemize}
+This completion is necessary for causal (not merely nearest) recourse and for differentiable recourse on MLP models.
+
+\subsection{Q5.4: Completing \texttt{get\_Jacobian}}
+The Jacobian was completed exactly from the assumed linear SCM coefficients above and used by linear recourse.
+
+\subsection{Q5.5: Rerun with SCM enabled and report cost}
+With SCM enabled, linear ERM recourse remains fully valid (rate 1.00 for tested runs).
+For seed 0 and $N_{\text{explain}}=10$:
+\begin{itemize}[leftmargin=1.2em]
+  \item Causal recourse mean valid cost: \textbf{0.625} (matched comparison setup in Section~\ref{sec:nvscausal}).
+\end{itemize}
+Cost here represents intervention effort after propagating causal effects through the structural equations.
+
+\subsection{Q5.6: Compare Nearest Counterfactual and Causal Recourse}
+\label{sec:nvscausal}
+Using the same linear ERM model (seed 0) and same sampled unhealthy individuals:
+\begin{itemize}[leftmargin=1.2em]
+  \item Nearest Counterfactual (SCM off): valid rate = 1.00, mean cost = 0.779.
+  \item Causal Recourse (SCM on): valid rate = 1.00, mean cost = 0.625.
+\end{itemize}
+In this dataset/model configuration, causal propagation reduces average intervention cost while preserving full validity.
+
+\section{Experimental Protocol}
+\subsection{Environment}
+\begin{itemize}[leftmargin=1.2em]
+  \item Python environment activated with:
+  \verb|source /Users/tahamajs/Documents/uni/venv/bin/activate|
+  \item Main code directory: \texttt{HomeWorks/HW3/code/Q5\_codes}
+  \item Report directory: \texttt{HomeWorks/HW3/report}
+\end{itemize}
+
+\subsection{Models and settings}
 \begin{table}[H]
-  \centering
-  \caption{HW3 metrics linked to benchmark artifacts}
-  \label{tab:hw3-main}
-  \begin{tabular}{lccc}
-    \toprule
-    Pipeline component & Metric source & Artifact path & Report status \\
-    \midrule
-    Classifier performance & saved acc/mcc arrays & HomeWorks/HW3/code/q5\_codes/results & Included \\
-    Recourse validity & recourse evaluation arrays & HomeWorks/HW3/code/q5\_codes/results & Included \\
-    Recourse cost & per-instance intervention results & HomeWorks/HW3/code/q5\_codes/results & Included \\
-    \bottomrule
-  \end{tabular}
+\centering
+\caption{Evaluated model/trainer settings on health dataset}
+\label{tab:settings}
+\begin{tabular}{llll}
+\toprule
+Model & Trainer & Seeds & Epsilon values \\
+\midrule
+Linear & ERM & 0,1,2 & 0.0, 0.1, 0.2 \\
+Linear & AF  & 0,1,2 & 0.0, 0.1, 0.2 \\
+MLP    & ERM & 0,1   & 0.0, 0.1, 0.2 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Generated artifacts}
+The script \texttt{generate\_report\_artifacts.py} writes:
+\begin{itemize}[leftmargin=1.2em]
+  \item \texttt{code/Q5\_codes/results/health\_report\_summary.csv}
+  \item \texttt{code/Q5\_codes/results/health\_report\_aggregate.csv}
+  \item \texttt{code/Q5\_codes/results/nearest\_vs\_causal\_lin\_seed0.csv}
+  \item Figures under \texttt{report/figures/}
+\end{itemize}
+
+\section{Quantitative Results}
+\subsection{Classifier quality}
+\begin{table}[H]
+\centering
+\caption{Classifier metrics (test split, mean $\pm$ std across seeds)}
+\label{tab:clfmetrics}
+\begin{tabular}{lcc}
+\toprule
+Configuration & Accuracy & MCC \\
+\midrule
+lin-ERM & $0.903 \pm 0.002$ & $0.803 \pm 0.004$ \\
+lin-AF  & $0.903 \pm 0.002$ & $0.803 \pm 0.003$ \\
+mlp-ERM & $1.000 \pm 0.000$ & $1.000 \pm 0.000$ \\
+\bottomrule
+\end{tabular}
 \end{table}
 
 \begin{figure}[H]
   \centering
-  \IfFileExists{figures/recourse_costs.png}{\includegraphics[width=0.68\textwidth]{figures/recourse_costs.png}}{\fbox{\parbox[c][4.2cm][c]{0.68\textwidth}{\centering Artifact not found: figures/recourse\_costs.png}}}
-  \caption{Recourse cost comparison evidence from exported benchmark output.}
-  \label{fig:hw3-costs}
+  \includegraphics[width=0.72\textwidth]{figures/classifier_metrics.png}
+  \caption{Accuracy and MCC by configuration (error bars from available seeds).}
+  \label{fig:clfmetrics}
 \end{figure}
 
-\section{Validation \& Tests}
-\label{sec:hw3-validation}
-\subsection{SCM validity checks}
-\textbf{Verification Block}
+\subsection{Recourse validity and cost across robustness radii}
+\begin{table}[H]
+\centering
+\caption{Recourse outcomes (mean over seeds)}
+\label{tab:recourseagg}
+\begin{tabular}{lccc}
+\toprule
+Configuration & $\epsilon$ & Valid rate & Mean valid cost \\
+\midrule
+lin-ERM & 0.0 & 1.00 & 0.889 \\
+lin-ERM & 0.1 & 1.00 & 1.004 \\
+lin-ERM & 0.2 & 1.00 & 1.120 \\
+lin-AF  & 0.0 & 1.00 & 0.701 \\
+lin-AF  & 0.1 & 1.00 & 0.823 \\
+lin-AF  & 0.2 & 1.00 & 0.946 \\
+mlp-ERM & 0.0 & 0.85 & 1.111 \\
+mlp-ERM & 0.1 & 0.90 & 1.253 \\
+mlp-ERM & 0.2 & 0.90 & 0.885 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.72\textwidth]{figures/valid_rate_vs_epsilon.png}
+  \caption{Valid recourse rate as robustness radius increases.}
+  \label{fig:validrate}
+\end{figure}
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.72\textwidth]{figures/valid_cost_vs_epsilon.png}
+  \caption{Mean cost of valid recourse vs robustness radius.}
+  \label{fig:validcost}
+\end{figure}
+
+\subsection{Instance-level recourse evidence}
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.72\textwidth]{figures/recourse_costs.png}
+  \caption{Per-instance recourse costs for explained unhealthy individuals (example run).}
+  \label{fig:instancecost}
+\end{figure}
+
+\subsection{Nearest vs causal comparison}
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.75\textwidth]{figures/nearest_vs_causal.png}
+  \caption{Direct comparison of Nearest Counterfactual and Causal Recourse (lin-ERM, seed 0).}
+  \label{fig:nvscausal}
+\end{figure}
+
+\section{Discussion}
+\subsection{Main findings}
 \begin{itemize}[leftmargin=1.2em]
-  \item Test/check: SCM Jacobian construction and counterfactual paths execute through benchmark run.
-  \item Result: pass when recourse generation completes and outputs are persisted.
-  \item Edge cases and residual risks: SCM misspecification can reduce external validity; robustness depends on structural assumptions.
+  \item Linear models (ERM and AF) achieved stable, high validity for all tested robustness radii.
+  \item AF regularization reduced intervention costs relative to ERM at every tested $\epsilon$.
+  \item Causal recourse improved intervention efficiency compared with nearest counterfactual under the matched setup.
 \end{itemize}
 
-\subsection{Recourse pipeline checks}
-\textbf{Verification Block}
-\begin{itemize}[leftmargin=1.2em]
-  \item Test/check: nearest and causal recourse routes produce finite interventions and validity scores.
-  \item Result: pass when result arrays contain non-empty valid entries.
-  \item Edge cases and residual risks: infeasible actionable constraints may yield no valid recourse for some individuals.
-\end{itemize}
+\subsection{Why cost increases with $\epsilon$ in linear models}
+For robust linear recourse, increasing $\epsilon$ effectively tightens the decision constraint by accounting for uncertainty
+around the decision boundary. As expected, higher robustness requirements demand larger interventions, which is reflected
+in monotonic cost growth for lin-ERM and lin-AF.
 
-\section{Error Analysis and Limitations}
-Causal recourse quality is tied to SCM fidelity. Any deterministic fallback run is explicitly tracked with status \statusfallback.
+\subsection{On perfect MLP classifier scores}
+The MLP reached perfect test metrics for available seeds in this split. This can happen due dataset size/split structure
+and model capacity. Recourse validity is still below 1.0 for MLP runs, indicating that prediction quality alone does not
+guarantee easy recourse.
+
+\section{Error Analysis and Threats to Validity}
+\subsection{Modeling assumptions}
+The health SCM is linear and additive-noise. Real physiological mechanisms are likely nonlinear and partially latent.
+Therefore, absolute recourse costs should be interpreted as model-conditional rather than causal ground truth.
+
+\subsection{Finite-sample and split sensitivity}
+Results are estimated on finite seeds and fixed train/test split routine. Additional seeds and stratified splits can
+change quantitative values, especially for MLP recourse.
+
+\subsection{Optimization effects}
+Differentiable recourse for MLP relies on iterative optimization and can be sensitive to hyperparameters. This is one
+reason to report both validity and cost instead of only one metric.
+
+\section{Reproducibility Checklist}
+\subsection{Core commands}
+\begin{lstlisting}[caption={Primary commands used for completion and reporting}]
+cd /Users/tahamajs/Documents/uni/truthlyAI/HomeWorks/HW3/code/Q5_codes
+source /Users/tahamajs/Documents/uni/venv/bin/activate
+
+# End-to-end benchmark
+python main.py --seed 0
+
+# Build additional report artifacts and figures
+python generate_report_artifacts.py
+
+# Build PDF report
+cd /Users/tahamajs/Documents/uni/truthlyAI/HomeWorks/HW3/report
+make pdf
+\end{lstlisting}
+
+\subsection{Determinism}
+All reported experiments used explicit seed control in training/evaluation scripts. Report aggregates state seed count
+for each configuration.
 
 \section{Conclusion}
-This template guarantees full HW3 traceability from requirements to audited outputs.
+This submission completes the causal recourse implementation pipeline for HW3 Question 5 in a fully runnable form.
+All required software components (constraints, SCM, Jacobian, recourse evaluation, and figure export) are implemented,
+validated, and documented with direct evidence. The empirical comparison shows that causal recourse can preserve validity
+while reducing intervention cost relative to nearest counterfactual recommendations in the tested setting.
 
 \appendix
-\section{Artifact Index (Appendix)}
-\label{app:hw3-artifacts}
-\small
-\begin{longtable}{p{0.26\textwidth}p{0.22\textwidth}p{0.20\textwidth}p{0.22\textwidth}}
+\section{Implementation Traceability Matrix}
+\begin{longtable}{p{0.16\textwidth}p{0.22\textwidth}p{0.22\textwidth}p{0.32\textwidth}}
 \toprule
-Artifact & Producer command/module & Discussed in section & Status \\
+Requirement & File & Function/Class & Evidence \\
 \midrule
 \endfirsthead
 \toprule
-Artifact & Producer command/module & Discussed in section & Status \\
+Requirement & File & Function/Class & Evidence \\
 \midrule
 \endhead
-HomeWorks/HW3/code/q5\_codes/models/*.pth & train\_classifiers.py via main.py & Results and Evidence & \statusimplemented \\
-HomeWorks/HW3/code/q5\_codes/results/*\_accs.npy & runner.py benchmark training & Results and Evidence & \statusimplemented \\
-HomeWorks/HW3/code/q5\_codes/results/*\_mccs.npy & runner.py benchmark training & Results and Evidence & \statusimplemented \\
-HomeWorks/HW3/code/q5\_codes/results/* (recourse outputs) & evaluate\_recourse.py & Results and Evidence & \statusimplemented \\
-HomeWorks/HW3/report/figures/recourse\_costs.png & benchmark figure export & Results and Evidence & \statusimplemented \\
-Deterministic rerun outputs after missing artifact detection & runner.py rerun path & Error Analysis and Limitations & \statusfallback \\
+Q5.1 constraints & \texttt{code/Q5\_codes/data\_utils.py} & \texttt{process\_health\_data} & Actionable set and feature limits consumed by recourse \\
+Q5.2 run on 10 unhealthy & \texttt{code/Q5\_codes/evaluate\_recourse.py} & \texttt{eval\_recourse} & Saved \texttt{\_valid.npy} and \texttt{\_cost.npy} files \\
+Q5.3 SCM completion & \texttt{code/Q5\_codes/scm.py} & \texttt{Health\_SCM} & Structural and inverse equations added \\
+Q5.4 Jacobian completion & \texttt{code/Q5\_codes/scm.py} & \texttt{get\_Jacobian} & Closed-form Jacobian matrix used by linear recourse \\
+Q5.5 SCM-enabled rerun & \texttt{code/Q5\_codes/utils.py} & \texttt{get\_scm} & Health SCM loaded by evaluation pipeline \\
+Q5.6 method comparison & \texttt{code/Q5\_codes/generate\_report\_artifacts.py} & \texttt{nearest\_vs\_causal\_lin} & CSV and figure \texttt{nearest\_vs\_causal.png} \\
+Figure export & \texttt{code/Q5\_codes/plot\_report\_figures.py} & \texttt{export\_report\_plots} & \texttt{recourse\_costs.png}, summary plots \\
 \bottomrule
 \end{longtable}
-\normalsize
+
+\section{Aggregated CSV Evidence}
+\subsection{Aggregate metrics table (auto-generated)}
+\lstinputlisting[caption={\texttt{health\_report\_aggregate.csv}}]{../code/Q5_codes/results/health_report_aggregate.csv}
+
+\subsection{Nearest-vs-causal comparison table (auto-generated)}
+\lstinputlisting[caption={\texttt{nearest\_vs\_causal\_lin\_seed0.csv}}]{../code/Q5_codes/results/nearest_vs_causal_lin_seed0.csv}
 
 \clearpage
 \bibliography{references}
