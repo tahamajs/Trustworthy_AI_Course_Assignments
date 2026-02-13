@@ -647,6 +647,9 @@ F1_{\text{macro}} &= \frac{1}{K}\sum_c F1_c.
 \end{align}
 weight all classes equally and therefore expose failures that global accuracy may hide under class-frequency effects. This is why top-k and PRF1 are included in the expanded report: they make ranking behavior and error structure explicit, not implicit.
 
+\subsection{Parameter Sensitivity Mini-Appendix}
+Even under identical data, model quality can change significantly with hyperparameters. Learning rate controls the effective step size and can cause underfitting (too small) or instability (too large). Momentum and weight decay adjust optimization geometry and implicit regularization, affecting both generalization and adversarial margin. Label smoothing changes gradient distribution and thus calibration behavior. Attack parameters \(\epsilon\), \(\alpha\), and iteration count determine the strength of the inner maximization and can change robustness conclusions by several percentage points. For this reason, all primary parameters are reported explicitly in Tables~\ref{tab:trainparams} and~\ref{tab:params}, and robustness claims are paired with sweep-based diagnostics rather than single-point numbers.
+
 \section{Reproducibility Commands}
 \textbf{Environment setup}
 \begin{verbatim}
