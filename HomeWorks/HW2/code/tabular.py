@@ -6,8 +6,9 @@
 - Trains MLPClassifier (from models.py) and NAMClassifier
 - Evaluates accuracy, recall, f1, confusion matrix
 """
+import copy
 import os
-from typing import Tuple
+from typing import Dict, List, Tuple
 
 import numpy as np
 import pandas as pd
@@ -137,13 +138,24 @@ def to_loader(X, y, batch_size=64, shuffle=True):
     return DataLoader(ds, batch_size=batch_size, shuffle=shuffle)
 
 
-def train_model(model, train_loader, val_loader=None, epochs=30, lr=1e-3, device="cpu"):
+def train_model(
+    model,
+    train_loader,
+    val_loader=None,
+    epochs=30,
+    lr=1e-3,
+    device="cpu",
+    return_history: bool = False,
+):
     model = model.to(device)
     opt = torch.optim.Adam(model.parameters(), lr=lr)
     best_val = 1e9
     best_state = None
+    train_losses: List[float] = []
+    val_losses: List[float] = []
     for epoch in range(1, epochs + 1):
         model.train()
+        epoch_losses = []
         for xb, yb in train_loader:
             xb, yb = xb.to(device), yb.to(device)
             logits = model(xb)
@@ -151,21 +163,32 @@ def train_model(model, train_loader, val_loader=None, epochs=30, lr=1e-3, device
             opt.zero_grad()
             loss.backward()
             opt.step()
+            epoch_losses.append(float(loss.item()))
+        train_losses.append(float(np.mean(epoch_losses)))
         if val_loader is not None:
             model.eval()
-            val_losses = []
+            epoch_val_losses = []
             with torch.no_grad():
                 for xb, yb in val_loader:
                     xb, yb = xb.to(device), yb.to(device)
-                    val_losses.append(
+                    epoch_val_losses.append(
                         F.binary_cross_entropy_with_logits(model(xb), yb).item()
                     )
-            mean_val = float(np.mean(val_losses))
+            mean_val = float(np.mean(epoch_val_losses))
+            val_losses.append(mean_val)
             if mean_val < best_val:
                 best_val = mean_val
-                best_state = model.state_dict()
+                best_state = copy.deepcopy(model.state_dict())
+        else:
+            val_losses.append(float("nan"))
     if best_state is not None:
         model.load_state_dict(best_state)
+    if return_history:
+        history: Dict[str, List[float]] = {
+            "train_loss": train_losses,
+            "val_loss": val_losses,
+        }
+        return model, history
     return model
 
 
