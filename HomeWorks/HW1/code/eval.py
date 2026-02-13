@@ -267,6 +267,107 @@ def save_confidence_coverage_plot(probs, labels, save_path, coverage_points=20):
     }
 
 
+def compute_classwise_prf1(labels, preds, num_classes):
+    cm = np.zeros((num_classes, num_classes), dtype=np.float64)
+    for t, p in zip(labels.astype(int), preds.astype(int)):
+        cm[t, p] += 1.0
+
+    precision = []
+    recall = []
+    f1 = []
+    support = []
+    for cls in range(num_classes):
+        tp = cm[cls, cls]
+        fp = cm[:, cls].sum() - tp
+        fn = cm[cls, :].sum() - tp
+        denom_p = tp + fp
+        denom_r = tp + fn
+        p_val = tp / denom_p if denom_p > 0 else 0.0
+        r_val = tp / denom_r if denom_r > 0 else 0.0
+        denom_f = p_val + r_val
+        f_val = (2.0 * p_val * r_val / denom_f) if denom_f > 0 else 0.0
+        precision.append(float(p_val))
+        recall.append(float(r_val))
+        f1.append(float(f_val))
+        support.append(int(cm[cls, :].sum()))
+
+    macro_precision = float(np.mean(precision))
+    macro_recall = float(np.mean(recall))
+    macro_f1 = float(np.mean(f1))
+    return {
+        'precision': precision,
+        'recall': recall,
+        'f1': f1,
+        'support': support,
+        'macro_precision': macro_precision,
+        'macro_recall': macro_recall,
+        'macro_f1': macro_f1,
+    }
+
+
+def save_classwise_prf1_plot(prf1, save_path):
+    precision = np.array(prf1['precision']) * 100.0
+    recall = np.array(prf1['recall']) * 100.0
+    f1 = np.array(prf1['f1']) * 100.0
+    num_classes = len(precision)
+    x = np.arange(num_classes)
+    width = 0.24
+
+    fig = plt.figure(figsize=(9.2, 4.8))
+    ax = fig.add_subplot(1, 1, 1)
+    ax.bar(x - width, precision, width=width, color='#264653', label='Precision')
+    ax.bar(x, recall, width=width, color='#2A9D8F', label='Recall')
+    ax.bar(x + width, f1, width=width, color='#E76F51', label='F1')
+    ax.set_xticks(x)
+    ax.set_xticklabels([str(i) for i in x], fontsize=8)
+    ax.set_ylim(0, 100)
+    ax.set_xlabel('Class Index')
+    ax.set_ylabel('Score (%)')
+    ax.set_title('Class-wise Precision / Recall / F1')
+    ax.grid(axis='y', alpha=0.3, linestyle='--')
+    ax.legend(loc='best', fontsize=8)
+    plt.tight_layout()
+    os.makedirs(os.path.dirname(save_path) or '.', exist_ok=True)
+    fig.savefig(save_path, dpi=220)
+    plt.close(fig)
+
+
+def compute_topk_accuracy(probs, labels, topk):
+    scores = {}
+    label_vec = labels.astype(int)
+    n = len(label_vec)
+    if n == 0:
+        return {f'top{k}': 0.0 for k in topk}
+    max_k = max(topk)
+    top_indices = np.argsort(-probs, axis=1)[:, :max_k]
+    for k in topk:
+        correct = np.any(top_indices[:, :k] == label_vec[:, None], axis=1)
+        scores[f'top{k}'] = float(np.mean(correct) * 100.0)
+    return scores
+
+
+def save_topk_accuracy_plot(topk_scores, save_path):
+    keys = sorted(topk_scores.keys(), key=lambda x: int(x.replace('top', '')))
+    vals = [topk_scores[k] for k in keys]
+    labels = [k.upper().replace('TOP', 'Top-') for k in keys]
+
+    fig = plt.figure(figsize=(7.2, 4.6))
+    ax = fig.add_subplot(1, 1, 1)
+    bars = ax.bar(np.arange(len(keys)), vals, color='#1D3557')
+    for i, b in enumerate(bars):
+        ax.text(b.get_x() + b.get_width() / 2.0, b.get_height() + 0.8, f'{vals[i]:.2f}', ha='center', va='bottom', fontsize=8)
+    ax.set_xticks(np.arange(len(keys)))
+    ax.set_xticklabels(labels)
+    ax.set_ylim(0, 100)
+    ax.set_ylabel('Accuracy (%)')
+    ax.set_title('Top-k Accuracy Profile')
+    ax.grid(axis='y', alpha=0.3, linestyle='--')
+    plt.tight_layout()
+    os.makedirs(os.path.dirname(save_path) or '.', exist_ok=True)
+    fig.savefig(save_path, dpi=220)
+    plt.close(fig)
+
+
 def _stats_for_dataset(dataset_name):
     if dataset_name.lower() == 'svhn':
         return (0.4377, 0.4438, 0.4728), (0.1980, 0.2010, 0.1970)
@@ -466,11 +567,16 @@ def parse_args():
     p.add_argument('--confusion-path', type=str, default=None)
     p.add_argument('--save-per-class', action='store_true')
     p.add_argument('--per-class-path', type=str, default=None)
+    p.add_argument('--save-prf1', action='store_true')
+    p.add_argument('--prf1-path', type=str, default=None)
     p.add_argument('--save-calibration', action='store_true')
     p.add_argument('--calibration-path', type=str, default=None)
     p.add_argument('--save-confidence-coverage', action='store_true')
     p.add_argument('--confidence-coverage-path', type=str, default=None)
     p.add_argument('--coverage-points', type=int, default=20)
+    p.add_argument('--save-topk', action='store_true')
+    p.add_argument('--topk-path', type=str, default=None)
+    p.add_argument('--topk-list', type=str, default='1,2,3,5')
     p.add_argument('--save-attack-sweep', action='store_true')
     p.add_argument('--attack-sweep-path', type=str, default=None)
     p.add_argument('--sweep-epsilons', type=str, default='0/255,2/255,4/255,8/255,12/255')
@@ -520,7 +626,14 @@ def main():
         )
         print(f'Saved sample grid to: {grid_path}')
 
-    needs_predictions = args.save_confusion or args.save_per_class or args.save_calibration or args.save_confidence_coverage
+    needs_predictions = (
+        args.save_confusion
+        or args.save_per_class
+        or args.save_prf1
+        or args.save_calibration
+        or args.save_confidence_coverage
+        or args.save_topk
+    )
     if needs_predictions:
         probs, preds, labels = collect_predictions(model, test_loader, device)
         num_classes = probs.shape[1]
@@ -536,6 +649,16 @@ def main():
             per_class_path = args.per_class_path or (args.checkpoint + '.per_class.png')
             save_per_class_accuracy(labels, preds, num_classes=num_classes, save_path=per_class_path)
             print(f'Saved per-class accuracy plot to: {per_class_path}')
+
+        if args.save_prf1:
+            prf1_path = args.prf1_path or (args.checkpoint + '.prf1.png')
+            prf1 = compute_classwise_prf1(labels, preds, num_classes=num_classes)
+            save_classwise_prf1_plot(prf1, save_path=prf1_path)
+            metrics['classwise_prf1'] = prf1
+            metrics['macro_precision'] = float(prf1['macro_precision'] * 100.0)
+            metrics['macro_recall'] = float(prf1['macro_recall'] * 100.0)
+            metrics['macro_f1'] = float(prf1['macro_f1'] * 100.0)
+            print(f'Saved class-wise PRF1 plot to: {prf1_path}')
 
         if args.save_calibration:
             calibration_path = args.calibration_path or (args.checkpoint + '.calibration.png')
@@ -554,6 +677,16 @@ def main():
             metrics['confidence_coverage'] = coverage_metrics
             metrics['aurc'] = float(coverage_metrics['aurc'])
             print(f'Saved confidence-coverage plot to: {coverage_path}')
+
+        if args.save_topk:
+            topk_path = args.topk_path or (args.checkpoint + '.topk.png')
+            topk_list = parse_int_list(args.topk_list)
+            topk_scores = compute_topk_accuracy(probs, labels, topk=topk_list)
+            save_topk_accuracy_plot(topk_scores, save_path=topk_path)
+            metrics['topk_accuracy'] = topk_scores
+            if 'top5' in topk_scores:
+                metrics['top5_acc'] = float(topk_scores['top5'])
+            print(f'Saved top-k accuracy plot to: {topk_path}')
 
     if args.save_attack_sweep:
         sweep_path = args.attack_sweep_path or (args.checkpoint + '.robustness_sweep.png')

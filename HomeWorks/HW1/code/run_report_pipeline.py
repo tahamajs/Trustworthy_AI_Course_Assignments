@@ -36,6 +36,7 @@ def parse_args():
     p.add_argument('--sweep-iters', type=int, default=3)
     p.add_argument('--sweep-max-batches', type=int, default=4)
     p.add_argument('--coverage-points', type=int, default=20)
+    p.add_argument('--topk-list', default='1,2,3,5')
     p.add_argument('--pgd-iters-list', default='1,2,4,7,10')
     p.add_argument('--iter-sweep-max-batches', type=int, default=4)
     p.add_argument('--full-run', action='store_true', help='Disable demo mode and run on full dataset.')
@@ -72,8 +73,10 @@ def main():
     grid_path = save_dir / 'best.pth.grid.png'
     confusion_path = save_dir / 'best.pth.confusion.png'
     per_class_path = save_dir / 'best.pth.per_class.png'
+    prf1_path = save_dir / 'best.pth.prf1.png'
     calibration_path = save_dir / 'best.pth.calibration.png'
     confidence_coverage_path = save_dir / 'best.pth.confidence_coverage.png'
+    topk_path = save_dir / 'best.pth.topk.png'
     sweep_path = save_dir / 'best.pth.robustness_sweep.png'
     pgd_iter_sweep_path = save_dir / 'best.pth.pgd_iter_sweep.png'
     metrics_path = save_dir / 'best.pth.metrics.json'
@@ -107,6 +110,9 @@ def main():
         '--save-per-class',
         '--per-class-path',
         str(per_class_path),
+        '--save-prf1',
+        '--prf1-path',
+        str(prf1_path),
         '--save-calibration',
         '--calibration-path',
         str(calibration_path),
@@ -115,6 +121,11 @@ def main():
         str(confidence_coverage_path),
         '--coverage-points',
         str(args.coverage_points),
+        '--save-topk',
+        '--topk-path',
+        str(topk_path),
+        '--topk-list',
+        args.topk_list,
         '--save-attack-sweep',
         '--attack-sweep-path',
         str(sweep_path),
@@ -143,8 +154,10 @@ def main():
     copy_if_exists(grid_path, report_fig_dir / 'adv_examples.png')
     copy_if_exists(confusion_path, report_fig_dir / 'confusion_matrix.png')
     copy_if_exists(per_class_path, report_fig_dir / 'per_class_accuracy.png')
+    copy_if_exists(prf1_path, report_fig_dir / 'classwise_prf1.png')
     copy_if_exists(calibration_path, report_fig_dir / 'reliability_diagram.png')
     copy_if_exists(confidence_coverage_path, report_fig_dir / 'confidence_coverage.png')
+    copy_if_exists(topk_path, report_fig_dir / 'topk_accuracy.png')
     copy_if_exists(sweep_path, report_fig_dir / 'robustness_sweep.png')
     copy_if_exists(pgd_iter_sweep_path, report_fig_dir / 'pgd_iter_sweep.png')
     copy_if_exists(metrics_path, report_fig_dir / 'metrics_summary.json')
