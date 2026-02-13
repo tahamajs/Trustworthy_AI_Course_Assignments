@@ -67,12 +67,18 @@ For a sample \(x\), the probability output is \(\sigma(f_\theta(x))\), where
 \begin{equation}
 \sigma(z)=\frac{1}{1+e^{-z}}.
 \end{equation}
+The population objective can be expressed as empirical risk minimization:
+\begin{equation}
+\hat{\theta}=\arg\min_{\theta}\frac{1}{N}\sum_{i=1}^{N}\ell\!\left(y_i,f_{\theta}(x_i)\right),
+\end{equation}
+with \(\ell\) equal to logistic loss. Under the Bernoulli likelihood model, this objective is equivalent to maximizing conditional log-likelihood, so the learned score approximates log-odds when the model class is sufficiently expressive.
 
 The NAM model uses an additive decomposition inspired by neural additive modeling \cite{agarwal2021nam}:
 \begin{equation}
 f(x)=\sum_{j=1}^{d} g_j(x_j), \quad \hat{y}=\sigma(f(x)).
 \end{equation}
 This supports direct per-feature response visualization and therefore intrinsic interpretability.
+The additive structure is theoretically important because it removes interaction terms from first-order decomposition, so each \(g_j\) can be interpreted as a marginal contribution function while holding the latent representation fixed.
 
 \subsection{Tabular Explanation Methods}
 LIME explains predictions through a locally weighted surrogate objective \cite{ribeiro2016lime}:
@@ -80,6 +86,12 @@ LIME explains predictions through a locally weighted surrogate objective \cite{r
 \xi(x)=\arg\min_{g\in\mathcal{G}}\;\mathcal{L}(f,g,\pi_x)+\Omega(g).
 \end{equation}
 SHAP estimates feature attributions via Shapley-value decomposition \cite{lundberg2017shap}, approximated here with KernelSHAP.
+For any sample \(x\), SHAP satisfies local additivity:
+\begin{equation}
+f(x)\approx \phi_0+\sum_{j=1}^{d}\phi_j,
+\end{equation}
+where \(\phi_j\) is the feature attribution. Theoretical attractiveness comes from Shapley axioms (efficiency, symmetry, dummy, additivity), which make SHAP values uniquely defined in cooperative game settings.
+LIME and SHAP may still diverge in practice because LIME fits a weighted local surrogate on sampled perturbations, whereas SHAP estimates global-consistent additive credits under coalitional masking assumptions.
 
 \subsection{Vision Explanation Methods}
 Grad-CAM localizes class-relevant activation regions by weighting feature maps with class gradients \cite{selvaraju2017gradcam}:
@@ -88,6 +100,14 @@ Grad-CAM localizes class-relevant activation regions by weighting feature maps w
 L_{\text{Grad-CAM}}^c &= \mathrm{ReLU}\left(\sum_k \alpha_k^c A^k\right).
 \end{align}
 Guided Backpropagation \cite{simonyan2013saliency} and SmoothGrad \cite{smilkov2017smoothgrad} are used to improve saliency interpretability, and their fusion with Grad-CAM provides Guided Grad-CAM maps.
+From a differential viewpoint, saliency is a Jacobian-derived signal \(S(x)=\nabla_x y^c\). SmoothGrad estimates a denoised gradient field by Monte Carlo averaging over Gaussian perturbations:
+\begin{equation}
+\hat{S}(x)=\frac{1}{K}\sum_{k=1}^{K}\nabla_x y^c(x+\epsilon_k), \;\; \epsilon_k\sim\mathcal{N}(0,\sigma^2 I),
+\end{equation}
+which acts as a variance-reduction estimator for pixel-level sensitivity.
+
+\subsection{Theoretical Basis for Plot Interpretation}
+Each result plot is interpreted using a common decomposition principle: prediction behavior is explained by either additive feature contributions (tabular) or spatial sensitivity decomposition (vision). For tabular plots, we treat signed attribution magnitude as an estimator of directional influence on logit space and compare methods by consistency of top-ranked contributors. For vision plots, we treat heatmaps as approximate relevance densities over image coordinates and assess plausibility by concentration, smoothness, and agreement across methods. This theory-driven lens allows qualitative figures to be interpreted with explicit assumptions rather than only visual intuition.
 
 \section{Quantitative Summary}
 \begin{table}[H]
@@ -117,6 +137,7 @@ The split remains stratified (train/val/test positive rates approximately 0.348/
 \label{fig:class_dist}
 \end{figure}
 The class-distribution plot shows a moderate imbalance (about 34.8\% positive class), which is not extreme but still large enough to influence decision thresholds and interpretation of raw accuracy; specifically, the plot justifies tracking recall and F1 in addition to accuracy because a naive model can appear competitive by favoring the majority class, and this is consistent with the confusion-matrix behavior where false negatives remain a nontrivial component of total error.
+From a decision-theoretic perspective, class prior \(\pi=P(Y=1)\) shifts Bayes-optimal thresholding under asymmetric costs, so this plot directly motivates using metrics that are prior-sensitive (recall, F1) rather than prior-insensitive only in balanced settings.
 
 \subsection{LIME--SHAP Comparison, Sample 0}
 \begin{figure}[H]
@@ -126,6 +147,7 @@ The class-distribution plot shows a moderate imbalance (about 34.8\% positive cl
 \label{fig:lime_shap_0}
 \end{figure}
 For sample 0 (predicted positive probability \(\approx 0.397\), true label 0), SHAP and LIME both identify a mixed-sign contribution pattern where \textit{DiabetesPedigreeFunction} and a mid-range \textit{Glucose} interval push the score upward while low \textit{Pregnancies} and age-related effects pull downward, indicating a borderline case in which familial-risk and glucose evidence are partially offset by protective factors; this agreement on dominant drivers but disagreement on exact rank/scale is expected because SHAP is additive game-theoretic while LIME is local-surrogate based.
+Theoretically, this is a near-margin sample where small perturbations can change sign of local linear coefficients, so rank instability is expected even when both methods preserve coarse attribution directionality.
 
 \subsection{LIME--SHAP Comparison, Sample 1}
 \begin{figure}[H]
@@ -135,6 +157,7 @@ For sample 0 (predicted positive probability \(\approx 0.397\), true label 0), S
 \label{fig:lime_shap_1}
 \end{figure}
 For sample 1 (predicted positive probability \(\approx 0.342\), true label 0), both methods assign the largest positive influence to high \textit{Glucose}, while \textit{BloodPressure} and \textit{SkinThickness} contribute negatively and reduce the final risk estimate, yielding a coherent clinical-style interpretation in which a strong glucose signal is present but is counterbalanced by other features so the final classification remains negative; this sample demonstrates that high-value single features can be moderated by multifeature context rather than determining the outcome alone.
+In additive explanation terms, \(\sum_j \phi_j\) remains below the decision boundary despite one dominant positive term, illustrating that classification is governed by net logit composition rather than any single high-attribution coordinate.
 
 \subsection{LIME--SHAP Comparison, Sample 2}
 \begin{figure}[H]
@@ -144,6 +167,7 @@ For sample 1 (predicted positive probability \(\approx 0.342\), true label 0), b
 \label{fig:lime_shap_2}
 \end{figure}
 For sample 2 (predicted positive probability \(\approx 0.261\), true label 0), SHAP and LIME agree that low \textit{DiabetesPedigreeFunction} and lower \textit{Glucose} range are major negative contributors, while \textit{Pregnancies} and \textit{BloodPressure} add smaller positive offsets, creating a clearly negative net attribution profile that aligns with the final class decision and illustrates a cleaner explanation regime than samples 0 and 1 because both methods emphasize similar dominant protective factors.
+The stronger inter-method agreement here indicates higher local explanation stability, which in theory corresponds to lower curvature and lower neighborhood sensitivity around the evaluated point.
 
 \subsection{NAM Feature-Function Plot}
 \begin{figure}[H]
@@ -153,6 +177,7 @@ For sample 2 (predicted positive probability \(\approx 0.261\), true label 0), S
 \label{fig:nam_functions}
 \end{figure}
 The NAM feature-function figure provides direct structural interpretability by plotting each learned \(g_j(x_j)\) while all other features are held at median values, and the observed nonlinear slopes/curvatures show where each feature increases or decreases model logit contribution; the key result is that the model exposes interpretable, feature-isolated response shapes without post-hoc approximation, making it possible to audit monotonic or non-monotonic behavior and compare this transparency tradeoff against the slightly better but more opaque MLP performance.
+Formally, because \(f(x)\) is separable, partial derivatives satisfy \(\partial f/\partial x_j=g_j'(x_j)\), so each subplot is directly linked to local sensitivity of the full model and not merely a post-hoc proxy.
 
 \subsection{Grad-CAM Demo Plot}
 \begin{figure}[H]
@@ -162,6 +187,7 @@ The NAM feature-function figure provides direct structural interpretability by p
 \label{fig:gradcam_demo}
 \end{figure}
 The Grad-CAM plot confirms that the implementation correctly computes class-conditioned activation localization by producing a normalized spatial heatmap with concentrated high-response regions rather than uniform noise, which validates the gradient-hook path, channel-weight averaging, ReLU gating, and upsampling steps in the code and establishes that the pipeline produces interpretable localization outputs even when pretrained weights are unavailable.
+Under the Grad-CAM formulation, this concentration pattern is theoretically consistent with positive class-evidence filtering by ReLU, which suppresses negative evidence and retains only regions with positive contribution to \(y^c\).
 
 \subsection{Guided Grad-CAM Example Plot}
 \begin{figure}[H]
@@ -171,6 +197,7 @@ The Grad-CAM plot confirms that the implementation correctly computes class-cond
 \label{fig:guided_gradcam}
 \end{figure}
 The Guided Grad-CAM example shows the expected complementarity between methods: Grad-CAM provides coarse spatial focus, Guided Backprop provides high-frequency sensitivity detail, and their fusion yields sharper yet still localized attribution patterns, demonstrating that the combined map preserves regional relevance while improving boundary detail and therefore offers a more informative qualitative explanation than either component used in isolation.
+This matches the product-form intuition \(M_{\text{guided-cam}}\approx M_{\text{grad-cam}}\odot |\nabla_x y^c|\), where multiplicative fusion acts as a spatial gate over fine gradients.
 
 \subsection{SmoothGrad and Guided Comparison Plot}
 \begin{figure}[H]
@@ -180,6 +207,7 @@ The Guided Grad-CAM example shows the expected complementarity between methods: 
 \label{fig:smoothgrad_guided}
 \end{figure}
 The SmoothGrad comparison plot demonstrates that gradient averaging suppresses noisy pixel-level variance while retaining salient structure, and when viewed alongside absolute Guided Backprop and Guided Grad-CAM maps it highlights a clear tradeoff between smoothness and edge sharpness: SmoothGrad is visually stable and less speckled, Guided Backprop is sharper but noisier, and Guided Grad-CAM balances both by enforcing localization priors from class-activation weighting.
+In estimator terms, increasing \(K\) in SmoothGrad lowers variance of attribution estimates at the cost of potential detail attenuation, which explains why the map appears smoother than raw guided gradients while preserving dominant relevance regions.
 
 \section{Discussion}
 The complete set of figures supports a consistent interpretation narrative: tabular attributions from LIME/SHAP are locally coherent with model decisions, NAM provides transparent global feature-shape behavior, and vision methods provide progressively richer saliency views from localization to fused detailed maps.
