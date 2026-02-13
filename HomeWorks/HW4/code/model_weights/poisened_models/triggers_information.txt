@@ -1,0 +1,13 @@
+number	position	label
+0	up left		0
+1	bottom right	1
+2	bottom left	2
+3	up right	3
+4	bottom right	4
+5	bottom right	5
+6	up right	6
+7	bottom left	7
+8	bottom right	8
+9	up left		9
+
+trigger size: 4x4 pixel
