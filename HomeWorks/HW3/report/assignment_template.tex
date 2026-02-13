@@ -10,7 +10,6 @@
 \usepackage{cite}
 \usepackage{listings}
 \usepackage{xcolor}
-\usepackage{float}
 
 \definecolor{codebg}{RGB}{246,246,246}
 \lstdefinestyle{plainstyle}{
@@ -67,7 +66,7 @@ For MLP classifiers, recourse is obtained via iterative optimization over interv
 
 \section{Implementation Completion for Q5}
 \subsection{Q5.1 Data Processing and Actionability}
-In \texttt{code/Q5\_codes/data\_utils.py}, health preprocessing is configured so only \texttt{insulin} and \texttt{blood\_glucose} are actionable. Feature bounds are enforced using observed dataset limits, preventing interventions from leaving realistic ranges. Non-actionable features \texttt{age} and \texttt{blood\_pressure} remain fixed under direct intervention.
+In \texttt{code/q5\_codes/data\_utils.py}, health preprocessing is configured so only \texttt{insulin} and \texttt{blood\_glucose} are actionable. Feature bounds are enforced using observed dataset limits, preventing interventions from leaving realistic ranges. Non-actionable features \texttt{age} and \texttt{blood\_pressure} remain fixed under direct intervention.
 
 \subsection{Q5.2 Running on 10 Unhealthy Individuals}
 The evaluation pipeline is executed with $N_{\text{explain}}=10$, sampling negatively classified test instances and computing valid recourse/cost arrays. For linear ERM with SCM enabled, seed-0 cost at $\epsilon=0$ is approximately 0.909, and the multi-seed mean is 0.889.
@@ -90,12 +89,12 @@ With SCM enabled, the pipeline computes causal recourse recommendations and save
 All runs use:
 \begin{itemize}
   \item Python environment: \texttt{/Users/tahamajs/Documents/uni/venv/bin/activate}
-  \item Code root: \texttt{HomeWorks/HW3/code/Q5\_codes}
+  \item Code root: \texttt{HomeWorks/HW3/code/q5\_codes}
   \item Report root: \texttt{HomeWorks/HW3/report}
 \end{itemize}
 
 \subsection{Evaluated Configurations}
-\begin{table}[H]
+\begin{table}[!t]
 \centering
 \caption{Model and recourse settings used in this report}
 \begin{tabular}{lccc}
@@ -104,7 +103,8 @@ Configuration & Seeds & $\epsilon$ set & $N_{\text{explain}}$ \\
 \midrule
 lin-ERM & 0,1,2 & \{0.0, 0.1, 0.2\} & 10 \\
 lin-AF  & 0,1,2 & \{0.0, 0.1, 0.2\} & 10 \\
-mlp-ERM & 0,1   & \{0.0, 0.1, 0.2\} & 10 \\
+mlp-ERM & 0,1,2 & \{0.0, 0.1, 0.2\} & 10 \\
+mlp-AF  & 0,1,2 & \{0.0, 0.1, 0.2\} & 10 \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -120,7 +120,7 @@ The script \texttt{generate\_report\_artifacts.py} produces:
 
 \section{Results and Complete Plot Explanations}
 \subsection{Classifier Performance Summary}
-\begin{table}[H]
+\begin{table}[!t]
 \centering
 \caption{Classifier quality (mean $\pm$ std across available seeds)}
 \label{tab:clf}
@@ -128,14 +128,15 @@ The script \texttt{generate\_report\_artifacts.py} produces:
 \toprule
 Configuration & Accuracy & MCC \\
 \midrule
-lin-ERM & $0.903 \pm 0.002$ & $0.803 \pm 0.004$ \\
-lin-AF  & $0.903 \pm 0.002$ & $0.803 \pm 0.003$ \\
-mlp-ERM & $1.000 \pm 0.000$ & $1.000 \pm 0.000$ \\
+lin-ERM & $0.907 \pm 0.003$ & $0.817 \pm 0.005$ \\
+lin-AF  & $0.906 \pm 0.001$ & $0.817 \pm 0.001$ \\
+mlp-ERM & $0.999 \pm 0.001$ & $0.999 \pm 0.002$ \\
+mlp-AF  & $0.999 \pm 0.001$ & $0.999 \pm 0.001$ \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-\begin{figure}[H]
+\begin{figure}[!t]
 \centering
 \includegraphics[width=0.95\columnwidth]{figures/classifier_metrics.png}
 \caption{Classifier metrics by model/trainer.}
@@ -143,10 +144,10 @@ mlp-ERM & $1.000 \pm 0.000$ & $1.000 \pm 0.000$ \\
 \end{figure}
 
 \textit{Complete interpretation of Fig.~\ref{fig:clfmetrics}:}
-This plot shows that linear ERM and linear AF are nearly identical in predictive discrimination (accuracy and MCC around 0.903 and 0.803), while the MLP reaches perfect scores on the tested split. Theoretically, this indicates that AF masking does not hurt linear predictive utility for this dataset because non-actionable features do not provide dominant unique information beyond actionable correlates in the chosen split. The MLP result suggests high function capacity relative to data complexity; however, in recourse theory high predictive accuracy does not imply low recourse burden, since the optimization landscape for intervention may remain sharp or constraint-limited even with near-perfect classification.
+This plot shows two clear regimes: linear models (ERM and AF) have nearly identical predictive strength around 0.906--0.907 accuracy and 0.817 MCC, while MLP models (ERM and AF) are substantially higher near 0.999 accuracy and 0.999 MCC. Theoretically, this supports the claim that actionability masking does not impose a major predictive penalty when actionable variables already capture most task-relevant signal. At the same time, the figure emphasizes a key recourse principle: predictive quality and intervention quality are different objectives. Even when discrimination is excellent, intervention feasibility and cost depend on the geometry of actionable directions, the causal Jacobian, and the optimization dynamics used to find recourse.
 
 \subsection{Validity--Cost Tradeoff Across Robustness Radius}
-\begin{table}[H]
+\begin{table}[!t]
 \centering
 \caption{Recourse outcomes (mean across seeds)}
 \label{tab:recourse}
@@ -154,20 +155,23 @@ This plot shows that linear ERM and linear AF are nearly identical in predictive
 \toprule
 Configuration & $\epsilon$ & Valid rate & Mean valid cost \\
 \midrule
-lin-ERM & 0.0 & 1.00 & 0.889 \\
-lin-ERM & 0.1 & 1.00 & 1.004 \\
-lin-ERM & 0.2 & 1.00 & 1.120 \\
-lin-AF  & 0.0 & 1.00 & 0.701 \\
-lin-AF  & 0.1 & 1.00 & 0.823 \\
-lin-AF  & 0.2 & 1.00 & 0.946 \\
-mlp-ERM & 0.0 & 0.85 & 1.111 \\
-mlp-ERM & 0.1 & 0.90 & 1.253 \\
-mlp-ERM & 0.2 & 0.90 & 0.885 \\
+lin-ERM & 0.0 & 1.000 & 0.889 \\
+lin-ERM & 0.1 & 1.000 & 1.004 \\
+lin-ERM & 0.2 & 1.000 & 1.120 \\
+lin-AF  & 0.0 & 1.000 & 0.701 \\
+lin-AF  & 0.1 & 1.000 & 0.823 \\
+lin-AF  & 0.2 & 1.000 & 0.946 \\
+mlp-ERM & 0.0 & 0.867 & 1.177 \\
+mlp-ERM & 0.1 & 0.900 & 1.334 \\
+mlp-ERM & 0.2 & 0.900 & 1.150 \\
+mlp-AF  & 0.0 & 0.967 & 1.793 \\
+mlp-AF  & 0.1 & 0.967 & 1.971 \\
+mlp-AF  & 0.2 & 0.933 & 1.988 \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-\begin{figure}[H]
+\begin{figure}[!t]
 \centering
 \includegraphics[width=0.95\columnwidth]{figures/valid_rate_vs_epsilon.png}
 \caption{Valid recourse rate vs robustness radius $\epsilon$.}
@@ -175,9 +179,9 @@ mlp-ERM & 0.2 & 0.90 & 0.885 \\
 \end{figure}
 
 \textit{Complete interpretation of Fig.~\ref{fig:validrate}:}
-The figure indicates that both linear settings preserve 100\% validity across all tested robustness radii, while MLP validity remains below 1.0 and varies with $\epsilon$. The linear stability is theoretically expected because robust linear recourse solves a convex feasibility problem with explicit Jacobian-adjusted boundary shift; as long as feasible action bounds remain wide enough, validity can stay saturated. In contrast, nonlinear recourse uses gradient optimization in a non-convex objective with finite iterations, so the algorithm may fail to find valid interventions for some points even when valid solutions exist, which explains sub-unity validity for MLP despite strong predictive accuracy.
+The figure indicates perfect validity saturation for both linear settings at all tested radii, while nonlinear settings remain below 1.0 with model-dependent behavior (MLP-AF above MLP-ERM but not perfect). This pattern is theoretically consistent with convex versus non-convex recourse search: linear robust recourse has explicit Jacobian-shifted constraints and a stable feasible-set characterization, whereas MLP recourse is obtained by iterative gradient steps over a non-convex objective and can terminate in local basins or near-boundary states that do not cross the threshold. The higher MLP-AF validity here suggests that constraining classifier dependence to actionable coordinates can improve optimization alignment, yet finite-step optimization and heterogeneous instance geometry still prevent guaranteed validity.
 
-\begin{figure}[H]
+\begin{figure}[!t]
 \centering
 \includegraphics[width=0.95\columnwidth]{figures/valid_cost_vs_epsilon.png}
 \caption{Mean valid recourse cost vs robustness radius $\epsilon$.}
@@ -185,10 +189,10 @@ The figure indicates that both linear settings preserve 100\% validity across al
 \end{figure}
 
 \textit{Complete interpretation of Fig.~\ref{fig:validcost}:}
-For both linear models, intervention cost increases monotonically with $\epsilon$, matching robust recourse theory where larger uncertainty enlarges the required safety margin from the decision boundary. AF consistently has lower cost than ERM, indicating that constraining classifier dependence to actionable dimensions can align decision geometry with feasible intervention directions and reduce required action magnitude. MLP costs are higher and less monotonic because the reported quantity is conditional on successful recourse instances; when validity changes with $\epsilon$, the set of included points also changes, so conditional mean cost can move non-monotonically even if underlying optimization becomes harder.
+For both linear models, intervention cost increases nearly linearly with $\epsilon$, which directly matches robust optimization theory: larger uncertainty requires a larger worst-case margin, hence larger minimum L1 action. AF remains strictly cheaper than ERM in the linear case, supporting the geometric view that actionable masking can rotate effective decision sensitivity toward feasible intervention directions. In nonlinear settings, costs are markedly higher and more variable, and MLP-AF is especially expensive despite higher validity. This is theoretically plausible because gradient-based search may find valid but distant interventions when loss curvature, step-size schedule, and action-penalty coupling favor large moves in a subset of hard instances.
 
 \subsection{Instance-Level Cost Distribution}
-\begin{figure}[H]
+\begin{figure}[!t]
 \centering
 \includegraphics[width=0.95\columnwidth]{figures/recourse_costs.png}
 \caption{Per-instance recourse costs for explained unhealthy individuals.}
@@ -199,7 +203,7 @@ For both linear models, intervention cost increases monotonically with $\epsilon
 This plot visualizes heterogeneity of intervention effort across individuals: some instances require very small perturbations while others require significantly larger actions. Theoretically, this heterogeneity arises from local geometry of the classifier boundary and individual position relative to actionable feasibility constraints. Points near the boundary and aligned with high-gain actionable directions need small interventions; points deeper in the unfavorable region, or constrained by directional/box bounds, require larger L1 actions. Therefore, average recourse cost should always be interpreted together with distributional spread, not as a single universal burden.
 
 \subsection{Nearest Counterfactual vs Causal Recourse}
-\begin{figure}[H]
+\begin{figure}[!t]
 \centering
 \includegraphics[width=0.95\columnwidth]{figures/nearest_vs_causal.png}
 \caption{Matched comparison: Nearest Counterfactual (SCM off) vs Causal Recourse (SCM on).}
@@ -207,12 +211,14 @@ This plot visualizes heterogeneity of intervention effort across individuals: so
 \end{figure}
 
 \textit{Complete interpretation of Fig.~\ref{fig:nvscausal}:}
-Under matched seed/model/samples, both methods achieve full validity, but causal recourse yields lower mean intervention cost (0.625 vs 0.779). Theoretically, SCM-aware recourse can exploit downstream causal amplification: an intervention on one actionable parent can beneficially move child variables without paying direct action cost on all descendants. Nearest counterfactual methods, by ignoring structural propagation, often optimize in a feature space geometry that treats dependent variables as independent coordinates, which can overestimate required action. This result is consistent with causal recourse arguments that structural knowledge can improve intervention efficiency while retaining decision-flip reliability.
+Under matched seed/model/samples, both methods achieve full validity, but causal recourse yields lower mean intervention cost (0.851 versus 1.061). Theoretically, SCM-aware optimization can leverage causal amplification: modifying an actionable parent induces beneficial downstream shifts through structural equations, increasing classifier score per unit direct intervention. In contrast, nearest counterfactual search without SCM treats correlated descendants as independent dimensions and may spend action budget redundantly. This cost gap therefore reflects an efficiency benefit from structural knowledge, not merely a random optimization artifact, and aligns with intervention-based recourse theory.
 
 \section{Discussion and Theoretical Implications}
-First, robust recourse is not a free lunch: increasing uncertainty tolerance raises intervention cost, especially in linear models where this effect is analytically transparent. Second, classifier architecture alone does not determine recourse practicality. Even with perfect classification, nonlinear recourse can remain optimization-sensitive under causal constraints. Third, actionability-aware training (AF) can reduce practical intervention burden without compromising classifier quality, suggesting a principled route to train recourse-friendly models.
+First, robust recourse is not a free lunch: increasing uncertainty tolerance raises intervention cost, especially in linear models where this effect is analytically transparent. Second, classifier architecture alone does not determine recourse practicality. The MLP results show that near-ceiling predictive metrics can coexist with high or unstable recourse costs. Third, actionability-aware training (AF) can reduce practical intervention burden in linear settings without sacrificing classifier quality, but this benefit is not guaranteed in nonlinear optimization regimes, where curvature and initialization effects can dominate.
 
 From a causal perspective, this homework confirms a central principle: interventions should be evaluated in a structural model, not only in observational feature space. When feature dependencies are strong, SCM-enabled recommendations can be both more realistic and cheaper.
+
+An additional implication is deployment robustness: operational recourse systems should report uncertainty bands over seeds, initialization, and optimization hyperparameters, especially for nonlinear recourse solvers. A single-point mean can hide heavy-tail intervention costs that are unacceptable in practice. Therefore, trustworthy deployment requires both average-case performance and tail-risk monitoring (e.g., quantiles of valid cost among successful recourse cases).
 
 \section{Extended Theoretical Analysis}
 \subsection{Linear Recourse Cost Lower Bound}
@@ -239,13 +245,19 @@ When downstream links are favorable for class flip, one unit intervention can pr
 \subsection{Validity-Cost Frontier Interpretation}
 Recourse quality can be viewed as a bi-objective frontier: maximize validity and minimize intervention burden. Linear models in this report sit near a high-validity region with predictable cost growth as robustness tightens. MLP settings display frontier instability due optimization non-convexity; therefore, robust deployment should report confidence intervals, not single-point estimates, and include optimization diagnostics.
 
+\subsection{Nonlinear Recourse Curvature Effect}
+For differentiable recourse with loss $\mathcal{L}(a)=\ell(g(x+f(a)))+\lambda\|a\|_1$, the local Hessian of the smooth term controls gradient flow stability. In regions of high curvature, a fixed step-size can oscillate or overshoot toward higher-cost valid points. This offers a theoretical explanation for observing high validity but inflated action magnitudes in some MLP-AF runs: optimization reaches feasibility, but not low-cost local minima. In practice, line-search or adaptive trust-region updates can reduce this gap.
+
+\subsection{SCM Misspecification Consideration}
+The causal advantage observed here assumes the SCM is approximately correct in sign and relative strength. If structural coefficients are misspecified, propagated effects can be mis-estimated and recommended actions may become suboptimal. Nonetheless, even imperfect SCMs often provide a better inductive bias than no structure at all when domain relations are strong. This motivates future work on recourse under causal uncertainty sets, where interventions are optimized against a family of plausible SCM parameters.
+
 \section{Conclusion}
 This report completes HW3 Question~5 end-to-end in IEEE format with explicit theoretical and empirical analysis. The software pipeline is fully runnable, missing SCM components are completed, robust evaluations are produced, and each plot is interpreted in a dedicated theory-grounded paragraph. Empirically, linear recourse is highly stable on this dataset, AF reduces intervention cost, and causal recourse outperforms nearest counterfactual in matched cost comparison while maintaining full validity.
 
 \appendices
 \section{Reproducibility Commands}
 \begin{lstlisting}[caption={Exact commands used for the final report build}]
-cd /Users/tahamajs/Documents/uni/truthlyAI/HomeWorks/HW3/code/Q5_codes
+cd /Users/tahamajs/Documents/uni/truthlyAI/HomeWorks/HW3/code/q5_codes
 source /Users/tahamajs/Documents/uni/venv/bin/activate
 
 python main.py --seed 0
@@ -256,10 +268,10 @@ make pdf
 \end{lstlisting}
 
 \section{Auto-Generated Aggregate CSV}
-\lstinputlisting[caption={Health report aggregate CSV}]{../code/Q5_codes/results/health_report_aggregate.csv}
+\lstinputlisting[caption={Health report aggregate CSV}]{../code/q5_codes/results/health_report_aggregate.csv}
 
 \section{Auto-Generated Per-Run CSV}
-\lstinputlisting[caption={Health report per-run summary CSV}]{../code/Q5_codes/results/health_report_summary.csv}
+\lstinputlisting[caption={Health report per-run summary CSV}]{../code/q5_codes/results/health_report_summary.csv}
 
 \section*{Acknowledgment}
 This submission was prepared for Trusted Artificial Intelligence coursework under Dr. Mostafa Tavasolipour.
