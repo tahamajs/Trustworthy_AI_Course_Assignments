@@ -517,8 +517,11 @@ def generate_vision_figures() -> dict[str, float]:
 def main() -> None:
     _set_seed()
     _ensure_dirs()
-    generate_tabular_figures()
-    generate_vision_figures()
+    tabular_summary = generate_tabular_figures()
+    vision_summary = generate_vision_figures()
+    combined_summary = {"tabular": tabular_summary, "vision": vision_summary}
+    METRICS_JSON.write_text(json.dumps(combined_summary, indent=2), encoding="utf-8")
+    print(f"[done] saved summary metrics at {METRICS_JSON}")
     print("[done] report figures generated in", FIG_DIR)
 
 

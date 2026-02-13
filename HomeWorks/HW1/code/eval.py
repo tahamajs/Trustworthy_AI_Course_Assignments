@@ -1,4 +1,5 @@
 import argparse
+import json
 import os
 import numpy as np
 import torch
@@ -37,6 +38,34 @@ def str_to_ratio(value):
     return float(value)
 
 
+def parse_ratio_list(values):
+    items = [x.strip() for x in values.split(',') if x.strip()]
+    return [str_to_ratio(x) for x in items]
+
+
+@torch.no_grad()
+def collect_predictions(model, loader, device, max_batches=None):
+    model.eval()
+    probs_all = []
+    preds_all = []
+    labels_all = []
+    for batch_idx, (x, y) in enumerate(loader):
+        if max_batches is not None and batch_idx >= max_batches:
+            break
+        x = x.to(device)
+        logits = model(x)
+        probs = torch.softmax(logits, dim=1)
+        preds = logits.argmax(dim=1)
+        probs_all.append(probs.cpu().numpy())
+        preds_all.append(preds.cpu().numpy())
+        labels_all.append(y.numpy())
+    return (
+        np.concatenate(probs_all, axis=0),
+        np.concatenate(preds_all, axis=0),
+        np.concatenate(labels_all, axis=0),
+    )
+
+
 def plot_umap(feats, labels, save_path):
     method = 'UMAP'
     try:
@@ -60,6 +89,120 @@ def plot_umap(feats, labels, save_path):
     os.makedirs(os.path.dirname(save_path) or '.', exist_ok=True)
     fig.savefig(save_path, dpi=220)
     plt.close(fig)
+
+
+def save_confusion_matrix(labels, preds, num_classes, save_path, normalize=True):
+    cm = np.zeros((num_classes, num_classes), dtype=np.float64)
+    for t, p in zip(labels, preds):
+        cm[int(t), int(p)] += 1.0
+    if normalize:
+        row_sum = cm.sum(axis=1, keepdims=True)
+        row_sum[row_sum == 0.0] = 1.0
+        cm = cm / row_sum
+
+    fig = plt.figure(figsize=(7.5, 6.5))
+    ax = fig.add_subplot(1, 1, 1)
+    im = ax.imshow(cm, cmap='Blues', interpolation='nearest')
+    fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
+    ax.set_xlabel('Predicted Label')
+    ax.set_ylabel('True Label')
+    ax.set_title('Normalized Confusion Matrix' if normalize else 'Confusion Matrix')
+    ticks = np.arange(num_classes)
+    ax.set_xticks(ticks)
+    ax.set_yticks(ticks)
+    ax.set_xticklabels([str(i) for i in ticks], fontsize=8)
+    ax.set_yticklabels([str(i) for i in ticks], fontsize=8)
+    plt.tight_layout()
+    os.makedirs(os.path.dirname(save_path) or '.', exist_ok=True)
+    fig.savefig(save_path, dpi=220)
+    plt.close(fig)
+
+
+def save_per_class_accuracy(labels, preds, num_classes, save_path):
+    labels = labels.astype(int)
+    preds = preds.astype(int)
+    acc = []
+    for cls in range(num_classes):
+        mask = labels == cls
+        if np.sum(mask) == 0:
+            acc.append(0.0)
+        else:
+            acc.append(float(np.mean(preds[mask] == labels[mask]) * 100.0))
+
+    fig = plt.figure(figsize=(8.5, 4.5))
+    ax = fig.add_subplot(1, 1, 1)
+    ax.bar(np.arange(num_classes), acc, color='#2A9D8F')
+    ax.set_ylim(0, 100)
+    ax.set_xlabel('Class Index')
+    ax.set_ylabel('Accuracy (%)')
+    ax.set_title('Per-Class Accuracy')
+    ax.grid(axis='y', alpha=0.3, linestyle='--')
+    plt.tight_layout()
+    os.makedirs(os.path.dirname(save_path) or '.', exist_ok=True)
+    fig.savefig(save_path, dpi=220)
+    plt.close(fig)
+
+
+def compute_ece(probs, labels, n_bins=10):
+    confidences = np.max(probs, axis=1)
+    predictions = np.argmax(probs, axis=1)
+    correct = (predictions == labels).astype(np.float64)
+
+    bins = np.linspace(0.0, 1.0, n_bins + 1)
+    ece = 0.0
+    stats = []
+    for i in range(n_bins):
+        lo, hi = bins[i], bins[i + 1]
+        if i == n_bins - 1:
+            mask = (confidences >= lo) & (confidences <= hi)
+        else:
+            mask = (confidences >= lo) & (confidences < hi)
+        if np.sum(mask) == 0:
+            stats.append((0.0, 0.0, 0))
+            continue
+        bin_acc = float(np.mean(correct[mask]))
+        bin_conf = float(np.mean(confidences[mask]))
+        bin_frac = float(np.mean(mask))
+        ece += abs(bin_acc - bin_conf) * bin_frac
+        stats.append((bin_acc, bin_conf, int(np.sum(mask))))
+    return float(ece), stats
+
+
+def save_reliability_diagram(probs, labels, save_path, n_bins=10):
+    ece, stats = compute_ece(probs, labels, n_bins=n_bins)
+    bin_acc = np.array([x[0] for x in stats], dtype=np.float64)
+    bin_conf = np.array([x[1] for x in stats], dtype=np.float64)
+    bin_counts = np.array([x[2] for x in stats], dtype=np.float64)
+    bins = np.linspace(0.0, 1.0, n_bins + 1)
+    centers = (bins[:-1] + bins[1:]) / 2.0
+    widths = np.diff(bins) * 0.9
+    total = np.maximum(np.sum(bin_counts), 1.0)
+
+    fig, axes = plt.subplots(2, 1, figsize=(7.0, 7.0), gridspec_kw={'height_ratios': [3, 1]})
+    ax = axes[0]
+    ax.plot([0, 1], [0, 1], '--', color='gray', linewidth=1.2, label='Perfect calibration')
+    ax.bar(centers, bin_acc, width=widths, color='#264653', alpha=0.8, label='Accuracy')
+    ax.bar(centers, np.maximum(bin_conf - bin_acc, 0), width=widths, bottom=bin_acc, color='#E76F51', alpha=0.7, label='Gap')
+    ax.set_xlim(0, 1)
+    ax.set_ylim(0, 1)
+    ax.set_ylabel('Accuracy / Confidence')
+    ax.set_title(f'Reliability Diagram (ECE={ece:.4f})')
+    ax.legend(loc='lower right', fontsize=8)
+    ax.grid(alpha=0.3, linestyle='--')
+
+    ax_hist = axes[1]
+    ax_hist.bar(centers, bin_counts / total, width=widths, color='#2A9D8F', alpha=0.85)
+    ax_hist.set_xlim(0, 1)
+    ax_hist.set_ylim(0, 1)
+    ax_hist.set_xlabel('Confidence')
+    ax_hist.set_ylabel('Bin Fraction')
+    ax_hist.grid(alpha=0.3, linestyle='--')
+
+    plt.tight_layout()
+    os.makedirs(os.path.dirname(save_path) or '.', exist_ok=True)
+    fig.savefig(save_path, dpi=220)
+    plt.close(fig)
+    return ece
 
 
 def _stats_for_dataset(dataset_name):
@@ -130,6 +273,68 @@ def save_example_grid(model, loader, device, dataset_name, save_path, attack='fg
     plt.close(fig)
 
 
+def evaluate_accuracy_under_attack(model, loader, device, attack='clean', epsilon=8 / 255, alpha=2 / 255, iters=7, max_batches=None):
+    model.eval()
+    total = 0
+    correct = 0
+    loss_fn = nn.CrossEntropyLoss()
+    for batch_idx, (x, y) in enumerate(loader):
+        if max_batches is not None and batch_idx >= max_batches:
+            break
+        x = x.to(device)
+        y = y.to(device)
+
+        if attack == 'fgsm':
+            x_eval = fgsm_attack(model, x, y, epsilon=epsilon, loss_fn=loss_fn, device=device)
+        elif attack == 'pgd':
+            x_eval = pgd_attack(model, x, y, epsilon=epsilon, alpha=alpha, iters=iters, loss_fn=loss_fn, device=device)
+        elif attack == 'noise':
+            x_eval = (x + torch.empty_like(x).uniform_(-epsilon, epsilon)).clamp(0.0, 1.0)
+        else:
+            x_eval = x
+
+        with torch.no_grad():
+            pred = model(x_eval).argmax(dim=1)
+        correct += pred.eq(y).sum().item()
+        total += x_eval.size(0)
+    return 100.0 * correct / max(total, 1)
+
+
+def save_attack_sweep_plot(model, loader, device, save_path, epsilons, alpha, sweep_iters=3, max_batches=None):
+    clean_acc = evaluate_accuracy_under_attack(model, loader, device, attack='clean', epsilon=0.0, alpha=alpha, iters=sweep_iters, max_batches=max_batches)
+    fgsm = []
+    pgd = []
+    noise = []
+    eps_scaled = [e * 255.0 for e in epsilons]
+    for eps in epsilons:
+        fgsm.append(evaluate_accuracy_under_attack(model, loader, device, attack='fgsm', epsilon=eps, alpha=alpha, iters=sweep_iters, max_batches=max_batches))
+        pgd.append(evaluate_accuracy_under_attack(model, loader, device, attack='pgd', epsilon=eps, alpha=alpha, iters=sweep_iters, max_batches=max_batches))
+        noise.append(evaluate_accuracy_under_attack(model, loader, device, attack='noise', epsilon=eps, alpha=alpha, iters=sweep_iters, max_batches=max_batches))
+
+    fig = plt.figure(figsize=(8, 5))
+    ax = fig.add_subplot(1, 1, 1)
+    ax.plot(eps_scaled, fgsm, marker='o', linewidth=2, label='FGSM')
+    ax.plot(eps_scaled, pgd, marker='s', linewidth=2, label='PGD')
+    ax.plot(eps_scaled, noise, marker='^', linewidth=2, label='Random Noise')
+    ax.axhline(clean_acc, color='black', linestyle='--', linewidth=1.2, label=f'Clean ({clean_acc:.2f}%)')
+    ax.set_xlabel('Epsilon (x/255)')
+    ax.set_ylabel('Accuracy (%)')
+    ax.set_title('Robustness Sweep')
+    ax.grid(alpha=0.3, linestyle='--')
+    ax.legend()
+    plt.tight_layout()
+    os.makedirs(os.path.dirname(save_path) or '.', exist_ok=True)
+    fig.savefig(save_path, dpi=220)
+    plt.close(fig)
+    return {
+        'clean_acc': clean_acc,
+        'epsilons': eps_scaled,
+        'fgsm_acc': fgsm,
+        'pgd_acc': pgd,
+        'noise_acc': noise,
+    }
+
+
 def parse_args():
     p = argparse.ArgumentParser()
     p.add_argument('--dataset', default='svhn')
@@ -143,6 +348,18 @@ def parse_args():
     p.add_argument('--grid-samples', type=int, default=8)
     p.add_argument('--umap-path', type=str, default=None)
     p.add_argument('--grid-path', type=str, default=None)
+    p.add_argument('--save-confusion', action='store_true')
+    p.add_argument('--confusion-path', type=str, default=None)
+    p.add_argument('--save-per-class', action='store_true')
+    p.add_argument('--per-class-path', type=str, default=None)
+    p.add_argument('--save-calibration', action='store_true')
+    p.add_argument('--calibration-path', type=str, default=None)
+    p.add_argument('--save-attack-sweep', action='store_true')
+    p.add_argument('--attack-sweep-path', type=str, default=None)
+    p.add_argument('--sweep-epsilons', type=str, default='0/255,2/255,4/255,8/255,12/255')
+    p.add_argument('--sweep-iters', type=int, default=3)
+    p.add_argument('--sweep-max-batches', type=int, default=4)
+    p.add_argument('--metrics-path', type=str, default=None)
     p.add_argument('--demo', action='store_true')
     p.add_argument('--batch-size', type=int, default=256)
     return p.parse_args()
@@ -158,6 +375,7 @@ def main():
     model.to(device)
     epsilon = str_to_ratio(args.epsilon)
     alpha = str_to_ratio(args.alpha)
+    metrics = {}
 
     if args.umap:
         feats, labels = extract_features(model, test_loader, device)
@@ -180,6 +398,51 @@ def main():
             num_samples=args.grid_samples,
         )
         print(f'Saved sample grid to: {grid_path}')
+
+    needs_predictions = args.save_confusion or args.save_per_class or args.save_calibration
+    if needs_predictions:
+        probs, preds, labels = collect_predictions(model, test_loader, device)
+        num_classes = probs.shape[1]
+        clean_acc = float(np.mean(preds == labels) * 100.0)
+        metrics['clean_acc'] = clean_acc
+
+        if args.save_confusion:
+            confusion_path = args.confusion_path or (args.checkpoint + '.confusion.png')
+            save_confusion_matrix(labels, preds, num_classes=num_classes, save_path=confusion_path, normalize=True)
+            print(f'Saved confusion matrix to: {confusion_path}')
+
+        if args.save_per_class:
+            per_class_path = args.per_class_path or (args.checkpoint + '.per_class.png')
+            save_per_class_accuracy(labels, preds, num_classes=num_classes, save_path=per_class_path)
+            print(f'Saved per-class accuracy plot to: {per_class_path}')
+
+        if args.save_calibration:
+            calibration_path = args.calibration_path or (args.checkpoint + '.calibration.png')
+            ece = save_reliability_diagram(probs, labels, save_path=calibration_path, n_bins=10)
+            metrics['ece'] = float(ece)
+            print(f'Saved reliability diagram to: {calibration_path}')
+
+    if args.save_attack_sweep:
+        sweep_path = args.attack_sweep_path or (args.checkpoint + '.robustness_sweep.png')
+        epsilons = parse_ratio_list(args.sweep_epsilons)
+        sweep = save_attack_sweep_plot(
+            model=model,
+            loader=test_loader,
+            device=device,
+            save_path=sweep_path,
+            epsilons=epsilons,
+            alpha=alpha,
+            sweep_iters=args.sweep_iters,
+            max_batches=args.sweep_max_batches,
+        )
+        metrics['robustness_sweep'] = sweep
+        print(f'Saved robustness sweep plot to: {sweep_path}')
+
+    if args.metrics_path is not None:
+        os.makedirs(os.path.dirname(args.metrics_path) or '.', exist_ok=True)
+        with open(args.metrics_path, 'w', encoding='utf-8') as f:
+            json.dump(metrics, f, indent=2)
+        print(f'Saved metrics summary to: {args.metrics_path}')
 
 
 if __name__ == '__main__':
