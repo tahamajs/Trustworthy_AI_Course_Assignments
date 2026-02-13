@@ -12,37 +12,40 @@
 \newcommand{\course}{Trustworthy Artificial Intelligence}
 \newcommand{\assignment}{HW4}
 
-% Fallback values; overwritten when report/results/results_macros.tex exists.
-\newcommand{\QOneDetectedLabel}{-1}
-\newcommand{\QOneExpectedLabel}{-1}
-\newcommand{\QOneCleanAccBefore}{-1}
-\newcommand{\QOneAsrBefore}{-1}
-\newcommand{\QOneCleanAccAfter}{-1}
-\newcommand{\QOneAsrAfter}{-1}
-\newcommand{\QTwoBBase}{-1}
-\newcommand{\QTwoBSequential}{-1}
-\newcommand{\QTwoBUnbounded}{-1}
-\newcommand{\QTwoProbBase}{-1}
-\newcommand{\QTwoProbSequential}{-1}
-\newcommand{\QTwoProbUnbounded}{-1}
-\newcommand{\QThreeBaseAcc}{-1}
-\newcommand{\QThreeBaseDi}{-1}
-\newcommand{\QThreeBaseZemel}{-1}
-\newcommand{\QThreeSwapAcc}{-1}
-\newcommand{\QThreeSwapDi}{-1}
-\newcommand{\QThreeSwapZemel}{-1}
-\newcommand{\QThreeNoGenderAcc}{-1}
-\newcommand{\QThreeNoGenderDi}{-1}
-\newcommand{\QThreeNoGenderZemel}{-1}
-\newcommand{\QThreeReweighedAcc}{-1}
-\newcommand{\QThreeReweighedDi}{-1}
-\newcommand{\QThreeReweighedZemel}{-1}
-\newcommand{\QThreeGroupThrAcc}{-1}
-\newcommand{\QThreeGroupThrDi}{-1}
-\newcommand{\QThreeGroupThrZemel}{-1}
-\newcommand{\QThreeGroupThrZero}{-1}
-\newcommand{\QThreeGroupThrOne}{-1}
-\IfFileExists{results/results_macros.tex}{\input{results/results_macros.tex}}{}
+% Load generated values when present; otherwise define fallback placeholders.
+\IfFileExists{results/results_macros.tex}{
+    \input{results/results_macros.tex}
+}{
+    \newcommand{\QOneDetectedLabel}{-1}
+    \newcommand{\QOneExpectedLabel}{-1}
+    \newcommand{\QOneCleanAccBefore}{-1}
+    \newcommand{\QOneAsrBefore}{-1}
+    \newcommand{\QOneCleanAccAfter}{-1}
+    \newcommand{\QOneAsrAfter}{-1}
+    \newcommand{\QTwoBBase}{-1}
+    \newcommand{\QTwoBSequential}{-1}
+    \newcommand{\QTwoBUnbounded}{-1}
+    \newcommand{\QTwoProbBase}{-1}
+    \newcommand{\QTwoProbSequential}{-1}
+    \newcommand{\QTwoProbUnbounded}{-1}
+    \newcommand{\QThreeBaseAcc}{-1}
+    \newcommand{\QThreeBaseDi}{-1}
+    \newcommand{\QThreeBaseZemel}{-1}
+    \newcommand{\QThreeSwapAcc}{-1}
+    \newcommand{\QThreeSwapDi}{-1}
+    \newcommand{\QThreeSwapZemel}{-1}
+    \newcommand{\QThreeNoGenderAcc}{-1}
+    \newcommand{\QThreeNoGenderDi}{-1}
+    \newcommand{\QThreeNoGenderZemel}{-1}
+    \newcommand{\QThreeReweighedAcc}{-1}
+    \newcommand{\QThreeReweighedDi}{-1}
+    \newcommand{\QThreeReweighedZemel}{-1}
+    \newcommand{\QThreeGroupThrAcc}{-1}
+    \newcommand{\QThreeGroupThrDi}{-1}
+    \newcommand{\QThreeGroupThrZemel}{-1}
+    \newcommand{\QThreeGroupThrZero}{-1}
+    \newcommand{\QThreeGroupThrOne}{-1}
+}
 
 \begin{document}
 
