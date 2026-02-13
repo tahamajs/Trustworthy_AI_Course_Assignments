@@ -46,3 +46,17 @@ A full notebook that covers all HW3 parts (Q1-Q6), including runnable Q5 causal 
 
 - `HomeWorks/HW3/code/HW3_complete_assignment.ipynb`
 - `HomeWorks/HW3/output/jupyter-notebook/hw3_complete_assignment.ipynb`
+
+## Clean PDF Export
+
+Use the helper script below to build a clean PDF from the notebook with
+XeLaTeX-safe font and Unicode patching:
+
+```bash
+cd HomeWorks/HW3
+./scripts/export_notebook_pdf.sh
+```
+
+Default output:
+
+- `HomeWorks/HW3/output/pdf/hw3_complete_assignment.pdf`

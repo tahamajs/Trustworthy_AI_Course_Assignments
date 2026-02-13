@@ -76,6 +76,102 @@ This report presents a complete, reproducible implementation of HW4 with emphasi
 \section{Introduction}
 Trustworthy AI is a multi-objective design problem: models should resist adversarial manipulation, leak limited information about individuals, and avoid systematic group-level harm. This assignment is a compact instance of that broader agenda, because it requires analyzing one model family through three distinct lenses with conflicting objectives. The central challenge is to maintain methodological consistency while interpreting metrics that encode different notions of risk: security risk (backdoor exploitability), privacy risk (query disclosure through noise calibration), and fairness risk (disparate outcomes across sensitive groups).
 
+\section{Related Work and Positioning}
+\subsection{Backdoor Detection and Model Repair Context}
+The security part of this report is grounded in optimization-based trigger reconstruction, represented by Neural Cleanse~\cite{wang2019neuralcleanse}. Conceptually, this family of methods assumes that a genuinely attacked target class has a lower-cost pathway in input space than clean classes. The present pipeline follows this rationale, but makes two practical decisions to improve auditability in coursework conditions: first, reconstruction is executed for all ten labels with a fixed profile and deterministic seed; second, attacked-label detection is based on lower-tail robust outlier statistics (MAD) over reconstructed scales rather than subjective visual interpretation. This yields a reproducible detection claim that can be checked numerically, not only visually.
+
+Mitigation in this report uses one-epoch constrained unlearning instead of full model replacement. That decision reflects assignment constraints and deployment realism: organizations usually prefer minimal updates that reduce exploitability while preserving utility and retraining cost budgets. The report therefore treats unlearning as a constrained optimization problem with two competing objectives: suppress trigger response (ASR reduction) and preserve normal behavior (clean accuracy and confusion-structure recovery). The added fraction-sweep analysis makes this tradeoff explicit and avoids presenting a single hard-coded hyperparameter as universally optimal.
+
+\subsection{Differential Privacy Context}
+The privacy track follows the standard Laplace mechanism derivation from the DP foundations text~\cite{dwork2014algorithmic}. Beyond reproducing assignment formulas, the report positions privacy analysis as a full uncertainty-geometry problem: a mechanism is not sufficiently understood by quoting $b=\Delta f/\epsilon$ once. Instead, one should inspect threshold exceedance probabilities and how they move under composition and sensitivity assumptions. This is why the report includes both point analysis (at threshold 505) and full tail curves over thresholds, as well as a budget sweep in epsilon. Together, these views connect symbolic DP constraints to observable query behavior.
+
+The sequential and unbounded settings are not presented as optional variations; they are scenario stress tests. Sequential composition with fixed total budget increases per-query noise scale and approximates high-query operational settings. Unbounded adjacency increases sensitivity assumptions and approximates systems where small population fractions may change. Including both scenarios creates a transparent spectrum from utility-favoring to privacy-favoring regimes, which is necessary for trustworthy policy discussion.
+
+\subsection{Fairness Intervention Context}
+The fairness module combines an assignment-specific intervention (promotion/demotion label swapping) with two classical alternatives: reweighing and group-threshold post-processing. This is aligned with the broader fairness taxonomy: pre-processing (reweighing), in-processing or data-level correction (swapped labels), and post-processing (group thresholds). The Zemel representation perspective~\cite{zemel2013learning} motivates the clustering-based local disparity proxy used in evaluation. Instead of selecting one metric, the report intentionally tracks three complementary signals: predictive utility (accuracy), group-rate parity (DI), and local representation disparity (Zemel proxy).
+
+This multi-method, multi-metric framing is important because fairness interventions can improve one metric while degrading another, or improve parity by qualitatively different mechanisms. The report therefore includes decomposition and tradeoff plots to show how each method moves group-positive rates and where it lands in fairness-utility space. This prevents misleading conclusions from single-score comparisons.
+
+\subsection{Contribution of This Report}
+Relative to a minimal homework write-up, this report contributes four completeness properties. First, it provides end-to-end traceability from definitions to executable artifacts. Second, it includes robust diagnostics rather than only final numbers (all-label reconstruction grid, scale profile, tail curves, decomposition/tradeoff maps). Third, it includes ablation sweeps for key knobs (unlearning fraction, epsilon, swap budget). Fourth, it enforces repeatability through generated macros and test-based report guardrails. These properties are necessary for a trustworthy report that can be audited, rerun, and extended.
+
+\section{Threat Model and Evaluation Criteria}
+\subsection{Security Threat Model}
+The security adversary is modeled as a training-time backdoor attacker that implants a latent trigger-target association into model weights. The attacker objective is high triggered misclassification into a specific target label while preserving plausible clean-input behavior. The defender is assumed to have model weights and clean validation data, but no access to attacker poison metadata. This corresponds to post-training forensic detection settings where only suspicious checkpoints are available.
+
+Under this model, a valid detection criterion must satisfy two conditions: label-specificity and perturbation-efficiency asymmetry. Label-specificity means the method identifies one target class rather than flagging all classes uniformly. Perturbation-efficiency asymmetry means the attacked class requires substantially less trigger mass to induce misclassification than clean classes. Neural Cleanse with MAD lower-tail selection satisfies both criteria when the checkpoint has a meaningful backdoor shortcut.
+
+For mitigation, the threat model assumes the attacker shortcut is not immutable and can be weakened by retraining with correctly labeled triggered samples. Success is measured by reduced ASR under the reconstructed trigger, not by clean accuracy alone. Clean accuracy and confusion matrices are treated as collateral-damage indicators to ensure mitigation does not replace one failure mode with another.
+
+\subsection{Privacy Threat Model}
+The privacy adversary is modeled as an observer who sees noisy query outputs and attempts to infer sensitive neighboring-dataset differences. The mechanism is required to satisfy $(\epsilon,\delta)$-DP assumptions provided by assignment constants and scenario-specific budget allocations. The report does not assume adversary ignorance of mechanism type; instead, it assumes full mechanism knowledge and evaluates uncertainty through output-distribution behavior.
+
+Evaluation criteria include: (i) calibrated noise scale under each scenario, (ii) threshold exceedance probability for a representative decision point, and (iii) tail-shape behavior over a threshold range. The last criterion is critical because many practical systems perform repeated threshold comparisons rather than reading raw query values. A privacy analysis that ignores tail behavior can underestimate decision-level leakage.
+
+\subsection{Fairness Risk Model}
+The fairness risk is modeled as disparate positive decision rates between protected and privileged groups in binary prediction. The report uses gender as sensitive attribute according to the assignment dataset encoding. This is a statistical parity-style risk model and does not claim to cover all fairness notions (for example, equalized odds or calibration parity are not primary targets in this assignment).
+
+Evaluation criteria are therefore scoped explicitly: DI for group-rate parity, accuracy for utility, and a clustering-based Zemel proxy for local representation-level disparity. Interventions are compared on a common split and deterministic seed to isolate method behavior from sampling noise. For swap-budget analysis, selection criteria are stated explicitly (best DI gap under an accuracy-drop tolerance), making the choice policy auditable.
+
+\subsection{Cross-Track Evaluation Discipline}
+A core completeness requirement is consistent evidence quality across tracks. This report applies a shared discipline: deterministic seeds, fixed assumptions, machine-generated metrics, and explicit plots that separate mechanism behavior from summary outcomes. Security uses trigger reconstruction plus ASR/clean checks; privacy uses scale plus tail probabilities; fairness uses aggregate plus decomposition geometry. This consistency reduces the risk of over-analyzing one domain while under-analyzing another.
+
+\section{Experimental Protocol and Statistical Validity}
+\subsection{Data and Splits}
+Security evaluation uses MNIST test samples with deterministic loader configuration and profile-dependent subset policy. Fairness evaluation uses a fixed 70/30 split with \texttt{random\_state=0} on the assignment tabular dataset. Privacy scenarios use assignment constants and deterministic analytic calculations. No random metric is reported without seed control or deterministic closed-form calculation.
+
+\subsection{Model and Optimization Settings}
+The attacked checkpoint architecture is matched exactly by \texttt{AttackedMNISTCNN}, preventing silent compatibility drift between trained weights and analysis model. Neural Cleanse optimization runs per-label reconstruction with controlled step count, learning rate, and regularization. Unlearning retrains for one epoch with fixed trigger-exposure fraction and true labels preserved. Fairness methods use standardized preprocessing and deterministic logistic regression defaults, with method-specific controls for swapping, reweighing, and threshold search.
+
+\begin{table}[!t]
+\centering
+\caption{Core experimental configuration for all tracks}
+\label{tab:core_config}
+\setlength{\tabcolsep}{3pt}
+\footnotesize
+\begin{tabular}{>{\raggedright\arraybackslash}p{0.24\linewidth} >{\raggedright\arraybackslash}p{0.30\linewidth} >{\raggedright\arraybackslash}p{0.38\linewidth}}
+\toprule
+Track & Component & Configuration \\
+\midrule
+Security & Checkpoint selection & Student ID suffix mapping, default \texttt{810101504 $\rightarrow$ model 4} \\
+Security & Reconstruction profile & High-fidelity: 500 steps/label, batch 128, learning rate 0.1 \\
+Security & Mitigation & One epoch, trigger exposure fraction 0.2, true labels preserved \\
+Privacy & Constants & $\epsilon=0.1$, $\delta=10^{-5}$, $k=92$, threshold 505, true count 500 \\
+Privacy & Scenario locks & Sequential: $\epsilon_i=\epsilon/k$, $\delta_i=\delta/k$; unbounded: $\Delta f_u=\max(1,\lceil pn\rceil)\Delta f$ \\
+Fairness & Data split & 70/30, deterministic seed, same split for all methods \\
+Fairness & Assignment rule & Promotion from male predicted negatives and demotion from female predicted positives by confidence ranking \\
+Fairness & Bonus methods & Reweighing (sample weights), group thresholds (post-hoc search) \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Metric Semantics and Directionality}
+To avoid ambiguous interpretations, each metric is analyzed with explicit directionality. For security, lower ASR is better and higher clean accuracy is better, with confusion diagonal strength as supporting evidence. For privacy, larger noise scales and threshold probabilities near 0.5 indicate stronger uncertainty (and typically lower utility). For fairness, DI closer to 1 indicates group-rate parity, while accuracy measures utility and Zemel proxy penalizes local disparity. Because these goals conflict, no single scalar dominates evaluation.
+
+\begin{table}[!t]
+\centering
+\caption{Metric interpretation used throughout the report}
+\label{tab:metric_semantics}
+\setlength{\tabcolsep}{3pt}
+\footnotesize
+\begin{tabular}{>{\raggedright\arraybackslash}p{0.22\linewidth} >{\raggedright\arraybackslash}p{0.30\linewidth} >{\raggedright\arraybackslash}p{0.40\linewidth}}
+\toprule
+Metric & Better direction & Interpretation \\
+\midrule
+Clean accuracy & Higher & Standard utility on clean inputs \\
+ASR & Lower & Backdoor exploitability under reconstructed trigger \\
+Laplace scale $b$ & Context-dependent & Higher implies more privacy noise and lower point precision \\
+$P(\tilde{q}>t)$ & Context-dependent & Near 0.5 indicates high uncertainty around threshold decisions \\
+Disparate Impact & Closer to 1 & Group parity of positive prediction rates \\
+Zemel proxy & Lower & Lower local representation disparity across groups \\
+$|1-\mathrm{DI}|$ & Lower & Fairness-gap geometry for tradeoff visualization \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Threats to Validity and Mitigations}
+Three validity risks are acknowledged and mitigated. First, reconstruction quality may depend on optimization profile; mitigation: profile is fixed and reported, plus all-label comparisons are included. Second, fairness outcomes can be split-sensitive; mitigation: deterministic split and seed are fixed, and method comparisons share identical partitions. Third, privacy scenario outputs can be misread as absolute guarantees; mitigation: scenario assumptions are explicitly stated and tied to formulas and tail plots. These mitigations do not remove all uncertainty, but they make uncertainty explicit and bounded.
+
 \section{Complete Theoretical Foundations}
 \subsection{Security Theory: Backdoor Model and Neural Cleanse}
 Let $f_\theta(x)$ be a classifier and $\mathcal{T}(x; m, p)=(1-m)\odot x + m\odot p$ be a trigger injection operator with mask $m$ and pattern $p$. In a backdoor setting, the attacker seeks
@@ -160,7 +256,7 @@ The CLI orchestrator in \path{code/generate_report_figs.py} executes the full pi
 \section{Results and Full Plot Interpretation}
 
 \subsection{Reconstructed Trigger for Detected Label}
-\begin{figure}[H]
+\begin{figure}[!t]
     \centering
     \IfFileExists{figures/trigger_reconstructed.png}{\includegraphics[width=0.42\linewidth]{figures/trigger_reconstructed.png}}{\fbox{\parbox[c][3.0cm][c]{0.42\linewidth}{\centering Missing: trigger\_reconstructed.png}}}
     \caption{Reconstructed trigger mask for detected attacked label.}
@@ -169,13 +265,13 @@ The CLI orchestrator in \path{code/generate_report_figs.py} executes the full pi
 Figure~\ref{fig:trigger_reconstructed} shows the recovered sparse mask for the detected attacked label. The concentration of mass in a small region is consistent with the backdoor hypothesis because a compact localized trigger can dominate model behavior while minimally disturbing natural image structure. The detected label is \QOneDetectedLabel{} and expected checkpoint label is \QOneExpectedLabel{}, and their agreement indicates that the optimization objective plus lower-tail MAD criterion successfully recovered the latent attack target rather than an arbitrary optimization artifact.
 
 \subsection{All-Label Scale Profile and Grid}
-\begin{figure}[H]
+\begin{figure}[!t]
     \centering
     \IfFileExists{figures/trigger_all_labels_grid.png}{\includegraphics[width=0.95\linewidth]{figures/trigger_all_labels_grid.png}}{\fbox{\parbox[c][3.0cm][c]{0.95\linewidth}{\centering Missing: trigger\_all\_labels\_grid.png}}}
     \caption{Reconstructed masks/scales for all candidate labels.}
     \label{fig:trigger_all_labels}
 \end{figure}
-\begin{figure}[H]
+\begin{figure}[!t]
     \centering
     \IfFileExists{figures/security_scale_profile.png}{\includegraphics[width=0.88\linewidth]{figures/security_scale_profile.png}}{\fbox{\parbox[c][3.0cm][c]{0.88\linewidth}{\centering Missing: security\_scale\_profile.png}}}
     \caption{Trigger-scale profile with detected/expected labels highlighted.}
@@ -184,13 +280,13 @@ Figure~\ref{fig:trigger_reconstructed} shows the recovered sparse mask for the d
 Figures~\ref{fig:trigger_all_labels} and~\ref{fig:security_scale_profile} jointly provide the key detection evidence: the attacked class appears as the most anomalously small trigger scale among all labels, while non-attacked labels require larger masks to force class-specific behavior. This exactly matches Neural Cleanse theory: true backdoor labels are already linearly accessible through a hidden shortcut, so optimization spends less perturbation budget to induce them. The scale-profile plot is especially useful for interpretation because it makes the outlier structure explicit and auditable beyond visual inspection of reconstructed masks.
 
 \subsection{Mitigation Outcomes: Accuracy, ASR, and Confusion Structure}
-\begin{figure}[H]
+\begin{figure}[!t]
     \centering
     \IfFileExists{figures/security_before_after.png}{\includegraphics[width=0.74\linewidth]{figures/security_before_after.png}}{\fbox{\parbox[c][3.0cm][c]{0.74\linewidth}{\centering Missing: security\_before\_after.png}}}
     \caption{Clean accuracy and ASR before/after one-epoch unlearning.}
     \label{fig:security_before_after}
 \end{figure}
-\begin{figure}[H]
+\begin{figure}[!t]
     \centering
     \IfFileExists{figures/security_confusion_before_after.png}{\includegraphics[width=0.93\linewidth]{figures/security_confusion_before_after.png}}{\fbox{\parbox[c][3.0cm][c]{0.93\linewidth}{\centering Missing: security\_confusion\_before\_after.png}}}
     \caption{Row-normalized clean confusion matrices before and after unlearning.}
@@ -199,7 +295,7 @@ Figures~\ref{fig:trigger_all_labels} and~\ref{fig:security_scale_profile} jointl
 Figure~\ref{fig:security_before_after} shows a strong post-unlearning ASR reduction from \QOneAsrBefore{} to \QOneAsrAfter{} while clean accuracy improves from \QOneCleanAccBefore{} to \QOneCleanAccAfter{}, indicating that the poisoned model was initially dominated by trigger-induced behavior and that retraining with correct labels successfully restored generalization. Figure~\ref{fig:security_confusion} complements this by showing class-wise behavior on clean inputs: diagonal strengthening after unlearning means the mitigation did not merely suppress one attack pathway, but improved overall decision calibration. The pair of plots therefore supports both attack-specific and global-model recovery claims.
 
 \subsection{Security Ablation: Unlearning Fraction Sweep}
-\begin{figure}[H]
+\begin{figure}[!t]
     \centering
     \IfFileExists{figures/security_unlearning_sweep.png}{\includegraphics[width=0.86\linewidth]{figures/security_unlearning_sweep.png}}{\fbox{\parbox[c][3.0cm][c]{0.86\linewidth}{\centering Missing: security\_unlearning\_sweep.png}}}
     \caption{Clean accuracy and ASR versus unlearning fraction.}
@@ -208,13 +304,13 @@ Figure~\ref{fig:security_before_after} shows a strong post-unlearning ASR reduct
 Figure~\ref{fig:security_unlearning_sweep} quantifies sensitivity of mitigation strength to the retraining exposure ratio. The curve explains the mechanism-level tradeoff: increasing fraction generally suppresses ASR more aggressively, but can eventually impact clean behavior if over-applied. In this run, the best ASR point occurs around fraction \QOneBestFrac{} with ASR \QOneBestFracASR{} and clean accuracy \QOneBestFracAcc{}, providing an interpretable operating point rather than a single hard-coded choice.
 
 \subsection{Privacy Scales, Point Probabilities, and Tail Curves}
-\begin{figure}[H]
+\begin{figure}[!t]
     \centering
     \IfFileExists{figures/privacy_scenarios.png}{\includegraphics[width=0.88\linewidth]{figures/privacy_scenarios.png}}{\fbox{\parbox[c][3.0cm][c]{0.88\linewidth}{\centering Missing: privacy\_scenarios.png}}}
     \caption{Laplace scale and exceedance probability at threshold 505.}
     \label{fig:privacy_scenarios}
 \end{figure}
-\begin{figure}[H]
+\begin{figure}[!t]
     \centering
     \IfFileExists{figures/privacy_tail_curves.png}{\includegraphics[width=0.86\linewidth]{figures/privacy_tail_curves.png}}{\fbox{\parbox[c][3.0cm][c]{0.86\linewidth}{\centering Missing: privacy\_tail\_curves.png}}}
     \caption{Tail probability $P(\tilde{q}>t)$ versus threshold for all privacy scenarios.}
@@ -223,7 +319,7 @@ Figure~\ref{fig:security_unlearning_sweep} quantifies sensitivity of mitigation 
 Figure~\ref{fig:privacy_scenarios} summarizes the assignment query at $t=505$: scale grows from \QTwoBBase{} (base) to \QTwoBSequential{} (sequential) and \QTwoBUnbounded{} (unbounded), with corresponding probabilities \QTwoProbBase{}, \QTwoProbSequential{}, and \QTwoProbUnbounded{}. Figure~\ref{fig:privacy_tail} generalizes this point analysis by showing entire tail functions over thresholds, making the utility-loss mechanism explicit: larger scales flatten the response curve and keep probabilities closer to 0.5 over wider threshold bands. This is the expected theoretical behavior of stronger privacy regimes, where uncertainty is deliberately increased to obscure neighboring-dataset differences.
 
 \subsection{Privacy Budget Sweep (Epsilon Analysis)}
-\begin{figure}[H]
+\begin{figure}[!t]
     \centering
     \IfFileExists{figures/privacy_epsilon_sweep.png}{\includegraphics[width=0.88\linewidth]{figures/privacy_epsilon_sweep.png}}{\fbox{\parbox[c][3.0cm][c]{0.88\linewidth}{\centering Missing: privacy\_epsilon\_sweep.png}}}
     \caption{Scale and threshold probability as functions of epsilon.}
@@ -232,19 +328,19 @@ Figure~\ref{fig:privacy_scenarios} summarizes the assignment query at $t=505$: s
 Figure~\ref{fig:privacy_epsilon_sweep} provides a direct parametric interpretation of privacy budget: as epsilon increases, scale $b$ decays hyperbolically and the noisy-threshold probability moves away from the high-uncertainty regime toward sharper query behavior. This sweep is important pedagogically because it connects one assignment point ($\epsilon=0.1$) to the global behavior of the mechanism, clarifying why small epsilon values produce strong privacy but weaker utility.
 
 \subsection{Fairness: Aggregate Metrics, Group Decomposition, and Tradeoff Geometry}
-\begin{figure}[H]
+\begin{figure}[!t]
     \centering
     \IfFileExists{figures/fairness_comparison.png}{\includegraphics[width=0.98\linewidth]{figures/fairness_comparison.png}}{\fbox{\parbox[c][3.0cm][c]{0.98\linewidth}{\centering Missing: fairness\_comparison.png}}}
     \caption{Accuracy, DI, and Zemel-proxy across five model variants.}
     \label{fig:fairness_comparison}
 \end{figure}
-\begin{figure}[H]
+\begin{figure}[!t]
     \centering
     \IfFileExists{figures/fairness_group_rates.png}{\includegraphics[width=0.92\linewidth]{figures/fairness_group_rates.png}}{\fbox{\parbox[c][3.0cm][c]{0.92\linewidth}{\centering Missing: fairness\_group\_rates.png}}}
     \caption{Group positive prediction rates (male/female) for DI interpretation.}
     \label{fig:fairness_group_rates}
 \end{figure}
-\begin{figure}[H]
+\begin{figure}[!t]
     \centering
     \IfFileExists{figures/fairness_tradeoff.png}{\includegraphics[width=0.66\linewidth]{figures/fairness_tradeoff.png}}{\fbox{\parbox[c][3.0cm][c]{0.66\linewidth}{\centering Missing: fairness\_tradeoff.png}}}
     \caption{Accuracy versus fairness-gap map ($|1-\mathrm{DI}|$).}
@@ -253,7 +349,7 @@ Figure~\ref{fig:privacy_epsilon_sweep} provides a direct parametric interpretati
 Figure~\ref{fig:fairness_comparison} provides aggregate comparison, but Figures~\ref{fig:fairness_group_rates} and~\ref{fig:fairness_tradeoff} explain why these aggregates change: group-rate decomposition shows whether DI movement is caused by increasing protected-group positives, decreasing privileged-group positives, or both; the tradeoff map then visualizes each model's position in fairness-utility space. Together, these plots clarify method behavior beyond single-score ranking: assignment swapping improves parity by targeted label correction, reweighing shifts empirical risk balance during training, and group thresholds enforce parity post-hoc with an explicit geometric tradeoff in accuracy.
 
 \subsection{Fairness Ablation: Swap-Budget Sweep}
-\begin{figure}[H]
+\begin{figure}[!t]
     \centering
     \IfFileExists{figures/fairness_swapk_sweep.png}{\includegraphics[width=0.86\linewidth]{figures/fairness_swapk_sweep.png}}{\fbox{\parbox[c][3.0cm][c]{0.86\linewidth}{\centering Missing: fairness\_swapk\_sweep.png}}}
     \caption{Accuracy and fairness-gap trends versus promotion/demotion swap budget $k$.}
@@ -262,7 +358,7 @@ Figure~\ref{fig:fairness_comparison} provides aggregate comparison, but Figures~
 Figure~\ref{fig:fairness_swapk_sweep} shows how the assignment mitigation behaves as $k$ changes from no swapping to aggressive relabeling. The curve demonstrates that fairness gains (lower $|1-\mathrm{DI}|$) are not monotonic in practical utility terms unless accuracy is co-monitored, so selecting $k$ is an optimization problem, not a fixed rule. Using a tolerance of at most 3\% absolute accuracy loss from baseline, the best operating point in this run is $k=\QThreeBestSwapK$ with accuracy \QThreeBestSwapAcc{} and fairness gap \QThreeBestSwapDiGap{}.
 
 \section{Consolidated Metric Tables}
-\begin{table}[H]
+\begin{table}[!t]
 \centering
 \caption{Final fairness metrics used in this report}
 \label{tab:final_metrics}
@@ -279,7 +375,7 @@ Group-thresholds (bonus) & \QThreeGroupThrAcc{} & \QThreeGroupThrDi{} & \QThreeG
 \end{tabular}
 \end{table}
 
-\begin{table}[H]
+\begin{table}[!t]
 \centering
 \caption{Security and privacy summary}
 \label{tab:security_privacy}
@@ -296,6 +392,44 @@ $P(\tilde{q} > 505)$ (base / seq. / unb.) & \QTwoProbBase{} / \QTwoProbSequentia
 \bottomrule
 \end{tabular}
 \end{table}
+
+\section{Expanded Cross-Domain Discussion}
+\subsection{Security-Privacy Interaction}
+Security hardening and privacy protection interact in non-trivial ways. In principle, stronger privacy noise can obscure trigger-related telemetry, making forensic diagnostics harder if only aggregate outputs are available. Conversely, security-driven retraining can alter model sensitivity landscapes, which changes effective query behavior in downstream analytics. This report keeps the two analyses separate at evaluation time to avoid confounding, but deployment practice should consider joint design: model updates, query release policies, and monitoring thresholds should be co-calibrated rather than tuned independently.
+
+The practical implication is that trustworthy deployment is not achieved by maximizing one axis. A model can have low ASR and still leak too much via high-confidence query outputs; similarly, a heavily noised query interface can satisfy privacy goals while masking early warning signals of security regressions. The correct framing is constrained multi-objective optimization, where each track contributes a non-redundant risk boundary.
+
+\subsection{Fairness-Utility Coupling Under Method Choice}
+Fairness interventions differ in where they intervene in the learning pipeline, and this determines both their strengths and side effects. Assignment swapping modifies labels before retraining, so it can express targeted parity adjustments but may inherit historical label biases. Reweighing modifies empirical risk weights, which is statistically principled for imbalance correction but can reduce calibration in minority regions if weights amplify noisy labels. Group-threshold post-processing offers explicit parity control at decision time, often with clearer guarantees on DI movement, but may reduce global accuracy.
+
+The tradeoff plots in this report show that method ranking depends on the decision criterion. If parity is primary, group thresholds can dominate. If calibration consistency and utility are primary, baseline or limited correction may be preferable. A complete report therefore should not ask ``which method is best'' globally; it should ask ``which constraint set and risk tolerance are in force.'' This section formalizes that interpretation.
+
+\subsection{Interpretability of Metric Movement}
+Aggregate metrics can hide mechanism-level behavior. For example, DI can move toward 1 by increasing protected-group positive rates, decreasing privileged-group positive rates, or both. These mechanisms have different social and operational implications. That is why this report includes group-rate decomposition in addition to aggregate DI and accuracy. Likewise, security ASR reduction is interpreted jointly with confusion matrices, avoiding the false conclusion that attack suppression alone implies healthy global behavior.
+
+\section{Limitations and Responsible Use}
+\subsection{Scope Limitations}
+This report is complete with respect to assignment scope, but several external-validity limits remain. Security findings are based on MNIST-scale architecture and one poisoned checkpoint family, not on diverse real-world modalities. Privacy analysis is mechanism-level and scenario-based, not end-to-end system-level (for example, correlated repeated queries or adaptive adversarial querying are not modeled explicitly). Fairness analysis focuses on one sensitive attribute and parity-style metrics, so it does not cover all fairness notions or causal justice constraints.
+
+\subsection{Methodological Limitations}
+Neural Cleanse assumptions can fail for highly distributed or dynamic triggers. MAD-based detection is robust but still depends on reconstruction quality and optimization convergence. Fairness metrics depend on dataset labeling conventions and may not reflect normative fairness standards outside the task context. Threshold optimization uses brute-force grids and therefore approximates, rather than solves exactly, a continuous decision problem.
+
+\subsection{Responsible Reporting Practices}
+To reduce misuse risk, this report avoids presenting any single metric as sufficient evidence of trustworthiness. Claims are tied to assumptions, and scenario locks are documented in code and text. Numerical values are generated automatically from executable code instead of manual editing. This structure limits accidental claim drift and makes it easier for reviewers to challenge assumptions and reproduce calculations.
+
+\section{Operational Recommendations}
+\subsection{Minimum Deployment Gate}
+Before model release, the following gate should pass under fixed seeds and documented configurations:
+\begin{enumerate}
+    \item No anomalous attacked-label mismatch between expected checkpoint and detected label.
+    \item ASR reduction validated with clean accuracy and confusion matrix stability checks.
+    \item Privacy scale and threshold probabilities reviewed under both base and stressed scenarios.
+    \item Fairness method selected by explicit policy target (utility-priority, parity-priority, or balanced).
+    \item All artifacts regenerated automatically, with report macros refreshed from code outputs.
+\end{enumerate}
+
+\subsection{Monitoring and Incident Response}
+After deployment, metrics should be monitored as time series rather than one-time snapshots. Security incidents should trigger targeted re-analysis of trigger scales and ASR. Privacy policy updates should trigger re-evaluation of epsilon allocations and threshold probabilities. Fairness drift should be tracked at both aggregate and group-rate decomposition levels. This operational framing converts the report from a static deliverable into a repeatable governance workflow.
 
 \section{Requirement Coverage Checklist}
 This report is organized to fully cover both assignment deliverables and standard scientific-paper structure.
@@ -401,6 +535,124 @@ Thresholds are chosen by constrained scalarization:
 \left|1-\mathrm{DI}(\tau_0,\tau_1)\right|+\lambda\left(1-\mathrm{Acc}(\tau_0,\tau_1)\right),
 \end{equation}
 making the fairness-utility tradeoff explicit and tunable.
+
+\section{Algorithmic Workflow Appendix}
+\subsection{End-to-End Orchestration Logic}
+The executable workflow follows a strict sequence to minimize hidden dependencies:
+\begin{enumerate}
+    \item Parse CLI configuration (student ID, checkpoint selection mode, security profile, fairness and privacy knobs, seed).
+    \item Resolve filesystem paths for code, data, figure outputs, and report result files.
+    \item Execute security pipeline: checkpoint load, full-label reconstruction, attacked-label detection, mitigation evaluation, and ablations.
+    \item Execute privacy pipeline: deterministic scenario calculations, threshold-tail computations, and epsilon sweeps.
+    \item Execute fairness pipeline: baseline, assignment method, no-sensitive-feature variant, and two bonus methods.
+    \item Materialize artifacts: figures, metrics JSON, and TeX macros for report injection.
+    \item Compile report PDF against generated artifacts.
+\end{enumerate}
+
+This sequence matters because later steps depend on upstream artifacts. For example, report tables should never be edited manually when macros can be regenerated from JSON. The orchestration design enforces that dependency direction.
+
+\subsection{Security Runner Pseudocode}
+Security runner behavior can be summarized as:
+\begin{equation}
+\mathbf{o}_{sec}=
+\mathcal{R}_{sec}(c,\mathcal{D}_{mnist},\pi,s),
+\end{equation}
+where $c$ is checkpoint path, $\pi$ is the security profile, $s$ is the seed, and $\mathbf{o}_{sec}$ includes summary metrics and figure paths. The routine $\mathcal{R}_{sec}$ internally performs:
+\begin{enumerate}
+    \item reconstruct triggers for all labels $0\ldots9$,
+    \item detect attacked label by lower-tail MAD,
+    \item evaluate clean accuracy and ASR before unlearning,
+    \item retrain one epoch with triggered correct-label samples,
+    \item evaluate clean accuracy and ASR after unlearning,
+    \item compute unlearning-fraction sweep.
+\end{enumerate}
+The output contract includes detected label, expected label, all trigger scales, before/after metrics, and sweep summaries.
+
+\subsection{Fairness Runner Pseudocode}
+Fairness execution can be represented as:
+\begin{equation}
+\mathbf{o}_{fair}=
+\mathcal{R}_{fair}(\mathcal{D}_{tab},\sigma,s,k),
+\end{equation}
+where $\sigma$ is split configuration and $k$ is swap budget. Execution branches include baseline, assignment swapping, no-gender variant, reweighing, and group thresholds. All branches share identical split indices, ensuring comparability. Output includes method-wise accuracy, DI, Zemel proxy, group positive rates, and swap-budget sweep diagnostics.
+
+\section{Reproducibility Contract Appendix}
+\subsection{Artifact Contract}
+The report is defined by a strict artifact contract:
+\begin{itemize}
+    \item Figures must exist under \path{report/figures}.
+    \item Numeric summaries must exist in \path{report/results/metrics_summary.json}.
+    \item Macro injections must exist in \path{report/results/results_macros.tex}.
+    \item PDF text must reference generated macros instead of duplicating numeric literals.
+\end{itemize}
+If any artifact is missing, the report is considered incomplete even if LaTeX compilation succeeds.
+
+\subsection{Execution Contract}
+Complete regeneration requires one canonical command family (profile and options may vary):
+\begin{equation}
+\begin{aligned}
+G &\Rightarrow \{F, J, M\},\\
+\{F, J, M\} &\Rightarrow P.
+\end{aligned}
+\end{equation}
+where $G$ denotes the report generator script, $F/J/M$ denote figure, JSON, and macro outputs, and $P$ denotes PDF compilation.
+This contract ensures that content and numbers evolve together as code changes. The executed notebook complements this by embedding representative outputs.
+
+\subsection{Validation Contract}
+Two validation layers are required:
+\begin{enumerate}
+    \item Functional tests for security, privacy, and fairness helpers.
+    \item Report guard tests that assert required theory sections, equations, and figure references.
+\end{enumerate}
+Only when both layers pass should a PDF be considered submission-ready.
+
+\section{Extended Interpretation Reference}
+\subsection{How to Read Security Plots}
+Security plots should be read in a causal chain: reconstruction evidence identifies vulnerability locus, scale outlier confirms target specificity, before/after bars quantify mitigation effect, confusion matrices verify broad calibration recovery, and fraction sweeps identify operating points under resource constraints. Interpreting only one plot can produce false confidence.
+
+\subsection{How to Read Privacy Plots}
+Privacy scenario bars provide point summaries but can hide threshold-range behavior. Tail curves reveal how uncertainty behaves across operational thresholds, while epsilon sweeps map policy choices to utility consequences. This layered reading prevents over-generalizing from one threshold.
+
+\subsection{How to Read Fairness Plots}
+Fairness comparison bars provide aggregate ranking, group-rate decomposition explains mechanism, tradeoff maps reveal utility cost geometry, and swap-budget sweeps expose method sensitivity. Together, these plots support policy-level selection rather than metric cherry-picking.
+
+\section{Future Work}
+Natural extensions of this report include: (i) backdoor analysis across multiple trigger families and architectures, (ii) privacy analysis under adaptive query strategies and composition accountants beyond basic sequential assumptions, (iii) fairness analysis across additional protected attributes and intersectional groups, and (iv) joint optimization methods that treat security, privacy, and fairness as a coupled objective instead of separate tracks. These directions would move the current assignment-complete report toward a broader research-grade evaluation framework.
+
+\section{Comprehensive Plot-by-Plot Technical Notes}
+This section provides an additional interpretation layer for reviewers who want dense, audit-oriented commentary beyond the main narrative.
+
+\subsection{Security Figure Notes}
+\textbf{Fig. 1 (reconstructed trigger):} The key diagnostic value is not the visual shape alone, but sparse support under constrained optimization. In a clean class, target induction usually requires broader perturbation support. In the detected attacked class, a compact mask can dominate decision logits with low perturbation cost, indicating latent shortcut structure.
+
+\textbf{Fig. 2 (all-label reconstruction grid):} This grid functions as a comparative null test. If multiple labels showed similarly low-cost coherent masks, the attack claim would weaken. The observed asymmetry supports class-specific compromise and justifies using robust outlier statistics rather than single-label visual judgments.
+
+\textbf{Fig. 3 (scale profile):} The scale distribution exposes low-tail anomaly directly. MAD-based selection is robust to non-Gaussian spread and avoids overreacting to high-side outliers. The attacked label estimate is therefore based on relative perturbation economy across classes, not absolute pixel intensity.
+
+\textbf{Fig. 4 (before/after ASR and clean accuracy):} The relevant interpretation is coupled movement: ASR should decrease while clean accuracy is preserved or improved. A drop in ASR alone is insufficient if clean behavior collapses; this figure guards against that failure mode.
+
+\textbf{Fig. 5 (confusion matrices):} Row-normalized confusion structure tests whether mitigation restored broad decision geometry. Stronger diagonal mass after unlearning suggests class discrimination recovery, not only suppression of one trigger path.
+
+\textbf{Fig. 6 (unlearning-fraction sweep):} This sweep reframes mitigation from one-point evaluation to sensitivity analysis. It exposes whether chosen fraction is robust or brittle and provides explicit operating-point selection under utility constraints.
+
+\subsection{Privacy Figure Notes}
+\textbf{Fig. 7 (scenario bars):} The scale and exceedance bars show how assumptions about composition and adjacency translate into practical query uncertainty. This is useful for policy communication because it maps abstract parameters to decision-level probability shifts.
+
+\textbf{Fig. 8 (tail curves):} Tail curves are the correct object when downstream systems compare noisy values to thresholds. They make visible whether uncertainty remains near-indifferent over operational ranges, which is critical for leakage risk interpretation.
+
+\textbf{Fig. 9 (epsilon sweep):} The epsilon sweep demonstrates global mechanism behavior and prevents overfitting interpretation to one assignment point. It shows how quickly utility sharpens as privacy budget increases, clarifying policy consequences of epsilon changes.
+
+\subsection{Fairness Figure Notes}
+\textbf{Fig. 10 (aggregate fairness comparison):} Aggregate bars are useful for fast ranking but insufficient for causal interpretation. They should be read jointly with decomposition and tradeoff plots to understand which groups and thresholds drive movement.
+
+\textbf{Fig. 11 (group positive rates):} This decomposition identifies whether parity changes come from protected-group uplift, privileged-group suppression, or mixed movement. Policy interpretation differs across these mechanisms, so decomposition is mandatory for responsible reporting.
+
+\textbf{Fig. 12 (tradeoff map):} The map converts fairness tuning into geometry: left is fairer under DI gap, up is more accurate. Method choice becomes a constrained optimization decision rather than a single-metric ranking problem.
+
+\textbf{Fig. 13 (swap-budget sweep):} The sweep tests whether assignment intervention intensity behaves monotonically. Non-monotonic behavior implies that higher intervention does not guarantee better fairness-utility outcomes, motivating explicit selection rules.
+
+\subsection{Meta-Interpretation}
+Across all 13 figures, the main methodological principle is triangulation: no single chart is used as standalone proof. Security claims require reconstruction plus behavioral outcomes; privacy claims require scale plus tail behavior; fairness claims require aggregates plus decomposition and tradeoff geometry. This triangulated interpretation model is a core reason the report remains defensible under review.
 
 \begin{thebibliography}{1}
 \bibitem{wang2019neuralcleanse}
