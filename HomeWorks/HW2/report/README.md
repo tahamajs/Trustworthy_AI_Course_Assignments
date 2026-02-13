@@ -6,7 +6,7 @@ Files created
 - `Makefile` — `make pdf` builds the PDF
 
 How to use
-1. Put figures exported from your notebooks in `template/figures/` (create the folder).
+1. Put figures exported from your notebooks in `report/figures/` (create the folder).
 2. Edit document metadata near the top of `assignment_template.tex`:
    - `\authorname{}`, `\studentid{}`, `\assignment{}`
 3. Add citations to `references.bib` and cite with `\citep{key}`.
@@ -19,6 +19,6 @@ Notes & tips
 - Keep images in `figures/` and refer to them in the LaTeX file (example provided).
 
 Example workflow for notebook -> report
-- Export important plots from Jupyter (`.png`/`.pdf`) into `template/figures/`.
+- Export important plots from Jupyter (`.png`/`.pdf`) into `report/figures/`.
 - Copy key code blocks into the Appendix or `\lstinputlisting` the script files under `HW*/code/`.
 - Update `references.bib` with any papers or libraries you cite.

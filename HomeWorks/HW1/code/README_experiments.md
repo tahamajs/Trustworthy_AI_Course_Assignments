@@ -1,18 +1,32 @@
-Experiment checklist (what to run)
+# HW1 Experiment Checklist
 
-1) Baseline ResNet18 on SVHN
-   - python train.py --dataset svhn --epochs 80 --batch-size 128 --lr 0.1 --optimizer sgd --save-dir checkpoints/svhn_baseline
-   - Evaluate on MNIST test: python eval.py --dataset mnist --checkpoint checkpoints/svhn_baseline/best.pth --umap
+Use this list to cover the required comparisons in a reproducible order.
 
-2) Remove BatchNorm
-   - python train.py --dataset svhn --use-bn False --epochs 80 --batch-size 128 --lr 0.1 --save-dir checkpoints/svhn_no_bn
+## A. Generalization experiments
 
-3) Label-smoothing
-   - python train.py --dataset svhn --label-smoothing 0.1 --epochs 80 --save-dir checkpoints/svhn_label_smooth
+1. Baseline ResNet18 on SVHN
+   - `python train.py --dataset svhn --epochs 80 --optimizer sgd --save-dir checkpoints/svhn_baseline`
+2. BatchNorm ablation
+   - `python train.py --dataset svhn --epochs 80 --use-bn false --save-dir checkpoints/svhn_no_bn`
+3. Label smoothing
+   - `python train.py --dataset svhn --epochs 80 --label-smoothing 0.1 --save-dir checkpoints/svhn_label_smooth`
+4. Optimizer comparison
+   - `python train.py --dataset svhn --epochs 80 --optimizer adam --lr 1e-3 --save-dir checkpoints/svhn_adam`
+5. Reverse domain direction (MNIST to SVHN)
+   - `python train.py --dataset mnist --epochs 80 --save-dir checkpoints/mnist_train`
+6. Evaluate all saved checkpoints with UMAP
+   - `python eval.py --dataset svhn --checkpoint checkpoints/<exp>/best.pth --umap`
 
-4) Pretrained feature extractor (use torchvision's resnet18 pretrained) — code stub in notebook
+## B. Robustness experiments
 
-5) CIFAR10 adversarial experiments
-   - python train.py --dataset cifar10 --adv-train --attack pgd --epsilon 8/255 --alpha 2/255 --iters 7 --epochs 100 --save-dir checkpoints/cifar_adv
+1. Baseline on CIFAR10 (no adversarial training)
+   - `python train.py --dataset cifar10 --epochs 100 --save-dir checkpoints/cifar_base`
+2. FGSM adversarial training
+   - `python train.py --dataset cifar10 --epochs 100 --adv-train --attack fgsm --epsilon 8/255 --save-dir checkpoints/cifar_adv_fgsm`
+3. PGD adversarial training
+   - `python train.py --dataset cifar10 --epochs 100 --adv-train --attack pgd --epsilon 8/255 --alpha 2/255 --iters 7 --save-dir checkpoints/cifar_adv_pgd`
 
-6) Circle Loss training — use notebook and modify training loop to train on embeddings (example available on request)
+## C. Optional extension
+
+- Circle Loss is implemented in `losses.py` (`CircleLoss` class).  
+  To use it in training, replace the criterion in `train.py` with `CircleLoss` over embeddings.

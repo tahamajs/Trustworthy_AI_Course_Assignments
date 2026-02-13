@@ -1,34 +1,83 @@
-HW1 — Trusted AI (complete solution)
+# HW1 Code Guide
 
-Overview
-- Implements Part 1 (Generalization: ResNet18 from scratch, label smoothing, data-augmentation, pre-trained feature extractor, optimizer comparisons, fine-tuning) and Part 2 (Robustness: FGSM/PGD attacks, Circle Loss, adversarial training, UMAP visualization).
+This folder contains the full implementation for HW1.
 
-Quick start (GPU recommended)
-1. Create a virtualenv and install requirements:
-   python -m venv .venv && source .venv/bin/activate
-   pip install -r requirements.txt
+## Implemented methods
 
-2. Example full training (SVHN -> test SVHN + MNIST):
-   python train.py --dataset svhn --epochs 80 --batch-size 128 --lr 0.1 --optimizer sgd --save-dir checkpoints/svhn_baseline
+### 1) Model architecture
 
-3. Run robustness experiment (CIFAR10, adversarial training):
-   python train.py --dataset cifar10 --epochs 100 --batch-size 128 --optimizer sgd --adv-train --attack pgd --epsilon 8/255 --save-dir checkpoints/cifar_adv
+- `models/resnet18_custom.py`
+  - `BasicBlock`: residual block with optional BatchNorm.
+  - `ResNet` and `resnet18(...)`: full ResNet18 defined manually.
+  - Supports `return_features=True` for embedding extraction.
 
-4. Evaluate & visualize embeddings:
-   python eval.py --dataset svhn --checkpoint checkpoints/svhn_baseline/best.pth --umap
+### 2) Losses
 
-Notes
-- Default scripts checkpoint automatically and save training logs in the same folder as checkpoints.
-- The `--demo` flag runs short quick checks (useful on CPU). Remove it for full/long runs.
+- `losses.py`
+  - `LabelSmoothingCrossEntropy`: soft target distribution for improved generalization.
+  - `CircleLoss`: metric-learning style pair-similarity objective over normalized embeddings.
 
-Files
-- models/resnet18_custom.py  : manual ResNet18 implementation (BN optional)
-- losses.py                  : LabelSmoothing + Circle Loss
-- attacks.py                 : FGSM, PGD generators
-- datasets.py                : dataset loaders and augmentations (handles MNIST<->RGB conversions)
-- train.py                   : training loop + options for adversarial training, label-smoothing, optimizer choice
-- eval.py                    : evaluation, UMAP visualizations
-- utils.py                   : helpers (checkpointing, seed, metrics)
-- notebooks/analysis.ipynb   : starter analysis notebook
+### 3) Adversarial methods
 
-If you want, I can run a short smoke-run or create SLURM/GPU job scripts next.
+- `attacks.py`
+  - `fgsm_attack(...)`: single-step sign-gradient perturbation with `epsilon`.
+  - `pgd_attack(...)`: iterative projected attack with `epsilon`, `alpha`, and `iters`.
+
+### 4) Data handling
+
+- `datasets.py`
+  - `get_transforms(...)`: resize, optional augmentation, normalization.
+  - `get_dataloaders(...)`: SVHN/MNIST/CIFAR10 loaders.
+  - MNIST is converted to RGB when needed.
+  - Includes offline fallback to `torchvision.datasets.FakeData`.
+
+### 5) Training/evaluation pipeline
+
+- `train.py`
+  - `train_one_epoch(...)`, `evaluate(...)`.
+  - Supports `SGD` or `Adam`.
+  - Uses `MultiStepLR` (milestones at 50% and 75% of epochs).
+  - Optional adversarial training (`--adv-train`) with FGSM/PGD.
+- `eval.py`
+  - `extract_features(...)`: gets penultimate features.
+  - `plot_umap(...)`: 2D UMAP of features.
+  - Optional sample-grid export for report figures.
+
+### 6) Utilities
+
+- `utils.py`: seed control and checkpoint I/O.
+- `trainers.py`: minimal reusable trainer helper.
+- `runner.py`: lightweight entry point that calls `train.main()`.
+
+## Quick run
+
+```bash
+cd HomeWorks/HW1/code
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+```
+
+Baseline:
+
+```bash
+python train.py --dataset svhn --epochs 80 --batch-size 128 --optimizer sgd --save-dir checkpoints/svhn_baseline
+```
+
+Adversarial training:
+
+```bash
+python train.py --dataset cifar10 --epochs 100 --adv-train --attack pgd --epsilon 8/255 --alpha 2/255 --iters 7 --save-dir checkpoints/cifar_adv
+```
+
+Evaluation + UMAP:
+
+```bash
+python eval.py --dataset svhn --checkpoint checkpoints/svhn_baseline/best.pth --umap
+```
+
+## Outputs
+
+- Checkpoints: `checkpoints/<experiment>/last.pth`, `best.pth`
+- TensorBoard logs: same `--save-dir`
+- UMAP figure: `<checkpoint>.umap.png`

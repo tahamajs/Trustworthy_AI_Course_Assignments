@@ -1,11 +1,40 @@
-HW3 — Homework
+# HW3: Causal Recourse
 
-Contents:
+HW3 focuses on causal modeling and algorithmic recourse.
 
-- `code/` — implementations and `q5_codes/` (standardized)
-- `dataset/` — datasets used for experiments
-- `description/` — assignment text (`README.md` copied from `en.md`)
+## Folders
 
-Notes:
+- `code/q5_codes`: full implementation for training and recourse evaluation.
+- `code/health.csv`: local dataset used in health-related questions.
+- `dataset`: additional dataset archives.
+- `description`: assignment statement.
+- `report`: report template.
 
-- Renamed `Q5_codes` → `q5_codes` for consistency.
+## Methods used in this project
+
+- **Data processing and constraints**:
+  dataset-specific preprocessing + actionability constraints (`data_utils.py`).
+- **Predictive models**:
+  logistic regression and MLP classifiers with threshold calibration by MCC (`trainers.py`).
+- **Training strategies**:
+  ERM, actionable-feature masking (AF), ALLR/LLR-style regularization, Ross regularizer.
+- **Causal modeling**:
+  structural causal model base class + dataset SCMs (Loan, Adult, COMPAS, Health).
+- **Recourse methods**:
+  linear recourse via constrained optimization and differentiable recourse via iterative gradient-based optimization.
+- **Causal recourse evaluation**:
+  validity and cost metrics over negatively classified instances.
+
+## Quick start
+
+```bash
+cd HomeWorks/HW3/code/q5_codes
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+python main.py --seed 0
+```
+
+Detailed method-level documentation is in:
+
+- `HomeWorks/HW3/code/README.md`

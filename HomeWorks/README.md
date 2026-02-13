@@ -1,16 +1,25 @@
-HomeWorks folder — standardized academic layout
+# HomeWorks Directory
 
-Structure (per homework):
+This directory contains all course projects (`HW1` to `HW4`).
 
-- `code/` — implementation files and scripts
-- `dataset/` — datasets for the homework (if present)
-- `description/` — assignment text and PDFs (now `README.md` inside)
-- `README.md` — this file (summary + quick pointers)
+## Shared structure
 
-Conventions applied:
+Most homework folders follow this layout:
 
-- folder & filenames standardized to `snake_case` where practical
-- `description/en.md` → `description/README.md` for consistency
-- added `.gitignore` at repository root
+- `code`: runnable scripts, notebooks, and project-specific dependencies.
+- `description`: assignment statement and supporting PDFs.
+- `report`: LaTeX report template and bibliography.
+- `README.md`: project-level overview and run guide.
 
-If you want a different layout (top-level `src/`, `notebooks/`, etc.) tell me and I’ll rework it.
+## Project index
+
+- `HW1`: image-model generalization and robustness experiments.
+- `HW2`: interpretability for tabular and computer vision tasks.
+- `HW3`: causal recourse with structural causal models.
+- `HW4`: security/privacy/fairness implementations.
+
+## Where methods are documented
+
+- High-level methods: each `HW*/README.md`.
+- Implementation details: each `HW*/code/README.md`.
+- Assignment requirements: each `HW*/description/README.md`.
