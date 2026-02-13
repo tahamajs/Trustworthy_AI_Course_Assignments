@@ -67,6 +67,9 @@ for _ in 1 2; do
   xelatex -interaction=nonstopmode -halt-on-error -output-directory "$OUT_DIR" "$TEX_FILE" >> "$LOG_FILE" 2>&1
 done
 
+# Keep only the final PDF, patched TeX, and consolidated XeLaTeX log.
+rm -f "$OUT_DIR/$OUT_NAME.aux" "$OUT_DIR/$OUT_NAME.log" "$OUT_DIR/$OUT_NAME.out"
+
 echo "[4/4] Optional preview images..."
 if command -v pdftoppm >/dev/null 2>&1; then
   PREVIEW_DIR="/tmp/hw3_notebook_pdf_preview"
