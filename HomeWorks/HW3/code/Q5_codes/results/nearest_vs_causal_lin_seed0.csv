@@ -1,3 +1,3 @@
 method,valid_rate,valid_cost
-Nearest Counterfactual (SCM off),1.0,0.7789666461435908
-Causal Algorithmic Recourse (SCM on),1.0,0.6252955975060629
+Nearest Counterfactual (SCM off),1.0,1.0605220896617833
+Causal Algorithmic Recourse (SCM on),1.0,0.8513070450531248
