@@ -16,8 +16,10 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 import seaborn as sns
+import shap
 import torch
-from PIL import Image
+import torch.nn.functional as F
+from PIL import Image, ImageDraw
 from scipy.stats import spearmanr
 from sklearn.calibration import calibration_curve
 from sklearn.metrics import (
@@ -29,6 +31,7 @@ from sklearn.metrics import (
     roc_auc_score,
     roc_curve,
 )
+from torchvision import models as tv_models
 
 from interpretability import lime_explain, shap_explain
 from models import MLPClassifier, NAMClassifier
@@ -41,7 +44,14 @@ from tabular import (
     to_loader,
     train_model,
 )
-from vision import GradCAM, GuidedBackprop, get_vgg16, preprocess_image, smoothgrad
+from vision import (
+    GradCAM,
+    GuidedBackprop,
+    activation_maximization,
+    get_vgg16,
+    preprocess_image,
+    smoothgrad,
+)
 
 
 SEED = 42
@@ -370,6 +380,153 @@ def _plot_permutation_importance(
     print(f"[tabular] saved {out}")
 
 
+def _plot_eda_figures(df) -> None:
+    feat_cols = [c for c in df.columns if c != "Outcome"]
+
+    corr = df[feat_cols + ["Outcome"]].corr()
+    fig = plt.figure(figsize=(8, 6))
+    ax = fig.add_subplot(111)
+    sns.heatmap(corr, cmap="coolwarm", center=0.0, ax=ax)
+    ax.set_title("Correlation matrix")
+    fig.tight_layout()
+    out = FIG_DIR / "eda_correlation_matrix.png"
+    fig.savefig(out, dpi=150)
+    plt.close(fig)
+    print(f"[tabular] saved {out}")
+
+    pair_cols = [c for c in ["Glucose", "BMI", "Age", "DiabetesPedigreeFunction"] if c in df.columns]
+    pair_df = df[pair_cols + ["Outcome"]].copy()
+    if len(pair_df) > 250:
+        pair_df = pair_df.sample(n=250, random_state=SEED)
+    g = sns.pairplot(pair_df, hue="Outcome", diag_kind="hist", corner=True, plot_kws={"s": 12, "alpha": 0.6})
+    g.fig.suptitle("Pairplot (subset) for EDA", y=1.01)
+    out = FIG_DIR / "eda_pairplot.png"
+    g.fig.savefig(out, dpi=150)
+    plt.close(g.fig)
+    print(f"[tabular] saved {out}")
+
+    fig = plt.figure(figsize=(10, 4.2))
+    ax = fig.add_subplot(111)
+    sns.boxplot(data=df[feat_cols], orient="h", ax=ax, fliersize=2)
+    ax.set_title("Feature dispersion and outlier profile")
+    ax.set_xlabel("Raw feature value")
+    fig.tight_layout()
+    out = FIG_DIR / "eda_outlier_boxplots.png"
+    fig.savefig(out, dpi=150)
+    plt.close(fig)
+    print(f"[tabular] saved {out}")
+
+
+def _plot_corr_vs_shap_alignment(
+    df,
+    feature_names: list[str],
+    shap_rows: list[np.ndarray],
+) -> None:
+    corr_abs = df[feature_names + ["Outcome"]].corr()["Outcome"].drop("Outcome").abs()
+    mean_abs_shap = np.mean(np.abs(np.vstack(shap_rows)), axis=0)
+
+    order = np.argsort(mean_abs_shap)
+    feats = [feature_names[i] for i in order]
+    corr_vals = corr_abs.values[order]
+    shap_vals = mean_abs_shap[order]
+
+    y = np.arange(len(feats))
+    fig = plt.figure(figsize=(8.5, 4.8))
+    ax = fig.add_subplot(111)
+    ax.barh(y - 0.18, corr_vals, height=0.34, label="|Corr(feature, Outcome)|", color="#457b9d")
+    ax.barh(y + 0.18, shap_vals, height=0.34, label="Mean |SHAP| (3 samples)", color="#e76f51")
+    ax.set_yticks(y)
+    ax.set_yticklabels(feats)
+    ax.set_xlabel("Importance proxy value")
+    ax.set_title("Correlation-Attribution alignment")
+    ax.grid(alpha=0.2, axis="x")
+    ax.legend(fontsize=8, loc="best")
+    fig.tight_layout()
+    out = FIG_DIR / "correlation_vs_shap_importance.png"
+    fig.savefig(out, dpi=150)
+    plt.close(fig)
+    print(f"[tabular] saved {out}")
+
+
+def _plot_shap_force_plots(
+    expected_value: float,
+    shap_rows: list[np.ndarray],
+    samples: list[np.ndarray],
+    sample_idxs: np.ndarray,
+    feature_names: list[str],
+) -> None:
+    for plot_i, (row, x, test_idx) in enumerate(zip(shap_rows, samples, sample_idxs)):
+        fig = plt.figure(figsize=(10, 1.8))
+        shap.force_plot(
+            expected_value,
+            row,
+            x,
+            feature_names=feature_names,
+            matplotlib=True,
+            show=False,
+        )
+        plt.title(f"SHAP force plot - sample {plot_i} (test idx={int(test_idx)})", fontsize=10)
+        fig.tight_layout()
+        out = FIG_DIR / f"shap_force_sample_{plot_i}.png"
+        fig.savefig(out, dpi=170)
+        plt.close(fig)
+        print(f"[tabular] saved {out}")
+
+
+def _plot_grace_counterfactual(
+    predict_fn,
+    feature_names: list[str],
+    x: np.ndarray,
+    shap_row: np.ndarray,
+    shap_explainer,
+) -> dict[str, float | str]:
+    top_idx = int(np.argmax(np.abs(shap_row)))
+    top_feat = feature_names[top_idx]
+
+    x_cf = x.copy()
+    direction = -np.sign(shap_row[top_idx]) if shap_row[top_idx] != 0 else -1.0
+    x_cf[top_idx] = x_cf[top_idx] + direction * 1.0
+
+    p_before = float(predict_fn(x.reshape(1, -1))[0, 1])
+    p_after = float(predict_fn(x_cf.reshape(1, -1))[0, 1])
+
+    shap_before = _normalize_shap_output(
+        np.asarray(shap_explainer.shap_values(x.reshape(1, -1), nsamples=160))
+    )
+    shap_after = _normalize_shap_output(
+        np.asarray(shap_explainer.shap_values(x_cf.reshape(1, -1), nsamples=160))
+    )
+    delta = shap_after - shap_before
+
+    order = np.argsort(np.abs(delta))
+    feats = [feature_names[i] for i in order]
+    delta_sorted = delta[order]
+
+    fig, axes = plt.subplots(1, 2, figsize=(11, 4))
+    axes[0].bar(["Original", "Counterfactual"], [p_before, p_after], color=["#1d3557", "#e63946"])
+    axes[0].set_ylim(0, 1.0)
+    axes[0].set_title("Predicted probability shift")
+    axes[0].set_ylabel("p(Outcome=1)")
+    axes[0].grid(alpha=0.2, axis="y")
+
+    axes[1].barh(feats, delta_sorted, color="#2a9d8f")
+    axes[1].set_title("SHAP change (counterfactual - original)")
+    axes[1].set_xlabel("Attribution delta")
+    axes[1].grid(alpha=0.2, axis="x")
+    fig.suptitle(f"GRACE-style counterfactual on feature: {top_feat}")
+    fig.tight_layout()
+    out = FIG_DIR / "grace_counterfactual_shap_shift.png"
+    fig.savefig(out, dpi=150)
+    plt.close(fig)
+    print(f"[tabular] saved {out}")
+    return {
+        "top_feature": top_feat,
+        "p_before": p_before,
+        "p_after": p_after,
+        "delta_p": float(p_after - p_before),
+    }
+
+
 def _overlay_heatmap(
     pil_image: Image.Image,
     heat: np.ndarray,
@@ -427,6 +584,7 @@ def generate_tabular_figures() -> dict[str, float]:
     X, y, _ = preprocess(df)
     X_train, X_val, X_test, y_train, y_val, y_test = make_splits(X, y, seed=SEED)
     feature_names = df.columns[:-1].tolist()
+    _plot_eda_figures(df)
 
     plt.figure(figsize=(6, 4))
     sns.countplot(x="Outcome", data=df)
@@ -451,17 +609,20 @@ def generate_tabular_figures() -> dict[str, float]:
     )
 
     predict_fn = _predict_fn_factory(mlp)
+    shap_explainer = shap.KernelExplainer(lambda z: predict_fn(z)[:, 1], X_train[:100])
     sample_idxs = np.array([0, 1, 2])
     sample_idxs = sample_idxs[sample_idxs < len(X_test)]
     agreement_rows: list[dict[str, float]] = []
+    shap_rows: list[np.ndarray] = []
+    sample_vectors: list[np.ndarray] = []
 
     for plot_i, test_idx in enumerate(sample_idxs):
         x = X_test[test_idx]
         lime_exp = lime_explain(predict_fn, X_train, x, feature_names)
-        shap_vals = shap_explain(
-            lambda z: predict_fn(z)[:, 1], X_train, x.reshape(1, -1)
-        )
+        shap_vals = shap_explainer.shap_values(x.reshape(1, -1), nsamples=200)
         shap_row = _normalize_shap_output(shap_vals)
+        shap_rows.append(shap_row.copy())
+        sample_vectors.append(x.copy())
 
         fig, axes = plt.subplots(1, 2, figsize=(11, 4))
         axes[0].barh(feature_names, shap_row, color="#2a9d8f")
@@ -491,6 +652,22 @@ def generate_tabular_figures() -> dict[str, float]:
         agreement_rows.append(
             {"sample": float(plot_i), "spearman": float(corr), "top3_overlap": float(overlap)}
         )
+
+    _plot_shap_force_plots(
+        expected_value=float(np.asarray(shap_explainer.expected_value).reshape(-1)[0]),
+        shap_rows=shap_rows,
+        samples=sample_vectors,
+        sample_idxs=sample_idxs,
+        feature_names=feature_names,
+    )
+    _plot_corr_vs_shap_alignment(df, feature_names, shap_rows)
+    grace_summary = _plot_grace_counterfactual(
+        predict_fn=predict_fn,
+        feature_names=feature_names,
+        x=sample_vectors[0],
+        shap_row=shap_rows[0],
+        shap_explainer=shap_explainer,
+    )
 
     nam = NAMClassifier(n_features=X.shape[1], hidden=32)
     nam, nam_hist = train_model(
@@ -548,13 +725,204 @@ def generate_tabular_figures() -> dict[str, float]:
             "mlp_accuracy_drop": perm_imp_mlp.tolist(),
             "nam_accuracy_drop": perm_imp_nam.tolist(),
         },
+        "grace_counterfactual": grace_summary,
     }
     return summary
 
 
+def _imagenet_categories() -> list[str]:
+    weights_enum = getattr(tv_models, "VGG16_Weights", None)
+    if weights_enum is not None:
+        return list(weights_enum.IMAGENET1K_V1.meta.get("categories", []))
+    return [f"class_{i}" for i in range(1000)]
+
+
+def _denorm_to_rgb01(t: torch.Tensor) -> np.ndarray:
+    mean = torch.tensor([0.485, 0.456, 0.406], dtype=t.dtype, device=t.device).view(1, 3, 1, 1)
+    std = torch.tensor([0.229, 0.224, 0.225], dtype=t.dtype, device=t.device).view(1, 3, 1, 1)
+    x = t * std + mean
+    x = x.clamp(0.0, 1.0)
+    return x.detach().cpu().squeeze(0).permute(1, 2, 0).numpy()
+
+
+def _predict_top(model: torch.nn.Module, input_tensor: torch.Tensor, categories: list[str]) -> tuple[int, str, float]:
+    with torch.no_grad():
+        logits = model(input_tensor)
+        probs = torch.softmax(logits, dim=1)[0]
+        idx = int(torch.argmax(probs).item())
+        conf = float(probs[idx].item())
+    name = categories[idx] if idx < len(categories) else f"class_{idx}"
+    return idx, name, conf
+
+
+def _build_demo_images() -> list[Image.Image]:
+    imgs: list[Image.Image] = []
+
+    img0 = Image.new("RGB", (224, 224), color=(160, 120, 90))
+    d0 = ImageDraw.Draw(img0)
+    d0.ellipse((40, 40, 185, 185), fill=(220, 180, 130), outline=(90, 60, 30), width=4)
+    imgs.append(img0)
+
+    img1 = Image.new("RGB", (224, 224), color=(90, 130, 200))
+    d1 = ImageDraw.Draw(img1)
+    d1.rectangle((20, 120, 204, 210), fill=(40, 80, 60))
+    d1.polygon([(40, 120), (112, 60), (184, 120)], fill=(180, 180, 180))
+    imgs.append(img1)
+
+    img2 = Image.new("RGB", (224, 224), color=(220, 210, 120))
+    d2 = ImageDraw.Draw(img2)
+    d2.ellipse((70, 50, 150, 200), fill=(250, 220, 80), outline=(200, 160, 40), width=3)
+    imgs.append(img2)
+
+    img3 = Image.new("RGB", (224, 224), color=(180, 200, 230))
+    d3 = ImageDraw.Draw(img3)
+    for i in range(0, 224, 16):
+        d3.line((0, i, 223, i), fill=(120, 140, 170), width=2)
+    d3.rectangle((60, 70, 170, 170), outline=(20, 40, 60), width=5)
+    imgs.append(img3)
+
+    img4 = Image.new("RGB", (224, 224), color=(120, 80, 140))
+    d4 = ImageDraw.Draw(img4)
+    d4.polygon([(30, 180), (110, 40), (194, 180)], fill=(230, 120, 80), outline=(60, 20, 20), width=3)
+    imgs.append(img4)
+
+    img5 = Image.new("RGB", (224, 224), color=(200, 200, 200))
+    d5 = ImageDraw.Draw(img5)
+    d5.ellipse((20, 20, 200, 200), outline=(30, 30, 30), width=5)
+    d5.line((20, 112, 200, 112), fill=(30, 30, 30), width=4)
+    d5.line((112, 20, 112, 200), fill=(30, 30, 30), width=4)
+    imgs.append(img5)
+
+    return imgs
+
+
+def _plot_vgg16_image_set(model: torch.nn.Module, categories: list[str]) -> tuple[list[dict[str, float | str]], Image.Image]:
+    imgs = _build_demo_images()
+    rows: list[dict[str, float | str]] = []
+
+    fig, axes = plt.subplots(2, 3, figsize=(12, 7))
+    for i, (img, ax) in enumerate(zip(imgs, axes.ravel())):
+        inp = preprocess_image(img)
+        idx, name, conf = _predict_top(model, inp, categories)
+        rows.append({"image_id": i, "pred_idx": idx, "pred_name": name, "confidence": conf})
+        ax.imshow(img)
+        ax.set_title(f"Img {i}: {name}\nconf={conf:.3f}", fontsize=8)
+        ax.axis("off")
+    fig.suptitle("Six analyzed images with VGG16 predictions")
+    fig.tight_layout()
+    out = FIG_DIR / "vgg16_six_image_predictions.png"
+    fig.savefig(out, dpi=150)
+    plt.close(fig)
+    print(f"[vision] saved {out}")
+    return rows, imgs[0]
+
+
+def _plot_adversarial_comparison(
+    model: torch.nn.Module,
+    image: Image.Image,
+    categories: list[str],
+    epsilon: float = 0.12,
+) -> dict[str, float | int | str]:
+    x = preprocess_image(image).detach().clone().requires_grad_(True)
+    logits = model(x)
+    c0 = int(torch.argmax(logits, dim=1).item())
+    loss = F.cross_entropy(logits, torch.tensor([c0]))
+    model.zero_grad(set_to_none=True)
+    loss.backward()
+    grad_sign = x.grad.detach().sign()
+    x_adv = (x + epsilon * grad_sign).detach()
+
+    c_adv, name_adv, conf_adv = _predict_top(model, x_adv, categories)
+    _, name_orig, conf_orig = _predict_top(model, x.detach(), categories)
+
+    cam = GradCAM(model, model.features[28])
+    cam_orig = cam(x.detach(), class_idx=c0)
+    cam_adv = cam(x_adv, class_idx=c0)
+    cam.close()
+
+    rgb_orig = _denorm_to_rgb01(x.detach())
+    rgb_adv = _denorm_to_rgb01(x_adv)
+    pert = np.abs(rgb_adv - rgb_orig).mean(axis=2)
+
+    fig, axes = plt.subplots(1, 4, figsize=(14, 3.8))
+    axes[0].imshow(rgb_orig)
+    axes[0].set_title(f"Original\n{name_orig} ({conf_orig:.3f})", fontsize=9)
+    axes[1].imshow(pert, cmap="magma")
+    axes[1].set_title(f"|Perturbation| (eps={epsilon})", fontsize=9)
+    axes[2].imshow(cam_orig, cmap="jet")
+    axes[2].set_title(f"Grad-CAM @orig class\n{name_orig}", fontsize=9)
+    axes[3].imshow(cam_adv, cmap="jet")
+    axes[3].set_title(f"Adversarial prediction\n{name_adv} ({conf_adv:.3f})", fontsize=9)
+    for ax in axes:
+        ax.axis("off")
+    fig.tight_layout()
+    out = FIG_DIR / "adversarial_fgsm_comparison.png"
+    fig.savefig(out, dpi=150)
+    plt.close(fig)
+    print(f"[vision] saved {out}")
+    return {
+        "epsilon": float(epsilon),
+        "orig_class_idx": int(c0),
+        "orig_class_name": name_orig,
+        "adv_class_idx": int(c_adv),
+        "adv_class_name": name_adv,
+        "changed": bool(c_adv != c0),
+    }
+
+
+def _plot_feature_visualization_hen(model: torch.nn.Module, categories: list[str]) -> dict[str, float | int]:
+    hen_idx = categories.index("hen") if "hen" in categories else 8
+
+    torch.manual_seed(SEED)
+    img_raw = activation_maximization(
+        model,
+        hen_idx,
+        steps=120,
+        lr=0.8,
+        tv_weight=0.0,
+        device="cpu",
+        use_random_shifts=False,
+    )
+    regs = []
+    for i in range(5):
+        torch.manual_seed(SEED + i + 1)
+        regs.append(
+            activation_maximization(
+                model,
+                hen_idx,
+                steps=160,
+                lr=0.8,
+                tv_weight=2e-5,
+                device="cpu",
+                use_random_shifts=True,
+                shift_max=12,
+            )
+        )
+
+    fig, axes = plt.subplots(2, 3, figsize=(10.5, 7))
+    axes = axes.ravel()
+    axes[0].imshow(np.transpose(img_raw, (1, 2, 0)))
+    axes[0].set_title("Initial (no TV, no shifts)", fontsize=9)
+    axes[0].axis("off")
+    for i, img in enumerate(regs, start=1):
+        axes[i].imshow(np.transpose(img, (1, 2, 0)))
+        axes[i].set_title(f"Regularized #{i}", fontsize=9)
+        axes[i].axis("off")
+    fig.suptitle('Activation maximization for class "hen"')
+    fig.tight_layout()
+    out = FIG_DIR / "feature_visualization_hen.png"
+    fig.savefig(out, dpi=150)
+    plt.close(fig)
+    print(f"[vision] saved {out}")
+    return {"hen_class_idx": int(hen_idx), "n_regularized_images": 5}
+
+
 def generate_vision_figures() -> dict[str, float]:
     print("[vision] building model...")
-    model = get_vgg16(device="cpu", prefer_pretrained=False)
+    model = get_vgg16(device="cpu", prefer_pretrained=True)
+    categories = _imagenet_categories()
+
+    six_rows, attack_image = _plot_vgg16_image_set(model, categories)
 
     img_gradcam = Image.new("RGB", (224, 224), color=(100, 140, 200))
     inp_gradcam = preprocess_image(img_gradcam)
@@ -673,6 +1041,8 @@ def generate_vision_figures() -> dict[str, float]:
     entropies = [_saliency_entropy(m) for m in sweep_maps]
     tvs = [_saliency_total_variation(m) for m in sweep_maps]
     _plot_smoothgrad_convergence(smoothgrad_counts, entropies, tvs)
+    adv_summary = _plot_adversarial_comparison(model, attack_image, categories, epsilon=0.12)
+    featvis_summary = _plot_feature_visualization_hen(model, categories)
     return {
         "smoothgrad_cosine_5_20": cos_5_20,
         "smoothgrad_cosine_20_50": cos_20_50,
@@ -680,6 +1050,9 @@ def generate_vision_figures() -> dict[str, float]:
         "smoothgrad_ks": smoothgrad_counts,
         "smoothgrad_entropy": entropies,
         "smoothgrad_total_variation": tvs,
+        "six_image_predictions": six_rows,
+        "adversarial_demo": adv_summary,
+        "feature_visualization": featvis_summary,
     }
 
 

@@ -142,7 +142,16 @@ def smoothgrad(model, input_tensor, target_class=None, n_samples=25, stdev=0.15)
 
 
 # Activation maximization (simple gradient ascent on input)
-def activation_maximization(model, target_class, steps=200, lr=1.0, tv_weight=1e-5, device="cpu"):
+def activation_maximization(
+    model,
+    target_class,
+    steps=200,
+    lr=1.0,
+    tv_weight=1e-5,
+    device="cpu",
+    use_random_shifts=True,
+    shift_max=8,
+):
     x = torch.nn.Parameter(torch.randn(1, 3, 224, 224, device=device) * 0.1)
     opt = torch.optim.Adam([x], lr=lr)
 
@@ -153,7 +162,12 @@ def activation_maximization(model, target_class, steps=200, lr=1.0, tv_weight=1e
 
     for i in range(steps):
         opt.zero_grad()
-        out = model(x)
+        x_forward = x
+        if use_random_shifts and shift_max > 0:
+            dy = int(torch.randint(-shift_max, shift_max + 1, (1,), device=device).item())
+            dx = int(torch.randint(-shift_max, shift_max + 1, (1,), device=device).item())
+            x_forward = torch.roll(x_forward, shifts=(dy, dx), dims=(2, 3))
+        out = model(x_forward)
         loss = -out[0, target_class] + tv_weight * tv_loss(x)
         loss.backward()
         opt.step()
