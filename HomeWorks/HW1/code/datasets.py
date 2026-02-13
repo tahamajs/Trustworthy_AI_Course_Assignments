@@ -34,6 +34,9 @@ def get_transforms(dataset_name, train=True, image_size=32, augment=False, to_rg
 
     # convert grayscale to RGB if requested (for MNIST -> make 3-channels)
     conv = [transforms.Lambda(lambda img: img.convert('RGB'))] if to_rgb3 else []
+    if to_rgb3 and len(mean) == 1:
+        mean = (mean[0], mean[0], mean[0])
+        std = (std[0], std[0], std[0])
 
     transform = transforms.Compose(base + conv + aug + [transforms.ToTensor(), transforms.Normalize(mean, std)])
     return transform
@@ -64,11 +67,12 @@ def get_dataloaders(dataset_name, batch_size=128, image_size=32, augment=False, 
             in_channels = 3
         else:
             raise ValueError('Unknown dataset: ' + dataset_name)
-    except Exception as e:
+    except Exception:
         # Offline/demo fallback using synthetic data to keep pipelines runnable
         channels = 3 if dataset_name.lower() in ('svhn', 'cifar10') else 1
         num_classes = 10
-        in_channels = 3 if channels == 3 else 1
+        # We convert to RGB for consistency across all pipelines.
+        in_channels = 3
         transform = get_transforms('svhn' if channels == 3 else 'mnist', train=True, image_size=image_size, augment=augment, to_rgb3=True)
         train_size = 2048 if demo else 8192
         test_size = 512 if demo else 2048

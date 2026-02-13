@@ -1,5 +1,6 @@
 import argparse
-import time
+import csv
+import json
 import os
 from tqdm import tqdm
 
@@ -13,6 +14,61 @@ from models.resnet18_custom import resnet18
 from losses import LabelSmoothingCrossEntropy
 from attacks import fgsm_attack, pgd_attack
 from utils import set_seed, save_checkpoint
+
+
+def save_training_history(save_dir, history):
+    os.makedirs(save_dir, exist_ok=True)
+    json_path = os.path.join(save_dir, 'training_history.json')
+    csv_path = os.path.join(save_dir, 'training_history.csv')
+
+    with open(json_path, 'w', encoding='utf-8') as f:
+        json.dump(history, f, indent=2)
+
+    with open(csv_path, 'w', newline='', encoding='utf-8') as f:
+        writer = csv.writer(f)
+        writer.writerow(['epoch', 'train_loss', 'train_acc', 'val_loss', 'val_acc'])
+        for i in range(len(history['epoch'])):
+            writer.writerow(
+                [
+                    history['epoch'][i],
+                    history['train_loss'][i],
+                    history['train_acc'][i],
+                    history['val_loss'][i],
+                    history['val_acc'][i],
+                ]
+            )
+
+
+def save_training_plot(save_dir, history):
+    try:
+        import matplotlib
+        matplotlib.use('Agg')
+        import matplotlib.pyplot as plt
+    except Exception as e:
+        print(f'[WARN] Could not save training plot: {e}')
+        return
+
+    fig, axes = plt.subplots(1, 2, figsize=(12, 4.5))
+    axes[0].plot(history['epoch'], history['train_loss'], label='Train', linewidth=2)
+    axes[0].plot(history['epoch'], history['val_loss'], label='Val', linewidth=2)
+    axes[0].set_title('Loss')
+    axes[0].set_xlabel('Epoch')
+    axes[0].set_ylabel('Cross Entropy')
+    axes[0].grid(alpha=0.3, linestyle='--')
+    axes[0].legend()
+
+    axes[1].plot(history['epoch'], history['train_acc'], label='Train', linewidth=2)
+    axes[1].plot(history['epoch'], history['val_acc'], label='Val', linewidth=2)
+    axes[1].set_title('Accuracy')
+    axes[1].set_xlabel('Epoch')
+    axes[1].set_ylabel('Top-1 Accuracy (%)')
+    axes[1].grid(alpha=0.3, linestyle='--')
+    axes[1].legend()
+
+    fig.suptitle('Training Curves')
+    fig.tight_layout()
+    fig.savefig(os.path.join(save_dir, 'training_curves.png'), dpi=220)
+    plt.close(fig)
 
 
 def train_one_epoch(model, loader, optimizer, device, epoch, loss_fn, adv_attack=None, adv_params=None):
@@ -112,6 +168,7 @@ def main():
     args = parse_args()
     set_seed(args.seed)
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    os.makedirs(args.save_dir, exist_ok=True)
     train_loader, test_loader, num_classes, in_channels = get_dataloaders(args.dataset, batch_size=args.batch_size, augment=True, demo=args.demo)
 
     model = resnet18(num_classes=num_classes, in_channels=in_channels, use_bn=args.use_bn)
@@ -134,6 +191,7 @@ def main():
     best_acc = 0.0
     epsilon = str_to_eps(args.epsilon)
     alpha = str_to_eps(args.alpha)
+    history = {'epoch': [], 'train_loss': [], 'train_acc': [], 'val_loss': [], 'val_acc': []}
 
     adv_params = {'epsilon': epsilon, 'alpha': alpha, 'iters': args.iters, 'prob': 0.5}
 
@@ -146,6 +204,11 @@ def main():
         writer.add_scalar('train/acc', train_acc, epoch)
         writer.add_scalar('val/loss', val_loss, epoch)
         writer.add_scalar('val/acc', val_acc, epoch)
+        history['epoch'].append(epoch)
+        history['train_loss'].append(train_loss)
+        history['train_acc'].append(train_acc)
+        history['val_loss'].append(val_loss)
+        history['val_acc'].append(val_acc)
 
         is_best = val_acc > best_acc
         best_acc = max(val_acc, best_acc)
@@ -154,6 +217,8 @@ def main():
         print(f"Epoch {epoch}  Train Loss {train_loss:.4f}  Train Acc {train_acc:.2f}%  Val Loss {val_loss:.4f}  Val Acc {val_acc:.2f}%  Best {best_acc:.2f}%")
 
     writer.close()
+    save_training_history(args.save_dir, history)
+    save_training_plot(args.save_dir, history)
 
 
 if __name__ == '__main__':

@@ -8,6 +8,7 @@ import utils
 import data_utils
 import train_classifiers
 import evaluate_recourse
+import plot_report_figures
 
 
 def run_benchmark(models, datasets, seed, N_explain):
@@ -69,12 +70,15 @@ def run_benchmark(models, datasets, seed, N_explain):
         lambd = utils.get_lambdas(dataset, model_type, trainer)
         save_name = utils.get_metrics_save_dir(dataset, trainer, lambd, model_type, epsilon, seed)
         evaluate_recourse.eval_recourse(dataset, model_type, trainer, seed, N_explain, epsilon, lambd, save_name, save_adv)
+        try:
+            plot_report_figures.export_report_plots(dataset, trainer, model_type, epsilon, seed, lambd)
+        except Exception as exc:
+            print(f'Warning: plot export failed for {dataset}-{model_type}-{trainer}: {exc}')
 
     trainer = 'ERM'
     epsilon = 0
     for model_type in models:
         for dataset in datasets:
             run_evaluation(dataset, model_type, trainer, seed, N_explain, epsilon, False)
-
 
 

@@ -92,10 +92,16 @@ class LinearRecourse:
             except cp.error.SolverError:
                 return np.zeros(x.shape), False, np.inf, np.zeros(x.shape)
 
-            found_result = a.value is not None
-            cf = x + J @ a.value if found_result else None
-            found_result = found_result and self.w.T @ cf >= self.b
-            return a.value, found_result, optim_problem.value, cf
+            if a.value is None:
+                return np.zeros(x.shape), False, np.inf, np.zeros(x.shape)
+
+            # cvxpy may return column vectors/scalars with extra dimensions; flatten for stable downstream indexing.
+            action = np.asarray(a.value, dtype=float).reshape(-1)
+            cf = np.asarray(x + J @ action, dtype=float).reshape(-1)
+            margin = float(np.dot(self.w.reshape(-1), cf) - np.asarray(self.b).reshape(-1)[0])
+            found_result = margin >= -1e-8
+            cost = float(optim_problem.value) if optim_problem.value is not None else np.inf
+            return action, bool(found_result), cost, cf
 
         # Fallback solver (no cvxpy): optimal greedy for weighted L1 with one linear inequality and box bounds.
         return self.solve_lp_fallback(x, J, unactionable, bounds)
