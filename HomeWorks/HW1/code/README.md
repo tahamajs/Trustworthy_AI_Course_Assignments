@@ -76,8 +76,22 @@ Evaluation + UMAP:
 python eval.py --dataset svhn --checkpoint checkpoints/svhn_baseline/best.pth --umap
 ```
 
+One-command report artifact generation (demo-safe):
+
+```bash
+python run_report_pipeline.py --epochs 3
+```
+
+Full dataset run (long):
+
+```bash
+python run_report_pipeline.py --full-run --epochs 80 --dataset svhn
+```
+
 ## Outputs
 
 - Checkpoints: `checkpoints/<experiment>/last.pth`, `best.pth`
 - TensorBoard logs: same `--save-dir`
 - UMAP figure: `<checkpoint>.umap.png`
+- Adversarial/noise figure: `<checkpoint>.grid.png`
+- Training curves + history: `<save-dir>/training_curves.png`, `training_history.{csv,json}`

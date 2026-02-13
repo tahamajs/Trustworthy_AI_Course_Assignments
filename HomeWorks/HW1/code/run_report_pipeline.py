@@ -24,6 +24,7 @@ def parse_args():
     p.add_argument('--dataset', default='svhn', choices=['svhn', 'mnist', 'cifar10'])
     p.add_argument('--epochs', type=int, default=3)
     p.add_argument('--batch-size', type=int, default=128)
+    p.add_argument('--optimizer', default='sgd', choices=['sgd', 'adam'])
     p.add_argument('--attack', default='fgsm', choices=['fgsm', 'pgd'])
     p.add_argument('--epsilon', default='8/255')
     p.add_argument('--alpha', default='2/255')
@@ -31,6 +32,7 @@ def parse_args():
     p.add_argument('--save-dir', default='checkpoints/svhn_demo')
     p.add_argument('--report-fig-dir', default='../report/figures')
     p.add_argument('--grid-samples', type=int, default=8)
+    p.add_argument('--full-run', action='store_true', help='Disable demo mode and run on full dataset.')
     return p.parse_args()
 
 
@@ -51,11 +53,12 @@ def main():
         '--batch-size',
         str(args.batch_size),
         '--optimizer',
-        'sgd',
+        args.optimizer,
         '--save-dir',
         str(save_dir),
-        '--demo',
     ]
+    if not args.full_run:
+        train_cmd.append('--demo')
     run_step(train_cmd, cwd=script_dir)
 
     ckpt_path = save_dir / 'best.pth'
@@ -85,8 +88,9 @@ def main():
         str(umap_path),
         '--grid-path',
         str(grid_path),
-        '--demo',
     ]
+    if not args.full_run:
+        eval_cmd.append('--demo')
     run_step(eval_cmd, cwd=script_dir)
 
     copy_if_exists(save_dir / 'training_curves.png', report_fig_dir / 'training_curves.png')

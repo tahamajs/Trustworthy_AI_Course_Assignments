@@ -189,6 +189,13 @@ E1 & Feature embedding \& grid (demo) & code/eval.py & main; plot\_umap; save\_e
 
 \begin{figure}[H]
   \centering
+  \IfFileExists{figures/training_curves.png}{\includegraphics[width=0.72\textwidth]{figures/training_curves.png}}{\fbox{\parbox[c][4cm][c]{0.72\textwidth}{\centering Artifact not found: figures/training\_curves.png}}}
+  \caption{Training loss and accuracy curves exported from \texttt{train.py}.}
+  \label{fig:hw1-train-curves}
+\end{figure}
+
+\begin{figure}[H]
+  \centering
   \IfFileExists{figures/umap_features.png}{\includegraphics[width=0.48\textwidth]{figures/umap_features.png}}{\fbox{\parbox[c][4cm][c]{0.48\textwidth}{\centering Artifact not found: figures/umap\_features.png}}}
   \hfill
   \IfFileExists{figures/adv_examples.png}{\includegraphics[width=0.48\textwidth]{figures/adv_examples.png}}{\fbox{\parbox[c][4cm][c]{0.48\textwidth}{\centering Artifact not found: figures/adv\_examples.png}}}
@@ -243,6 +250,7 @@ HomeWorks/HW1/code/checkpoints/svhn\_baseline/best.pth & train.py baseline comma
 HomeWorks/HW1/code/checkpoints/svhn\_no\_bn/best.pth & train.py no-BN command & Results and Evidence & \statusimplemented \\
 HomeWorks/HW1/code/checkpoints/svhn\_label\_smooth/best.pth & train.py label smoothing command & Results and Evidence & \statusimplemented \\
 HomeWorks/HW1/code/checkpoints/cifar\_pgd/best.pth & train.py PGD command & Results and Evidence & \statusimplemented \\
+HomeWorks/HW1/report/figures/training\_curves.png & train.py (auto-export) & Results and Evidence & \statusfallback \\
 HomeWorks/HW1/report/figures/umap\_features.png & eval.py --umap --demo & Results and Evidence & \statusfallback \\
 HomeWorks/HW1/report/figures/adv\_examples.png & eval.py --save-grid --demo & Results and Evidence & \statusfallback \\
 HomeWorks/HW1/code/checkpoints/svhn\_demo/best.pth & train.py --demo & Error Analysis and Limitations & \statusfallback \\
