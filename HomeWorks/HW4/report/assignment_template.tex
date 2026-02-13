@@ -252,6 +252,45 @@ The fairness module provides one evaluation surface across baseline, assignment 
 \subsection{Artifact Orchestration}
 The CLI orchestrator in \path{code/generate_report_figs.py} executes the full pipeline end to end. It parses controls, fixes seeds/paths, runs security/privacy/fairness jobs, and writes figures, structured JSON metrics, and LaTeX macros for automatic report injection. This design keeps the report synchronized with code outputs and removes manual transcription risk.
 
+\subsection{Function-Level API Contracts}
+The codebase is intentionally organized around explicit contracts so each major function can be audited independently.
+
+\textbf{Security API contracts:}
+\begin{itemize}
+    \item Checkpoint-extraction helper: ensures archive extraction is idempotent and returns a valid extraction directory or a clear remediation error.
+    \item Checkpoint-resolution helper: deterministically selects the active checkpoint from student ID suffix or explicit model index and fails on ambiguous/missing choices.
+    \item All-label reconstruction routine: runs optimization for all candidate targets and returns structured trigger objects (mask, pattern, scale, target label).
+    \item Outlier detector: applies lower-tail MAD policy and returns both attacked-label decision and supporting evidence.
+    \item Clean/trigger evaluators: compute clean behavior and trigger behavior separately so mitigation claims are not conflated.
+    \item One-epoch unlearning routine: retrains with controlled trigger exposure while preserving true labels.
+\end{itemize}
+
+\textbf{Privacy API contracts:}
+\begin{itemize}
+    \item Income-query scenario helper: computes Q2-part-1 constants and derived values in deterministic form.
+    \item Counting-query scenario helper: computes base, sequential, and unbounded settings with explicit intermediate terms.
+    \item sequential composition lock: $\epsilon_i=\epsilon/k$, $\delta_i=\delta/k$.
+    \item unbounded sensitivity lock: $\Delta f_u=\max(1,\lceil pn\rceil)\Delta f$.
+\end{itemize}
+
+\textbf{Fairness API contracts:}
+\begin{itemize}
+    \item Promotion/demotion routine: uses predicted labels and predicted probabilities (not ground-truth labels) to select cohorts.
+    \item Reweighing trainer: applies group-label reweighing via importance weights and returns comparable metrics.
+    \item Group-threshold optimizer and applier: implement post-hoc threshold search and deployment-time thresholding.
+    \item Unified metrics routine: enforces one schema for accuracy, DI, Zemel proxy, and group-rate decomposition outputs.
+\end{itemize}
+
+\subsection{Complexity and Runtime Footprint}
+Security runtime dominates total pipeline cost. With $L$ target labels, $T$ optimization steps per label, and mini-batch size $B$, reconstruction cost is approximately
+\begin{equation}
+\mathcal{O}(L\cdot T\cdot B\cdot C_f),
+\end{equation}
+where $C_f$ is forward/backward model cost. Privacy scenarios are closed-form and effectively constant-time for assignment-sized parameter sweeps. Fairness runtime is mainly model fitting and threshold search; if $n$ is sample size, $d$ feature count, and $G$ threshold-grid resolution, post-hoc search is approximately $\mathcal{O}(G^2 n)$ after model inference. This explains why security profile choices (500-step optimization) are the primary wall-clock lever.
+
+\subsection{Determinism and Randomness Control}
+Reproducibility requires deterministic boundaries around stochastic components. The implementation sets explicit seeds for Python, NumPy, and framework-level RNGs, keeps data splits fixed, and avoids data-dependent branch ambiguity in reporting code. Where strict determinism is unavailable due to backend kernels, this report still guarantees deterministic configuration and seed disclosure so reruns remain auditable and numerically stable within expected tolerance.
+
 \section{Results and Full Plot Interpretation}
 
 \subsection{Reconstructed Trigger for Detected Label}
@@ -391,6 +430,32 @@ $P(\tilde{q} > 505)$ (base / seq. / unb.) & \QTwoProbBase{} / \QTwoProbSequentia
 \bottomrule
 \end{tabular}
 \end{table}
+
+\section{Uncertainty, Decision Risk, and Policy Interpretation}
+\subsection{Security Uncertainty and Claim Strength}
+Security conclusions are tied to two probability-like quantities: attack success rate and clean accuracy. For a Bernoulli rate estimate $\hat{p}=m/n$, standard error scales as
+\begin{equation}
+\mathrm{SE}(\hat{p})=\sqrt{\frac{\hat{p}(1-\hat{p})}{n}}.
+\end{equation}
+Even when point estimates move strongly (as in ASR reduction), responsible interpretation should ask whether the direction is stable under sample variation. This is why the report combines aggregate rates with class-wise confusion matrices and fraction sweeps: multiple views reduce the risk of over-claiming from one statistic.
+
+\subsection{Privacy Decision Risk Beyond Point Probabilities}
+In threshold-based use, decision cost can be formalized by weighted error risk:
+\begin{equation}
+\mathcal{R}(t)=c_{FP}\Pr(\tilde{q}>t\mid q\le t)+c_{FN}\Pr(\tilde{q}\le t\mid q>t).
+\end{equation}
+Larger Laplace scale increases both tails around the threshold and can raise operational uncertainty even when privacy guarantees improve. Therefore, privacy parameters should be selected with both legal/privacy constraints and decision-cost tolerance in mind, not by epsilon alone.
+
+\subsection{Fairness Selection as Constrained Optimization}
+Method selection is best treated as constrained optimization rather than winner-take-all ranking:
+\begin{equation}
+\min_{\mathcal{M}\in\mathcal{H}} \;\alpha\left(1-\mathrm{Acc}_{\mathcal{M}}\right)+
+\beta\left|1-\mathrm{DI}_{\mathcal{M}}\right|+\gamma Z_{\mathcal{M}},
+\end{equation}
+where $Z$ is Zemel proxy and $(\alpha,\beta,\gamma)$ encode policy preference. This formalization clarifies why different stakeholders can rationally choose different methods from the same metric table.
+
+\subsection{Cross-Track Governance View}
+Security, privacy, and fairness do not form a linear checklist; they form a coupled governance surface with competing objectives. A deployment-ready policy should therefore specify (i) hard constraints (for example, ASR ceiling), (ii) soft objectives (for example, DI gap target with tolerated accuracy loss), and (iii) monitoring triggers for retraining or policy revision. This report provides the evidence artifacts needed to instantiate that policy explicitly.
 
 \section{Expanded Cross-Domain Discussion}
 \subsection{Security-Privacy Interaction}
@@ -652,6 +717,87 @@ This section provides an additional interpretation layer for reviewers who want 
 
 \subsection{Meta-Interpretation}
 Across all 13 figures, the main methodological principle is triangulation: no single chart is used as standalone proof. Security claims require reconstruction plus behavioral outcomes; privacy claims require scale plus tail behavior; fairness claims require aggregates plus decomposition and tradeoff geometry. This triangulated interpretation model is a core reason the report remains defensible under review.
+
+\section{Notation and Symbol Table}
+\begin{table}[!t]
+\centering
+\caption{Primary symbols used throughout the report}
+\label{tab:symbols}
+\setlength{\tabcolsep}{4pt}
+\footnotesize
+\begin{tabular}{>{\raggedright\arraybackslash}p{0.20\linewidth} >{\raggedright\arraybackslash}p{0.70\linewidth}}
+\toprule
+Symbol & Meaning \\
+\midrule
+$x, y$ & Input sample and class label \\
+$m, p$ & Trigger mask and trigger pattern in Neural Cleanse \\
+$s_y$ & Reconstructed trigger scale for label $y$ \\
+$z_y$ & MAD-normalized lower-tail outlier score for $s_y$ \\
+$\epsilon,\delta$ & Differential privacy parameters \\
+$\Delta f$ & Query sensitivity under selected adjacency notion \\
+$b$ & Laplace scale parameter ($\eta\sim\mathrm{Lap}(0,b)$) \\
+$t$ & Threshold used in decision query comparisons \\
+$\hat{y}, p_i$ & Predicted class and predicted positive probability \\
+$s$ & Sensitive group membership indicator \\
+DI & Disparate Impact ratio of positive prediction rates \\
+$Z$ & Zemel-style local disparity proxy used in fairness analysis \\
+$k$ & Promotion/demotion swap budget in assignment mitigation \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Additional Theoretical Lemmas}
+\subsection{Lemma 1: Lower-Tail MAD Shift Invariance}
+If all reconstructed scales are shifted by a constant $c$ (for example, due to uniform optimization bias), MAD scores remain unchanged:
+\begin{equation}
+z_y'=
+0.6745\frac{(s_y+c)-\mathrm{median}(s+c)}{\mathrm{MAD}(s+c)}.
+\end{equation}
+Since $\mathrm{median}(s+c)=\mathrm{median}(s)+c$ and $\mathrm{MAD}(s+c)=\mathrm{MAD}(s)$, we obtain
+\begin{equation}
+z_y'=0.6745\frac{s_y-\mathrm{median}(s)}{\mathrm{MAD}(s)}=z_y.
+\end{equation}
+Hence attacked-label selection under lower-tail MAD is invariant to common additive shifts and depends on relative scale geometry.
+
+\subsection{Lemma 2: Laplace Tail Monotonicity in Scale}
+For $t\ge q$, tail probability is
+\begin{equation}
+\Pr(\tilde{q}>t)=\frac{1}{2}\exp\!\left(-\frac{t-q}{b}\right).
+\end{equation}
+Its derivative with respect to $b$ is positive:
+\begin{equation}
+\frac{\partial}{\partial b}\Pr(\tilde{q}>t)
+=\frac{t-q}{2b^2}\exp\!\left(-\frac{t-q}{b}\right)>0.
+\end{equation}
+Thus larger $b$ pushes probabilities toward high-uncertainty regimes near 0.5 over broader threshold intervals.
+
+\subsection{Lemma 3: DI Decomposition via Group Positive Rates}
+Let $r_0=\Pr(\hat{y}=1\mid s=0)$ and $r_1=\Pr(\hat{y}=1\mid s=1)$. Then
+\begin{equation}
+\left|1-\mathrm{DI}\right|=\left|1-\frac{r_0}{r_1}\right|=\frac{|r_1-r_0|}{r_1}.
+\end{equation}
+This identity shows fairness-gap movement is driven by both the numerator gap $|r_1-r_0|$ and the privileged-group base rate $r_1$, which is why group-rate decomposition is required for causal interpretation.
+
+\section{Function-by-Function Reference}
+This appendix maps major implementation functions to practical review questions.
+\begin{itemize}
+    \item \path{code/neural_cleanse.py}: model loading, all-label reconstruction, outlier detection, clean/trigger evaluation, and one-epoch unlearning. Review question: does each function isolate one stage of the attack-detect-mitigate chain with explicit inputs/outputs?
+    \item \path{code/privacy.py}: Laplace scale utilities and scenario calculators for base, sequential, and unbounded settings. Review question: are all constants and composition assumptions surfaced as explicit parameters or locked assumptions?
+    \item \path{code/fairness.py}: promotion/demotion mitigation, reweighing, group-threshold search, and unified metrics. Review question: are prediction-based cohorts, optimization knobs, and output metrics directly auditable?
+    \item Report orchestration script: pipeline execution and artifact writing. Review question: is one-command regeneration possible?
+\end{itemize}
+
+\section{Camera-Ready Compliance Checklist}
+\begin{itemize}
+    \item IEEE class and two-column layout preserved.
+    \item All figures referenced in text and present under \path{report/figures}.
+    \item All tables populated from generated macros instead of manual numbers.
+    \item Theory sections include explicit equations for security, privacy, and fairness.
+    \item Appendix includes derivations, notation map, and interpretation notes.
+    \item Build log checked for overfull/underfull and unresolved-reference warnings.
+    \item Executed notebook archived in the code directory as \path{notebook_executed.ipynb}.
+    \item Machine-readable results preserved in JSON and TeX macro outputs.
+\end{itemize}
 
 \begin{thebibliography}{1}
 \bibitem{wang2019neuralcleanse}
