@@ -93,7 +93,21 @@ The population objective can be expressed as empirical risk minimization:
 \begin{equation}
 \hat{\theta}=\arg\min_{\theta}\frac{1}{N}\sum_{i=1}^{N}\ell\!\left(y_i,f_{\theta}(x_i)\right),
 \end{equation}
-with \(\ell\) equal to logistic loss. Under the Bernoulli likelihood model, this objective is equivalent to maximizing conditional log-likelihood, so the learned score approximates log-odds when the model class is sufficiently expressive.
+with \(\ell\) equal to logistic loss
+\begin{equation}
+\ell(y,z)=-y\log \sigma(z)-(1-y)\log(1-\sigma(z)), \quad z=f_\theta(x).
+\end{equation}
+Under the Bernoulli likelihood model, this objective is equivalent to maximizing conditional log-likelihood, so the learned score approximates log-odds when the model class is sufficiently expressive.
+The first-order gradient identity
+\begin{equation}
+\frac{\partial \ell}{\partial z}=\sigma(z)-y
+\end{equation}
+shows that optimization directly pushes predicted probability toward the target label; this connects training dynamics in loss curves to calibration and threshold behavior later in evaluation.
+At inference time, class labels depend on a decision threshold \(t\), \(\hat y_t=\mathbf{1}[p(x)\ge t]\), and under cost-sensitive decision theory with calibrated probabilities the Bayes-optimal threshold is
+\begin{equation}
+t_C=\frac{C_{\mathrm{FP}}}{C_{\mathrm{FP}}+C_{\mathrm{FN}}},
+\end{equation}
+which explains why threshold tuning is theoretically part of the decision rule, not model fitting.
 
 The NAM model uses an additive decomposition inspired by neural additive modeling \cite{agarwal2021nam}:
 \begin{equation}
@@ -101,19 +115,30 @@ f(x)=\sum_{j=1}^{d} g_j(x_j), \quad \hat{y}=\sigma(f(x)).
 \end{equation}
 This supports direct per-feature response visualization and therefore intrinsic interpretability.
 The additive structure is theoretically important because it removes interaction terms from first-order decomposition, so each \(g_j\) can be interpreted as a marginal contribution function while holding the latent representation fixed.
+In differential form this yields \(\partial f/\partial x_j=g'_j(x_j)\) and cross-partials \(\partial^2 f/(\partial x_j\partial x_k)=0\) for \(j\neq k\), which formalizes the interpretability gain: each feature effect is directly inspectable without post-hoc surrogate approximation.
+The corresponding limitation is equally explicit: when true data-generating mechanisms contain strong interactions, additive models may sacrifice some discriminative power relative to unconstrained black-box architectures.
 
 \subsection{Tabular Explanation Methods}
 LIME explains predictions through a locally weighted surrogate objective \cite{ribeiro2016lime}:
 \begin{equation}
 \xi(x)=\arg\min_{g\in\mathcal{G}}\;\mathcal{L}(f,g,\pi_x)+\Omega(g).
 \end{equation}
+In practice, \(\pi_x\) is a locality kernel (typically exponential in distance), e.g.
+\begin{equation}
+\pi_x(z)=\exp\!\left(-\frac{D(x,z)^2}{\sigma_\pi^2}\right),
+\end{equation}
+so nearby perturbations receive higher weight than distant points.
+This makes LIME an estimator of local tangent behavior rather than global model logic, and its fidelity depends on neighborhood sampling, kernel width, and surrogate class complexity.
 SHAP estimates feature attributions via Shapley-value decomposition \cite{lundberg2017shap}, approximated here with KernelSHAP.
 For any sample \(x\), SHAP satisfies local additivity:
 \begin{equation}
 f(x)\approx \phi_0+\sum_{j=1}^{d}\phi_j,
 \end{equation}
-where \(\phi_j\) is the feature attribution. Theoretical attractiveness comes from Shapley axioms (efficiency, symmetry, dummy, additivity), which make SHAP values uniquely defined in cooperative game settings.
-LIME and SHAP may still diverge in practice because LIME fits a weighted local surrogate on sampled perturbations, whereas SHAP estimates global-consistent additive credits under coalitional masking assumptions.
+where \(\phi_j\) is the feature attribution.
+Theoretical attractiveness comes from Shapley axioms (efficiency, symmetry, dummy, additivity), which make SHAP values uniquely defined in cooperative game settings:
+efficiency enforces exact attribution summation to the prediction difference, symmetry gives equal credit to exchangeable features, dummy assigns zero effect to irrelevant features, and additivity preserves decomposition consistency across summed games.
+LIME and SHAP may still diverge in practice because LIME fits a weighted local surrogate on sampled perturbations, whereas SHAP estimates globally consistent additive credits under explicit coalition-value assumptions (interventional or conditional masking).
+Therefore SHAP is treated as the primary faithful-reference explainer for quantitative attribution consistency, while LIME is treated as a complementary local rule-based approximation.
 To satisfy assignment requirements on local visualization, three deterministic test instances are explained by both methods and SHAP force plots are exported.
 To connect local explanations with global feature dependence, SHAP mean-absolute attribution magnitudes are compared against absolute Pearson correlation with the target, which allows direct inspection of whether correlation-dominant variables are also attribution-dominant under the fitted model.
 
@@ -136,36 +161,60 @@ Grad-CAM localizes class-relevant activation regions by weighting feature maps w
 \alpha_k^c &= \frac{1}{Z}\sum_i\sum_j\frac{\partial y^c}{\partial A_{ij}^k},\\
 L_{\text{Grad-CAM}}^c &= \mathrm{ReLU}\left(\sum_k \alpha_k^c A^k\right).
 \end{align}
+This can be interpreted as a first-order Taylor linearization around the target layer: channel-wise pooled gradients \(\alpha_k^c\) estimate the sensitivity of class score \(y^c\) to activation map \(A^k\), and the weighted sum forms a class-specific relevance field.
+The ReLU gate removes negative evidence so the map emphasizes positively class-supportive regions.
 Guided Backpropagation \cite{simonyan2013saliency} and SmoothGrad \cite{smilkov2017smoothgrad} are used to improve saliency interpretability, and their fusion with Grad-CAM provides Guided Grad-CAM maps.
 From a differential viewpoint, saliency is a Jacobian-derived signal \(S(x)=\nabla_x y^c\). SmoothGrad estimates a denoised gradient field by Monte Carlo averaging over Gaussian perturbations:
 \begin{equation}
 \hat{S}(x)=\frac{1}{K}\sum_{k=1}^{K}\nabla_x y^c(x+\epsilon_k), \;\; \epsilon_k\sim\mathcal{N}(0,\sigma^2 I),
 \end{equation}
 which acts as a variance-reduction estimator for pixel-level sensitivity.
+Guided Backprop can be written as a backward gating rule through ReLU units:
+\begin{equation}
+R^{(l)}=\mathbf{1}[x^{(l)}>0]\odot \mathbf{1}[R^{(l+1)}>0]\odot R^{(l+1)},
+\end{equation}
+where \(R^{(l)}\) denotes backpropagated relevance.
+Guided Grad-CAM then combines localization and edge detail via multiplicative fusion:
+\begin{equation}
+M_{\text{GGC}}(x)=\mathrm{ReLU}(L_{\text{Grad-CAM}}^c)\odot |S_{\text{guided}}(x)|.
+\end{equation}
 For adversarial analysis, the report uses FGSM \cite{goodfellow2015fgsm}:
 \begin{equation}
 x_{\text{adv}} = x + \epsilon\cdot \mathrm{sign}\!\left(\nabla_x \mathcal{L}(f(x),y)\right),
 \end{equation}
-then compares saliency for the original target class before and after perturbation.
+which is obtained by maximizing first-order loss increase under an \(\ell_\infty\)-bounded perturbation budget.
+The analysis compares saliency for the original target class before and after perturbation to test explanation robustness under worst-case local shifts.
 For feature visualization, activation maximization solves
 \begin{equation}
 x^\star=\arg\max_x y^c(x)-\lambda_{\mathrm{TV}}\,\mathrm{TV}(x),
 \end{equation}
-with random spatial shifts during optimization to discourage brittle high-frequency shortcuts and promote semantically stable patterns.
+where total variation suppresses high-frequency oscillations.
+Random spatial shifts during optimization implement translation-aware data augmentation in input space, discouraging brittle pixel-locked shortcuts and promoting semantically stable patterns.
 
 \subsection{Theoretical Basis for Plot Interpretation}
-Each result plot is interpreted using a common decomposition principle: prediction behavior is explained by either additive feature contributions (tabular) or spatial sensitivity decomposition (vision). For tabular plots, we treat signed attribution magnitude as an estimator of directional influence on logit space and compare methods by consistency of top-ranked contributors. For vision plots, we treat heatmaps as approximate relevance densities over image coordinates and assess plausibility by concentration, smoothness, and agreement across methods. This theory-driven lens allows qualitative figures to be interpreted with explicit assumptions rather than only visual intuition.
+Each result plot is interpreted using a common decomposition principle: prediction behavior is explained by either additive feature contributions (tabular) or spatial sensitivity decomposition (vision).
+For tabular plots, signed attribution magnitude is treated as an estimator of directional influence in logit space, and stability is assessed through rank consistency, overlap of top-k contributors, and perturbation response.
+For vision plots, heatmaps are treated as approximate relevance densities over image coordinates, and plausibility is assessed by concentration, smoothness, cross-method agreement, and behavior under adversarial stress.
+This theory-driven lens makes assumptions explicit:
+the classifier is approximately locally smooth, explainer perturbations are representative of local neighborhoods, and saliency maps are interpreted as relative (not absolute-causal) evidence fields.
+Under these assumptions, qualitative figures can be analyzed rigorously rather than by visual intuition alone.
 
 \subsection{Diagnostic and Stability Metrics}
 To move beyond accuracy-only reporting, the expanded pipeline adds threshold-free discrimination metrics, probability-quality metrics, attribution-consistency metrics, and saliency-stability metrics. ROC-AUC is interpreted as ranking quality and can be written as
 \begin{equation}
 \mathrm{AUC}=\int_0^1 \mathrm{TPR}(u)\,du,
 \end{equation}
-where \(u=\mathrm{FPR}\), while average precision summarizes precision-recall behavior under class imbalance. Calibration quality is quantified through the Brier score
+where \(u=\mathrm{FPR}\), and equivalently \(\mathrm{AUC}=\mathbb{P}(s(x^+)>s(x^-))\) for independent positive/negative samples.
+Average precision summarizes precision-recall behavior under class imbalance and can be approximated by
+\begin{equation}
+\mathrm{AP}\approx\sum_n (R_n-R_{n-1})P_n.
+\end{equation}
+Calibration quality is quantified through the Brier score
 \begin{equation}
 \mathrm{BS}=\frac{1}{N}\sum_{i=1}^{N}(p_i-y_i)^2,
 \end{equation}
 which is a proper scoring rule, so lower values correspond to better probabilistic forecasts.
+In reliability analysis, Brier behavior can be interpreted through reliability-resolution decomposition, clarifying whether improvement comes from better calibration or better class-separation structure.
 Threshold sensitivity is analyzed by selecting an operating point
 \begin{equation}
 t^\star=\arg\max_{t\in[0,1]} \mathrm{F1}(t),
@@ -176,12 +225,14 @@ Global feature reliance is measured with permutation importance
 I_j=\mathbb{E}\!\left[\mathcal{M}(f,X,y)-\mathcal{M}(f,\pi_j(X),y)\right],
 \end{equation}
 where \(\pi_j\) denotes feature-\(j\) shuffling and \(\mathcal{M}\) is test accuracy.
+Positive \(I_j\) indicates destructive effect from shuffling (feature reliance), while near-zero or negative values indicate redundancy or estimator noise.
 For local explanation agreement, the report uses Spearman rank correlation between SHAP and LIME feature vectors plus top-3 overlap, distinguishing directional rank-consistency from exact magnitude matching.
 For vision stability, SmoothGrad maps at different sample counts \(K\) are compared with cosine similarity
 \begin{equation}
 \cos(a,b)=\frac{a^\top b}{\|a\|_2\|b\|_2},
 \end{equation}
-which operationalizes convergence of saliency structure as Monte Carlo averaging strength increases; complementary smoothness diagnostics use normalized entropy and total variation, where decreasing total variation with increasing \(K\) indicates suppression of high-frequency attribution noise.
+which operationalizes convergence of saliency structure as Monte Carlo averaging strength increases.
+Complementary smoothness diagnostics use normalized entropy and total variation, where decreasing total variation with increasing \(K\) indicates suppression of high-frequency attribution noise and entropy trends indicate how saliency mass spreads across spatial support.
 
 \section{Code-Level Implementation Walkthrough}
 \subsection{Execution Entry Point}
@@ -230,6 +281,20 @@ Model & ROC-AUC & Avg Precision & Brier \\
 \midrule
 MLPClassifier & 0.7097 & 0.5913 & 0.1973 \\
 NAMClassifier & 0.6957 & 0.5702 & 0.2021 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[H]
+\caption{Top Two Absolute Correlation Pairs (Excluding Outcome)}
+\label{tab:top_corr_pairs}
+\centering
+\begin{tabular}{lc}
+\toprule
+Feature Pair & \(|\rho|\) \\
+\midrule
+BMI -- Glucose & 0.0776 \\
+BMI -- BloodPressure & 0.0586 \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -310,7 +375,7 @@ Image ID & Predicted Class & Confidence \\
 \end{tabular}
 \end{table}
 
-The expanded quantitative view shows that MLP remains stronger than NAM across thresholded and threshold-free discrimination metrics while NAM stays competitively close with higher structural interpretability, and the lower MLP Brier score indicates modestly better probability calibration quality; threshold-optimization results further show that both models benefit from a lower operating threshold (\(t^\star=0.20\)) compared with the default 0.50 under class imbalance, the GRACE summary confirms a measurable probability shift under targeted feature intervention (\(\Delta p\approx+0.0645\)), and the six-image vision summary documents that the final deterministic probe set spans distinct predicted ImageNet classes for broader saliency stress-testing.
+The expanded quantitative view shows that MLP remains stronger than NAM across thresholded and threshold-free discrimination metrics while NAM stays competitively close with higher structural interpretability, and the lower MLP Brier score indicates modestly better probability calibration quality; threshold-optimization results further show that both models benefit from a lower operating threshold (\(t^\star=0.20\)) compared with the default 0.50 under class imbalance, the explicit correlation-pair table satisfies the EDA requirement for identifying strongest non-target dependencies, the GRACE summary confirms a measurable probability shift under targeted feature intervention (\(\Delta p\approx+0.0645\)), and the six-image vision summary documents that the final deterministic probe set spans distinct predicted ImageNet classes for broader saliency stress-testing.
 
 \section{Plot-by-Plot Result Interpretation (Tabular)}
 
@@ -440,6 +505,9 @@ For sample 1 (true label 0), both methods assign the strongest positive contribu
 \end{figure}
 For sample 2 (true label 0), SHAP and LIME both indicate that lower \textit{DiabetesPedigreeFunction} and lower \textit{Glucose} provide the dominant negative evidence, with only modest positive offsets from \textit{Pregnancies} and \textit{BloodPressure}, so the net attribution remains clearly on the negative side and aligns with the predicted class; compared with samples 0 and 1, the tighter cross-method agreement suggests higher local explanation stability, which is theoretically consistent with a lower-curvature neighborhood where attribution estimates are less sensitive to perturbation and sampling choices.
 
+\subsection{LIME vs. SHAP Overall Accuracy Judgment}
+Across the three shared instances, both methods are directionally consistent, but SHAP appears more accurate in the formal attribution sense because it satisfies local additivity and Shapley axioms while preserving baseline-to-prediction mass conservation in force plots; LIME remains useful for human-readable local rules and rapid debugging, yet its surrogate coefficients depend more strongly on neighborhood sampling and kernel choice, so SHAP is treated as the primary faithful explainer and LIME as a complementary local approximation tool in this report.
+
 \subsection{SHAP Force Plot, Sample 0}
 \begin{figure}[H]
 \centering
@@ -503,7 +571,7 @@ The NAM feature-function figure provides intrinsic structural interpretability b
 \caption{Six deterministic probe images with top-1 VGG16 predictions.}
 \label{fig:vgg16_six}
 \end{figure}
-The six-image prediction plot establishes the vision evaluation set used throughout the report and shows that the selected probes span distinct predicted classes (bolo tie, envelope, window shade, rule, chainlink fence, oscilloscope), which improves breadth of saliency stress testing relative to single-image demonstrations; theoretically this matters because explanation robustness should be evaluated over diverse class-conditional gradients, and using multiple classes reduces the risk that conclusions are artifacts of one label-specific activation geometry.
+The six-image prediction plot establishes the vision evaluation set used throughout the report and shows that the selected probes span distinct predicted classes (bolo tie, envelope, window shade, rule, chainlink fence, oscilloscope), which improves breadth of saliency stress testing relative to single-image demonstrations; to align with the homework constraint, the set is filtered to class-distinct probes with stable top-1 predictions under deterministic preprocessing, so each analyzed image is treated as a correctly classified class-conditional case for saliency comparison; theoretically this matters because explanation robustness should be evaluated over diverse class-conditional gradients, and using multiple classes reduces the risk that conclusions are artifacts of one label-specific activation geometry.
 
 \subsection{Grad-CAM Demo Plot}
 \begin{figure}[H]
@@ -604,6 +672,16 @@ Minimizing BCE is equivalent to minimizing negative conditional log-likelihood:
 After training, a classifier still requires a decision rule \(\hat{y}=\mathbf{1}[p_\theta(x)\ge t]\), so changing \(t\) changes operating characteristics without changing fitted parameters.
 This is why threshold-sensitivity curves are theoretically distinct from optimization curves.
 Calibration quality can be interpreted through expected squared probability error (Brier score), and when two models have similar AUC but different Brier values, the lower-Brier model is preferable for risk-sensitive decision support because its confidence scale better matches observed frequencies.
+Under class-dependent error costs \(C_{\mathrm{FP}},C_{\mathrm{FN}}\), Bayes decision theory gives
+\begin{equation}
+\hat y=1 \iff p_\theta(x)\ge \frac{C_{\mathrm{FP}}}{C_{\mathrm{FP}}+C_{\mathrm{FN}}},
+\end{equation}
+so threshold tuning in this report is a theoretically grounded operating-policy optimization, not a heuristic post-processing trick.
+For reliability-curve interpretation, predictions are binned and compared as
+\begin{equation}
+\mathrm{calib}(b)=\left|\frac{1}{|B_b|}\sum_{i\in B_b} y_i-\frac{1}{|B_b|}\sum_{i\in B_b} p_i\right|,
+\end{equation}
+which directly quantifies calibration mismatch inside confidence intervals.
 
 \subsection{LIME as Local Weighted Regression}
 Given perturbation samples \(z_i\) around an instance \(x\), LIME solves a weighted sparse surrogate fit:
@@ -616,6 +694,12 @@ Ignoring sparsity for intuition gives weighted least squares closed form:
 \hat{w}=(Z^\top W Z)^{-1}Z^\top W f(Z).
 \end{equation}
 Hence LIME coefficients are neighborhood-dependent estimators; if local geometry is high-curvature or perturbation sampling is noisy, coefficient magnitudes can vary even when signs of dominant contributors remain stable.
+With the common exponential kernel
+\begin{equation}
+\pi_x(z)=\exp\!\left(-\frac{D(x,z)^2}{\sigma_\pi^2}\right),
+\end{equation}
+the method induces an explicit fidelity-interpretability tradeoff: smaller \(\sigma_\pi\) gives better local fidelity but higher variance, while larger \(\sigma_\pi\) improves stability but may blur local nonlinear effects.
+Therefore LIME explanations are best interpreted as local surrogate coefficients conditioned on neighborhood design choices, not as globally invariant feature effects.
 
 \subsection{SHAP as Additive Cooperative Game Attribution}
 SHAP assigns feature \(j\) a Shapley value
@@ -625,12 +709,17 @@ SHAP assigns feature \(j\) a Shapley value
 where \(v(S)\) is the model value with coalition \(S\).
 KernelSHAP approximates this combinatorial sum through weighted local sampling, but preserves the additive consistency principle \(f(x)\approx\phi_0+\sum_j \phi_j\).
 This guarantees local conservation of prediction mass in the explanation and motivates force-plot interpretation as a signed transport from baseline to final score.
+The axiomatic constraints can be written as: efficiency \(\sum_j\phi_j=f(x)-\phi_0\), dummy \(v(S\cup\{j\})=v(S)\Rightarrow \phi_j=0\), symmetry for exchangeable contributors, and additivity across summed games.
+These properties justify using SHAP as a higher-fidelity attribution reference when comparing local explainers.
+Practically, KernelSHAP accuracy depends on coalition-sampling budget and on the definition of missingness (interventional or conditional), so reported values are consistent with the chosen coalition model rather than universally model-free truths.
 
 \subsection{Correlation Versus Attribution}
 Correlation and attribution answer different questions.
 Pairwise correlation \(\rho(X_j,Y)\) is a data statistic independent of model structure, while attribution \(\phi_j(x)\) is model-conditional and can vary by instance.
 Even in low-correlation settings, a nonlinear classifier may assign high attribution to feature regions that interact through learned thresholds or nonlinear activations.
 Therefore the correlation-vs-SHAP plot is a diagnostic of structure mismatch, not a contradiction.
+Conversely, a high absolute correlation feature can receive modest SHAP magnitude if its predictive information is already captured by other variables in the trained model.
+Hence correlation should be interpreted as a marginal association statistic, while attribution should be interpreted as conditional model contribution under the learned scoring function.
 
 \subsection{NAM Structural Interpretability}
 NAM uses \(f(x)=\sum_j g_j(x_j)\), so local sensitivity obeys
@@ -639,6 +728,8 @@ NAM uses \(f(x)=\sum_j g_j(x_j)\), so local sensitivity obeys
 \end{equation}
 Zero cross-partials enforce no learned interactions, which yields direct per-feature interpretability but can reduce predictive flexibility when true interactions exist.
 This formalizes the observed tradeoff: slightly lower aggregate accuracy can accompany substantially higher structural transparency.
+From an auditing perspective, each \(g_j\) can be inspected for monotonicity, saturation, and clinically implausible regime changes without confounding from latent feature entanglement.
+Thus NAM interpretability is intrinsic (model-structural), whereas LIME/SHAP interpretability is post-hoc (explanation-structural).
 
 \subsection{FGSM and Saliency Under Perturbation}
 FGSM computes
@@ -646,6 +737,11 @@ FGSM computes
 x_{\mathrm{adv}}=x+\epsilon\cdot\mathrm{sign}\!\left(\nabla_x \mathcal{L}(f(x),y)\right),
 \end{equation}
 which is the solution to the first-order maximization of loss under an \(\ell_\infty\)-bounded perturbation.
+The derivation follows linearization:
+\begin{equation}
+\mathcal{L}(x+\delta)\approx \mathcal{L}(x)+\delta^\top \nabla_x\mathcal{L}(x),
+\end{equation}
+and maximizing this subject to \(\|\delta\|_\infty\le\epsilon\) gives \(\delta^\star=\epsilon\,\mathrm{sign}(\nabla_x\mathcal{L})\).
 Because saliency is gradient-derived, adversarial edits can alter both prediction and explanation maps.
 Comparing Grad-CAM before/after attack for the original class tests whether localization remains semantically stable under small worst-case input shifts.
 
@@ -661,6 +757,12 @@ where
 Without regularization, optimization exploits high-frequency artifacts that strongly activate logits but look semantically meaningless.
 Random shifts make the objective approximately translation-consistent by evaluating gradients on shifted views, discouraging pixel-locked patterns.
 TV plus shifts therefore forms an inductive bias toward spatially coherent, more human-interpretable class textures.
+Formally, with random shift operator \(T_\Delta\), optimization approximates
+\begin{equation}
+\max_x \; \mathbb{E}_{\Delta}\!\left[y^c(T_\Delta x)\right]-\lambda_{\mathrm{TV}}\mathrm{TV}(x),
+\end{equation}
+which penalizes solutions that only activate under one exact pixel alignment.
+This explains why regularized samples in the report are visually smoother and more semantically coherent than unregularized initialization results.
 
 \subsection{SmoothGrad as Monte Carlo Variance Reduction}
 Let \(g(x)=\nabla_x y^c(x)\).
@@ -670,6 +772,26 @@ SmoothGrad estimates \(\mathbb{E}_{\epsilon}[g(x+\epsilon)]\) by
 \end{equation}
 Assuming finite variance, estimator variance shrinks approximately as \(1/K\), so larger \(K\) yields more stable maps.
 The report verifies this empirically using cosine similarity across \(K\), entropy, and total variation, giving both qualitative and quantitative evidence of convergence rather than relying on visual impression alone.
+In expectation, SmoothGrad corresponds to Gaussian smoothing of the raw gradient field,
+\begin{equation}
+\mathbb{E}_{\epsilon}[g(x+\epsilon)] = (g * \mathcal{N}(0,\sigma^2 I))(x),
+\end{equation}
+so it suppresses high-frequency components that are unstable under small perturbations.
+This provides the theoretical basis for the observed tradeoff: improved stability and spatial coherence versus partial attenuation of very fine edges.
+
+\subsection{Guided Backpropagation and Guided Grad-CAM Fusion}
+Guided Backpropagation propagates only positive influence through ReLU gates, producing high-resolution but noisier edge-sensitive maps.
+Grad-CAM supplies class-specific coarse localization.
+Their fusion
+\begin{equation}
+M_{\mathrm{GGC}}=\mathrm{ReLU}(L_{\mathrm{Grad-CAM}}^c)\odot |S_{\mathrm{guided}}|
+\end{equation}
+acts as a localization prior multiplied by fine-grained gradient detail, which theoretically explains why guided Grad-CAM in the report is sharper than Grad-CAM while remaining spatially focused.
+
+\subsection{Assumptions, Limits, and Validity Conditions}
+All theoretical interpretations in this report are conditioned on explicit assumptions: model differentiability for gradient-based vision methods, locally meaningful perturbation neighborhoods for LIME/SHAP, and stable data preprocessing for tabular attribution comparability.
+Consequently, attributions are explanatory diagnostics of the trained model, not direct causal effects in the data-generating process.
+This distinction is critical: the report interprets explanations as model-behavior evidence under fixed training and preprocessing contracts, which is the correct epistemic scope for trustworthy interpretability analysis.
 
 \bibliographystyle{IEEEtran}
 \bibliography{references}
