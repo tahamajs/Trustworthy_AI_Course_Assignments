@@ -121,6 +121,146 @@ def collect_metrics():
     return df, agg, X_train, Y_train, X_test, Y_test, constraints
 
 
+def collect_instance_costs(df: pd.DataFrame) -> pd.DataFrame:
+    """Build per-instance valid/cost table from saved recourse arrays."""
+    rows = []
+    for _, row in df.iterrows():
+        dataset = row["dataset"]
+        trainer = row["trainer"]
+        model_type = row["model"]
+        seed = int(row["seed"])
+        eps = float(row["epsilon"])
+        lambd = utils.get_lambdas(dataset, model_type, trainer)
+        save_base = Path(utils.get_metrics_save_dir(dataset, trainer, lambd, model_type, eps, seed))
+        valid_path = Path(str(save_base) + "_valid.npy")
+        cost_path = Path(str(save_base) + "_cost.npy")
+        if not valid_path.exists() or not cost_path.exists():
+            continue
+
+        valid = np.load(valid_path).astype(bool)
+        cost = np.load(cost_path)
+        for idx in range(cost.shape[0]):
+            rows.append(
+                {
+                    "dataset": dataset,
+                    "model": model_type,
+                    "trainer": trainer,
+                    "seed": seed,
+                    "epsilon": eps,
+                    "instance_id": idx,
+                    "valid": bool(valid[idx]),
+                    "cost": float(cost[idx]),
+                }
+            )
+
+    out = pd.DataFrame(rows)
+    out.to_csv(RESULTS_DIR / "health_instance_costs.csv", index=False)
+    return out
+
+
+def _build_model_for_eval(model_type: str, trainer_name: str, input_dim: int, actionable):
+    if model_type == "lin":
+        return trainers.LogisticRegression(
+            input_dim,
+            actionable_features=actionable,
+            actionable_mask=(trainer_name == "AF"),
+        )
+    return trainers.MLP(
+        input_dim,
+        actionable_features=actionable,
+        actionable_mask=(trainer_name == "AF"),
+    )
+
+
+def collect_action_profiles(
+    df: pd.DataFrame,
+    X_train: np.ndarray,
+    Y_train: np.ndarray,
+    X_test: np.ndarray,
+    constraints: dict,
+    epsilon: float = 0.1,
+    seed: int = 0,
+) -> pd.DataFrame:
+    """
+    Compute per-feature action diagnostics for a representative setup.
+    We use epsilon=0.1 and seed=0 across available model/trainer configurations.
+    """
+    feature_names = ["age", "insulin", "blood_glucose", "blood_pressure"]
+    rows = []
+
+    configs = (
+        df[["model", "trainer"]]
+        .drop_duplicates()
+        .sort_values(["model", "trainer"])
+        .itertuples(index=False)
+    )
+    for model_type, trainer_name in configs:
+        lambd = utils.get_lambdas("health", model_type, trainer_name)
+        save_base = Path(utils.get_metrics_save_dir("health", trainer_name, lambd, model_type, epsilon, seed))
+        id_path = Path(str(save_base) + "_ids.npy")
+        model_path = MODELS_DIR / f"health_{trainer_name}_{model_type}_s{seed}.pth"
+        if not id_path.exists() or not model_path.exists():
+            continue
+
+        model = _build_model_for_eval(model_type, trainer_name, X_train.shape[-1], constraints["actionable"])
+        model.load_state_dict(torch.load(model_path, map_location="cpu"))
+        model.set_max_mcc_threshold(X_train, Y_train)
+
+        ids = np.load(id_path).reshape(-1).astype(int)
+        if ids.size == 0:
+            continue
+        X_explain = X_test[ids]
+
+        scmm = utils.get_scm(model_type, "health")
+        if model_type == "lin":
+            w, b = model.get_weights()
+            Jw = w if scmm is None else scmm.get_Jacobian().T @ w
+            dual_norm = np.sqrt(Jw.T @ Jw)
+            explain = recourse.LinearRecourse(w, b + dual_norm * epsilon)
+            actions, valids, _, _, _ = recourse.causal_recourse(
+                X_explain, explain, constraints, scm=scmm, verbose=False
+            )
+        else:
+            hyperparams = utils.get_recourse_hyperparams(trainer_name)
+            explain = recourse.DifferentiableRecourse(model, hyperparams)
+            actions, valids, _, _, _ = recourse.causal_recourse(
+                X_explain,
+                explain,
+                constraints,
+                scm=scmm,
+                epsilon=epsilon,
+                robust=epsilon > 0,
+                verbose=False,
+            )
+
+        valid_mask = valids.astype(bool)
+        if not valid_mask.any():
+            valid_mask = np.ones(actions.shape[0], dtype=bool)
+
+        for feat_idx, feat_name in enumerate(feature_names):
+            abs_all = np.abs(actions[:, feat_idx])
+            abs_valid = np.abs(actions[valid_mask, feat_idx])
+            rows.append(
+                {
+                    "model": model_type,
+                    "trainer": trainer_name,
+                    "config": f"{model_type.upper()}-{trainer_name}",
+                    "epsilon": epsilon,
+                    "seed": seed,
+                    "feature": feat_name,
+                    "mean_abs_action_all": float(abs_all.mean()),
+                    "mean_abs_action_valid": float(abs_valid.mean()),
+                    "nonzero_rate_all": float((abs_all > 1e-5).mean()),
+                    "nonzero_rate_valid": float((abs_valid > 1e-5).mean()),
+                    "actionable": int(feat_idx in constraints["actionable"]),
+                }
+            )
+
+    out = pd.DataFrame(rows)
+    out.to_csv(RESULTS_DIR / "health_action_profiles.csv", index=False)
+    return out
+
+
 def nearest_vs_causal_lin(X_train, Y_train, X_test, constraints):
     seed = 0
     np.random.seed(seed)
@@ -176,7 +316,13 @@ def nearest_vs_causal_lin(X_train, Y_train, X_test, constraints):
     return out
 
 
-def make_figures(df: pd.DataFrame, agg: pd.DataFrame, nearest_vs_causal: pd.DataFrame):
+def make_figures(
+    df: pd.DataFrame,
+    agg: pd.DataFrame,
+    nearest_vs_causal: pd.DataFrame,
+    instance_costs: pd.DataFrame,
+    action_profiles: pd.DataFrame,
+):
     sns.set_theme(style="whitegrid", font_scale=1.0)
     df = df.copy()
     df["config"] = df["model"].str.upper() + "-" + df["trainer"]
@@ -241,16 +387,95 @@ def make_figures(df: pd.DataFrame, agg: pd.DataFrame, nearest_vs_causal: pd.Data
     fig.savefig(REPORT_FIG_DIR / "nearest_vs_causal.png", dpi=220)
     plt.close(fig)
 
+    # Validity-cost operating points.
+    scatter_df = agg.assign(config=lambda d: d["model"].str.upper() + "-" + d["trainer"]).copy()
+    fig, ax = plt.subplots(figsize=(7.8, 4.6))
+    sns.scatterplot(
+        data=scatter_df,
+        x="valid_rate_mean",
+        y="valid_cost_mean",
+        hue="config",
+        style="epsilon",
+        s=95,
+        ax=ax,
+    )
+    ax.set_title("Validity-Cost Frontier (Health)")
+    ax.set_xlabel("Mean Valid Recourse Rate")
+    ax.set_ylabel("Mean Valid L1 Cost")
+    ax.set_xlim(0.65, 1.02)
+    fig.tight_layout()
+    fig.savefig(REPORT_FIG_DIR / "validity_cost_frontier.png", dpi=220)
+    plt.close(fig)
+
+    # Distribution of per-instance costs.
+    if not instance_costs.empty:
+        dist_df = instance_costs.copy()
+        dist_df["config"] = dist_df["model"].str.upper() + "-" + dist_df["trainer"]
+        fig, ax = plt.subplots(figsize=(8.6, 4.6))
+        sns.boxplot(
+            data=dist_df,
+            x="config",
+            y="cost",
+            hue="epsilon",
+            showfliers=False,
+            ax=ax,
+        )
+        ax.set_title("Per-Instance Recourse Cost Distribution")
+        ax.set_xlabel("Model / Trainer")
+        ax.set_ylabel("L1 Cost")
+        ax.tick_params(axis="x", labelrotation=12)
+        fig.tight_layout()
+        fig.savefig(REPORT_FIG_DIR / "cost_distribution_boxplot.png", dpi=220)
+        plt.close(fig)
+
+    # Per-feature action intensity and activation frequency.
+    if not action_profiles.empty:
+        prof = action_profiles.copy()
+        fig, ax = plt.subplots(figsize=(9.0, 4.8))
+        sns.barplot(
+            data=prof,
+            x="feature",
+            y="mean_abs_action_valid",
+            hue="config",
+            ax=ax,
+        )
+        ax.set_title("Feature-wise Mean Absolute Action (epsilon=0.1, seed=0)")
+        ax.set_xlabel("Feature")
+        ax.set_ylabel("Mean |Action| (valid recourse)")
+        fig.tight_layout()
+        fig.savefig(REPORT_FIG_DIR / "feature_mean_abs_action.png", dpi=220)
+        plt.close(fig)
+
+        fig, ax = plt.subplots(figsize=(9.0, 4.8))
+        sns.barplot(
+            data=prof,
+            x="feature",
+            y="nonzero_rate_valid",
+            hue="config",
+            ax=ax,
+        )
+        ax.set_title("Feature Intervention Activation Rate (epsilon=0.1, seed=0)")
+        ax.set_xlabel("Feature")
+        ax.set_ylabel("P(|Action| > 1e-5 | valid)")
+        ax.set_ylim(0, 1.05)
+        fig.tight_layout()
+        fig.savefig(REPORT_FIG_DIR / "feature_nonzero_rate.png", dpi=220)
+        plt.close(fig)
+
 
 def main():
     df, agg, X_train, Y_train, X_test, _, constraints = collect_metrics()
     if df.empty:
         raise RuntimeError("No result files found to build report artifacts.")
     nearest_vs_causal = nearest_vs_causal_lin(X_train, Y_train, X_test, constraints)
-    make_figures(df, agg, nearest_vs_causal)
+    instance_costs = collect_instance_costs(df)
+    action_profiles = collect_action_profiles(df, X_train, Y_train, X_test, constraints, epsilon=0.1, seed=0)
+    make_figures(df, agg, nearest_vs_causal, instance_costs, action_profiles)
     print("Saved:", RESULTS_DIR / "health_report_summary.csv")
     print("Saved:", RESULTS_DIR / "health_report_aggregate.csv")
     print("Saved:", RESULTS_DIR / "nearest_vs_causal_lin_seed0.csv")
+    print("Saved:", RESULTS_DIR / "health_instance_costs.csv")
+    print("Saved:", RESULTS_DIR / "health_action_profiles.csv")
     print("Saved report figures in:", REPORT_FIG_DIR)
     print(agg.to_string(index=False))
     print(nearest_vs_causal.to_string(index=False))

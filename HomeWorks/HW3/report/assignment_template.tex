@@ -143,6 +143,8 @@ The script \texttt{generate\_report\_artifacts.py} produces:
   \item \texttt{results/health\_report\_summary.csv}
   \item \texttt{results/health\_report\_aggregate.csv}
   \item \texttt{results/nearest\_vs\_causal\_lin\_seed0.csv}
+  \item \texttt{results/health\_instance\_costs.csv}
+  \item \texttt{results/health\_action\_profiles.csv}
   \item Plot files under \texttt{report/figures/}
 \end{itemize}
 
@@ -241,6 +243,47 @@ This plot visualizes heterogeneity of intervention effort across individuals: so
 \textit{Complete interpretation of Fig.~\ref{fig:nvscausal}:}
 Under matched seed/model/samples, both methods achieve full validity, but causal recourse yields lower mean intervention cost (0.851 versus 1.061). Theoretically, SCM-aware optimization can leverage causal amplification: modifying an actionable parent induces beneficial downstream shifts through structural equations, increasing classifier score per unit direct intervention. In contrast, nearest counterfactual search without SCM treats correlated descendants as independent dimensions and may spend action budget redundantly. This cost gap therefore reflects an efficiency benefit from structural knowledge, not merely a random optimization artifact, and aligns with intervention-based recourse theory.
 
+\subsection{Expanded Diagnostic Features for Complete Understanding}
+\begin{figure}[!t]
+\centering
+\includegraphics[width=0.95\columnwidth]{figures/validity_cost_frontier.png}
+\caption{Validity-cost frontier across model/trainer/epsilon settings.}
+\label{fig:frontier}
+\end{figure}
+
+\textit{Complete interpretation of Fig.~\ref{fig:frontier}:}
+This frontier plot makes explicit that recourse quality is a multi-objective operating point rather than a single score. Points near the top-left are preferable (high validity, low cost), while downward or rightward shifts indicate weaker practical recourse quality. The linear AF family sits on a favorable region with both perfect validity and lower cost than linear ERM, while nonlinear settings occupy higher-cost regions despite strong classifier accuracy. Theoretically, this figure is useful because it separates predictive performance from intervention burden and visualizes the Pareto-like tradeoff that must be reported for trustworthy deployment.
+
+\begin{figure}[!t]
+\centering
+\includegraphics[width=0.95\columnwidth]{figures/cost_distribution_boxplot.png}
+\caption{Per-instance recourse cost distribution by configuration and epsilon.}
+\label{fig:costbox}
+\end{figure}
+
+\textit{Complete interpretation of Fig.~\ref{fig:costbox}:}
+Unlike mean-only summaries, this boxplot reveals distributional behavior and tail risk. Linear configurations show tighter spread and predictable median shifts with $\epsilon$, indicating stable geometry under robust margin increases. Nonlinear configurations exhibit wider dispersion and heavier upper tails, implying that a subset of individuals pays substantially larger intervention cost even when average validity is acceptable. This is theoretically important because fairness and usability concerns are often driven by high-cost tails, not by central tendency alone.
+
+\begin{figure}[!t]
+\centering
+\includegraphics[width=0.95\columnwidth]{figures/feature_mean_abs_action.png}
+\caption{Feature-wise mean absolute intervention magnitude (valid recourse only).}
+\label{fig:featabs}
+\end{figure}
+
+\textit{Complete interpretation of Fig.~\ref{fig:featabs}:}
+This diagnostic quantifies where intervention budget is actually spent. Since only insulin and blood glucose are actionable, large action mass should concentrate on those coordinates while non-actionable dimensions remain near zero. The plotted pattern confirms this implementation behavior and also reveals model-dependent preference among actionable features, which reflects how each classifier's local gradient and SCM propagation jointly determine the most efficient direction. This offers direct interpretability: the recommended changes are not only valid but also aligned with declared actionability policy.
+
+\begin{figure}[!t]
+\centering
+\includegraphics[width=0.95\columnwidth]{figures/feature_nonzero_rate.png}
+\caption{Feature intervention activation rate among valid recourse actions.}
+\label{fig:featnz}
+\end{figure}
+
+\textit{Complete interpretation of Fig.~\ref{fig:featnz}:}
+Activation rate measures how frequently each feature is used in successful interventions. A high nonzero rate for actionable variables and near-zero rate for non-actionable variables is the expected signature of a policy-consistent recourse system. This frequency view complements magnitude view in Fig.~\ref{fig:featabs}: a feature can have moderate average magnitude but very high activation frequency, indicating it is a reliable ``first-step'' recourse coordinate. Theoretical value comes from separating sparse-but-large actions from frequent-small actions, which correspond to different behavioral recourse strategies.
+
 \section{Discussion and Theoretical Implications}
 First, robust recourse is not a free lunch: increasing uncertainty tolerance raises intervention cost, especially in linear models where this effect is analytically transparent. Second, classifier architecture alone does not determine recourse practicality. The MLP results show that near-ceiling predictive metrics can coexist with high or unstable recourse costs. Third, actionability-aware training (AF) can reduce practical intervention burden in linear settings without sacrificing classifier quality, but this benefit is not guaranteed in nonlinear optimization regimes, where curvature and initialization effects can dominate.
 
@@ -300,6 +343,12 @@ make pdf
 
 \section{Auto-Generated Per-Run CSV}
 \lstinputlisting[caption={Health report per-run summary CSV}]{../code/q5_codes/results/health_report_summary.csv}
+
+\section{Auto-Generated Instance Cost CSV}
+\lstinputlisting[caption={Per-instance recourse costs CSV}]{../code/q5_codes/results/health_instance_costs.csv}
+
+\section{Auto-Generated Action Profile CSV}
+\lstinputlisting[caption={Feature-wise action diagnostics CSV}]{../code/q5_codes/results/health_action_profiles.csv}
 
 \section*{Acknowledgment}
 This submission was prepared for Trusted Artificial Intelligence coursework under Dr. Mostafa Tavasolipour.

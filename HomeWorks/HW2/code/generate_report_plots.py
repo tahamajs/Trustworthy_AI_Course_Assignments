@@ -23,6 +23,9 @@ from sklearn.calibration import calibration_curve
 from sklearn.metrics import (
     average_precision_score,
     brier_score_loss,
+    f1_score,
+    precision_score,
+    recall_score,
     roc_auc_score,
     roc_curve,
 )
