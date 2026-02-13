@@ -522,8 +522,16 @@ Reproducibility}\label{ux62aux646ux638ux6ccux645ux627ux62a-ux627ux648ux644ux6ccu
     \subsection{سوال اول (۱۰ نمره) \textbar{} Question 1 (10
 Points)}\label{ux633ux648ux627ux644-ux627ux648ux644-ux6f1ux6f0-ux646ux645ux631ux647-question-1-10-points}
 
-DAG: (S o A), (S o Y), (A o Y) with the exact probabilities from the
-assignment PDF.
+DAG: (S \to A), (S \to Y), (A \to Y) with the exact probabilities from
+the assignment PDF.
+
+\textbf{شرح نظری کامل / Full theoretical note:} در این DAG، متغیر \(S\)
+هم روی \(A\) و هم روی \(Y\) اثر دارد؛ بنابراین \(A\) و \(Y\) همبسته
+هستند حتی اگر \(A\) به‌صورت مداخله‌ای تنظیم شود. به‌صورت مشاهده‌ای باید از
+بیز استفاده کرد: \(P(Y\mid A)=\sum_s P(Y\mid A,S=s)P(S\mid A)\). اما
+برای مداخله \(do(A=a)\)، مسیرهای ورودی به \(A\) قطع می‌شود و داریم
+\(P(Y\mid do(A=a))=\sum_s P(Y\mid A=a,S=s)P(S=s)\). تفاوت این دو کمیت
+دقیقا اثر مخدوش‌گری \(S\) را نشان می‌دهد.
 
     \subsubsection{زیربخش اول (۵
 نمره)}\label{ux632ux6ccux631ux628ux62eux634-ux627ux648ux644-ux6f5-ux646ux645ux631ux647}
@@ -610,6 +618,14 @@ Given: - \(A=[75000,25000]^T\), \(B=[70000,23800]^T\) - classifier:
 \(h=\mathrm{sgn}(X_1 + 5X_2 - 225000)\)
 
 هدف: کمینه‌سازی هزینه مداخله برای تغییر تصمیم به حالت مطلوب.
+
+\textbf{شرح نظری کامل / Full theoretical note:} برای مرز تصمیم خطی
+\(x_1+5x_2=225000\) و هزینه \(\ell_1\)، کارآمدترین جهت مداخله روی ویژگی
+با ضریب بزرگ‌تر است (اینجا \(x_2\)) چون به ازای یک واحد تغییر، بیشترین
+افزایش margin را می‌دهد. برای هزینه \(\ell_2\)، بهترین جهت در راستای
+بردار نرمال \(w=(1,5)\) است؛ یعنی عمل به‌صورت پروژکشن به سمت مرز تصمیم
+انجام می‌شود. این تفاوت نشان می‌دهد که معیار هزینه مستقیما هندسه مداخله را
+تغییر می‌دهد.
 
     \begin{tcolorbox}[breakable, size=fbox, boxrule=1pt, pad at break*=1mm,colback=cellbackground, colframe=cellborder]
 \begin{Verbatim}[commandchars=\\\{\}]
@@ -701,6 +717,13 @@ Points)}\label{ux633ux648ux627ux644-ux633ux648ux645-ux6f2ux6f0-ux646ux645ux631ux
 بمانند.
 
 This keeps the full methodology fully runnable for grading.
+
+\textbf{شرح نظری کامل / Full theoretical note:} در SCM شرکت هواپیمایی،
+هر متغیر تابعی از والدهای علّی و نویز است. این فرم اجازه می‌دهد هم تفسیر
+علّی داشته باشیم و هم اثرگذاری متغیرها را با تجزیه واریانس یا رگرسیون خطی
+بسنجیم. وقتی ساختار علّی تعریف شد، می‌توان اثرات مستقیم و غیرمستقیم بر سود
+را تفکیک کرد و حساسیت سود نسبت به قیمت بلیت، بودجه بازاریابی و هزینه‌های
+عملیاتی را در چارچوبی منسجم تحلیل نمود.
 
     \subsubsection{زیربخش اول (۲
 نمره)}\label{ux632ux6ccux631ux628ux62eux634-ux627ux648ux644-ux6f2-ux646ux645ux631ux647}
@@ -955,6 +978,13 @@ Points)}\label{ux633ux648ux627ux644-ux686ux647ux627ux631ux645-ux6f2ux6f2-ux646ux
 
 هدف: تخمین اثر \texttt{insulin} بر \texttt{blood\_glucose} با استفاده از
 logistic regression.
+
+\textbf{شرح نظری کامل / Full theoretical note:} هدف Q4 برآورد اثر علّی
+انسولین بر قند خون است. اگر \(W\) و \(Z\) همه مسیرهای backdoor را مسدود
+کنند، آنگاه \(E_{W,Z}E[Y\mid t,W,Z]\) برآوردگر علّی است. حذف \(Z\) یا
+استفاده از \(E[Y\mid t]\) منجر به بایاس می‌شود. این دقیقا منطق تنظیم‌گری
+(adjustment) در استنتاج علّی است و دلیل اولویت برآوردگر چندمتغیره در این
+سؤال است.
 
     \subsubsection{زیربخش محاسباتی (۱۲
 نمره)}\label{ux632ux6ccux631ux628ux62eux634-ux645ux62dux627ux633ux628ux627ux62aux6cc-ux6f1ux6f2-ux646ux645ux631ux647}
@@ -1227,6 +1257,14 @@ Points)}\label{ux633ux648ux627ux644-ux634ux634ux645-ux6f1ux6f6-ux646ux645ux631ux
 
 Paper: \emph{On the Adversarial Robustness of Causal Algorithmic
 Recourse}
+
+\textbf{شرح نظری کامل / Full theoretical note:} نتیجه کلیدی مقاله این
+است که در حضور SCM، عدم‌قطعیت ورودی‌ها از طریق Jacobian علّی به فضای مداخله
+منتقل می‌شود؛ بنابراین شرط robust recourse به یک margin shift وابسته به
+\(\|J^T w\|\) تبدیل می‌گردد. این موضوع هم نظری است (برای مدل خطی قابل
+اثبات) و هم تجربی (در نمودارهای هزینه-اعتبار مشاهده می‌شود). همچنین به ما
+می‌گوید چرا recourse غیرعلّی می‌تواند پرهزینه‌تر شود: چون اثرات زنجیره‌ای
+مداخله را نادیده می‌گیرد.
 
     \subsubsection{زیربخش اول (۸
 نمره)}\label{ux632ux6ccux631ux628ux62eux634-ux627ux648ux644-ux6f8-ux646ux645ux631ux647}

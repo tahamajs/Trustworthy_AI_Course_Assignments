@@ -46,6 +46,32 @@ Algorithmic recourse asks: given an unfavorable model decision, what minimal act
 
 This report focuses on complete implementation and verification of Question~5 in HW3. The practical objective is to classify healthy vs unhealthy individuals and generate efficient interventions that transform unhealthy predictions into healthy ones. Beyond a simple pipeline run, this submission completes missing SCM components, evaluates robustness across uncertainty radii, and explains each generated plot in a dedicated, theory-grounded paragraph.
 
+\subsection{Full Homework Coverage (Q1--Q6)}
+Although the main report emphasis is Q5, the submission includes full HW3 coverage. The notebook and appendices provide: (i) observational vs interventional probabilities for Q1, (ii) analytic recourse solutions for Q2, (iii) SCM modeling and variance analysis for the airline case in Q3, (iv) causal effect estimation in Q4, (v) end-to-end causal recourse for Q5, and (vi) theoretical interpretation of the robustness paper in Q6. This section summarizes Q1--Q4 and Q6 at a level that can be graded independently of the Q5 pipeline, while keeping the main report body focused on causal recourse implementation.
+
+\subsubsection{Q1 Summary (Observational vs Interventional)}
+For the DAG $S\rightarrow A$, $S\rightarrow Y$, $A\rightarrow Y$, observational conditionals are computed via Bayes:
+\begin{equation}
+P(Y=1\mid A=a)=\sum_s P(Y=1\mid A=a,S=s)\,P(S=s\mid A=a).
+\end{equation}
+Interventional quantities cut incoming edges into $A$:
+\begin{equation}
+P(Y=1\mid do(A=a))=\sum_s P(Y=1\mid A=a,S=s)\,P(S=s).
+\end{equation}
+The core insight is that confounding by $S$ means observational and interventional probabilities differ even for the same event $A=a$.
+
+\subsubsection{Q2 Summary (Analytic Linear Recourse)}
+With classifier $h(x)=\operatorname{sgn}(x_1+5x_2-225000)$ and nonnegative actions, the minimum-cost L1 recourse concentrates action on $x_2$ because it yields the largest margin gain per unit L1 change (coefficient 5). The minimum-cost L2 action is proportional to $w=(1,5)$, providing a closed-form solution. This illustrates how cost metric choice changes the optimal intervention direction even under the same decision boundary.
+
+\subsubsection{Q3 Summary (Airline SCM and Variance Analysis)}
+The SCM for airline operations encodes direct causal links among booking mode, marketing budget, website visits, price, tickets sold, revenue, operating expenses, and profit. Linear structural equations yield interpretable coefficients, allowing: (i) causal graph visualization, (ii) regression-based effect estimation, (iii) variance decomposition of profit, and (iv) sensitivity analysis using the provided first-day table. This bridges structural modeling with operational interpretability, which is the goal of Q3.
+
+\subsubsection{Q4 Summary (Causal Effect Estimation)}
+The Q4 estimators correspond to backdoor adjustment with confounders: $E_{W,Z}E[Y\mid t,W,Z]$ is the causal estimand when $W$ and $Z$ block backdoor paths, whereas $E_W E[Y\mid t,W]$ can still be biased if $Z$ remains a confounder. The estimator $E[Y\mid t]$ is purely observational and in general biased. The report’s estimator choice and logistic regression implementation follow this causal identification principle.
+
+\subsubsection{Q6 Summary (Robust Recourse Theory)}
+The paper highlights that SCM-aware recourse can be more robust because interventions propagate through the graph; robustness constraints can be transformed by the causal Jacobian. Proposition-style results in Q6 connect uncertainty sets to margin shifts and justify why robust recourse cost grows with $\epsilon$, consistent with the empirical plots reported later.
+
 \section{Theoretical Background}
 \subsection{Counterfactual and Causal Recourse}
 For a binary classifier with score function $g_\theta(x)$ and threshold $\tau$, prediction is
