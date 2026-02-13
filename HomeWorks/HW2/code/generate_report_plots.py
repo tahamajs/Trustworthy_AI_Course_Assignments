@@ -265,6 +265,111 @@ def _plot_agreement(agreement_rows: list[dict[str, float]]) -> None:
     print(f"[tabular] saved {out}")
 
 
+def _plot_threshold_sensitivity(
+    y_test: np.ndarray,
+    probs_mlp: np.ndarray,
+    probs_nam: np.ndarray,
+) -> dict[str, float]:
+    thresholds = np.linspace(0.05, 0.95, 19)
+
+    def _metrics_vs_t(probs: np.ndarray):
+        precs, recs, f1s = [], [], []
+        for t in thresholds:
+            pred = (probs >= t).astype(int)
+            precs.append(precision_score(y_test, pred, zero_division=0))
+            recs.append(recall_score(y_test, pred, zero_division=0))
+            f1s.append(f1_score(y_test, pred, zero_division=0))
+        return np.asarray(precs), np.asarray(recs), np.asarray(f1s)
+
+    p_mlp, r_mlp, f_mlp = _metrics_vs_t(probs_mlp)
+    p_nam, r_nam, f_nam = _metrics_vs_t(probs_nam)
+
+    fig, axes = plt.subplots(1, 2, figsize=(11, 4))
+    configs = [
+        ("MLP", p_mlp, r_mlp, f_mlp, axes[0], "#1d3557"),
+        ("NAM", p_nam, r_nam, f_nam, axes[1], "#e63946"),
+    ]
+    for model_name, p, r, f, ax, base_color in configs:
+        ax.plot(thresholds, p, color=base_color, label="Precision")
+        ax.plot(thresholds, r, color="#2a9d8f", label="Recall")
+        ax.plot(thresholds, f, color="#f4a261", label="F1")
+        best_i = int(np.argmax(f))
+        ax.scatter([thresholds[best_i]], [f[best_i]], color="black", s=25, zorder=5)
+        ax.set_title(f"{model_name} threshold sensitivity")
+        ax.set_xlabel("Decision threshold")
+        ax.set_ylabel("Metric value")
+        ax.set_ylim(0, 1.02)
+        ax.grid(alpha=0.2)
+        ax.legend(fontsize=8, loc="best")
+    fig.tight_layout()
+    out = FIG_DIR / "threshold_sensitivity.png"
+    fig.savefig(out, dpi=150)
+    plt.close(fig)
+    print(f"[tabular] saved {out}")
+
+    best_mlp_i = int(np.argmax(f_mlp))
+    best_nam_i = int(np.argmax(f_nam))
+    return {
+        "mlp_best_threshold": float(thresholds[best_mlp_i]),
+        "mlp_best_f1": float(f_mlp[best_mlp_i]),
+        "nam_best_threshold": float(thresholds[best_nam_i]),
+        "nam_best_f1": float(f_nam[best_nam_i]),
+    }
+
+
+def _permutation_importance(
+    model: torch.nn.Module,
+    X_test: np.ndarray,
+    y_test: np.ndarray,
+    n_repeats: int = 8,
+    seed: int = SEED,
+) -> np.ndarray:
+    rng = np.random.default_rng(seed)
+    base_preds, _ = predict_binary(model, X_test)
+    base_acc = float(np.mean(base_preds == y_test))
+    importances = np.zeros(X_test.shape[1], dtype=float)
+    for feat_idx in range(X_test.shape[1]):
+        drops = []
+        for _ in range(n_repeats):
+            X_perm = X_test.copy()
+            col = X_perm[:, feat_idx].copy()
+            rng.shuffle(col)
+            X_perm[:, feat_idx] = col
+            perm_preds, _ = predict_binary(model, X_perm)
+            perm_acc = float(np.mean(perm_preds == y_test))
+            drops.append(base_acc - perm_acc)
+        importances[feat_idx] = float(np.mean(drops))
+    return importances
+
+
+def _plot_permutation_importance(
+    feat_names: list[str],
+    imp_mlp: np.ndarray,
+    imp_nam: np.ndarray,
+) -> None:
+    order = np.argsort(np.abs(imp_mlp) + np.abs(imp_nam))
+    sorted_feats = [feat_names[i] for i in order]
+    sorted_mlp = imp_mlp[order]
+    sorted_nam = imp_nam[order]
+
+    y_pos = np.arange(len(sorted_feats))
+    fig = plt.figure(figsize=(8.5, 4.8))
+    ax = fig.add_subplot(111)
+    ax.barh(y_pos - 0.18, sorted_mlp, height=0.34, label="MLP", color="#1d3557")
+    ax.barh(y_pos + 0.18, sorted_nam, height=0.34, label="NAM", color="#e63946")
+    ax.set_yticks(y_pos)
+    ax.set_yticklabels(sorted_feats)
+    ax.set_xlabel("Accuracy drop after feature permutation")
+    ax.set_title("Permutation feature importance (model comparison)")
+    ax.grid(alpha=0.2, axis="x")
+    ax.legend(fontsize=8, loc="best")
+    fig.tight_layout()
+    out = FIG_DIR / "permutation_importance_comparison.png"
+    fig.savefig(out, dpi=150)
+    plt.close(fig)
+    print(f"[tabular] saved {out}")
+
+
 def _overlay_heatmap(
     pil_image: Image.Image,
     heat: np.ndarray,
@@ -274,6 +379,46 @@ def _overlay_heatmap(
     heat_rgb = plt.get_cmap("jet")(_normalize_map(heat))[..., :3]
     overlay = (1.0 - alpha) * base + alpha * heat_rgb
     return np.clip(overlay, 0.0, 1.0)
+
+
+def _saliency_entropy(map2d: np.ndarray) -> float:
+    x = _normalize_map(map2d)
+    p = x.ravel() + 1e-12
+    p = p / p.sum()
+    ent = -np.sum(p * np.log(p))
+    ent = ent / np.log(len(p))
+    return float(ent)
+
+
+def _saliency_total_variation(map2d: np.ndarray) -> float:
+    x = _normalize_map(map2d)
+    dx = np.abs(x[:, 1:] - x[:, :-1]).mean()
+    dy = np.abs(x[1:, :] - x[:-1, :]).mean()
+    return float(dx + dy)
+
+
+def _plot_smoothgrad_convergence(
+    ks: list[int],
+    entropies: list[float],
+    tvs: list[float],
+) -> None:
+    fig, axes = plt.subplots(1, 2, figsize=(10.5, 4))
+    axes[0].plot(ks, entropies, marker="o", color="#1d3557")
+    axes[0].set_title("SmoothGrad entropy vs K")
+    axes[0].set_xlabel("Sample count K")
+    axes[0].set_ylabel("Normalized entropy")
+    axes[0].grid(alpha=0.2)
+
+    axes[1].plot(ks, tvs, marker="o", color="#e63946")
+    axes[1].set_title("SmoothGrad total variation vs K")
+    axes[1].set_xlabel("Sample count K")
+    axes[1].set_ylabel("Total variation")
+    axes[1].grid(alpha=0.2)
+    fig.tight_layout()
+    out = FIG_DIR / "smoothgrad_convergence_metrics.png"
+    fig.savefig(out, dpi=150)
+    plt.close(fig)
+    print(f"[vision] saved {out}")
 
 
 def generate_tabular_figures() -> dict[str, float]:
@@ -382,7 +527,11 @@ def generate_tabular_figures() -> dict[str, float]:
         y_test, probs_mlp, probs_nam
     )
     brier_mlp, brier_nam = _plot_calibration(y_test, probs_mlp, probs_nam)
+    threshold_summary = _plot_threshold_sensitivity(y_test, probs_mlp, probs_nam)
     _plot_agreement(agreement_rows)
+    perm_imp_mlp = _permutation_importance(mlp, X_test, y_test, n_repeats=8, seed=SEED)
+    perm_imp_nam = _permutation_importance(nam, X_test, y_test, n_repeats=8, seed=SEED + 1)
+    _plot_permutation_importance(feature_names, perm_imp_mlp, perm_imp_nam)
 
     summary = {
         "mlp": {k: float(v) for k, v in metrics_mlp.items() if k != "confusion_matrix"},
@@ -393,6 +542,12 @@ def generate_tabular_figures() -> dict[str, float]:
         "avg_precision": {"mlp": float(ap_mlp), "nam": float(ap_nam)},
         "brier": {"mlp": float(brier_mlp), "nam": float(brier_nam)},
         "lime_shap_agreement": agreement_rows,
+        "threshold_sensitivity": threshold_summary,
+        "permutation_importance": {
+            "feature_names": feature_names,
+            "mlp_accuracy_drop": perm_imp_mlp.tolist(),
+            "nam_accuracy_drop": perm_imp_nam.tolist(),
+        },
     }
     return summary
 
