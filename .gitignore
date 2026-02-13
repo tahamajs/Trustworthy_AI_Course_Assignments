@@ -23,3 +23,29 @@ venv/
 
 # Python test cache
 .pytest_cache/
+# generated artifacts from recourse/health runs
+exps/
+results/health_ERM_lin_e0.000_s0_*.npy
+models/health_ERM_lin_s0*.pth
+
+# LaTeX build artifacts
+*.aux
+*.bbl
+*.bcf
+*.blg
+*.fdb_latexmk
+*.fls
+*.idx
+*.ilg
+*.ind
+*.lof
+*.log
+*.lot
+*.nav
+*.out
+*.run.xml
+*.snm
+*.synctex.gz
+*.toc
+*.vrb
+*.xdv
