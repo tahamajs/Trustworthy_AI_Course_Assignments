@@ -150,6 +150,29 @@ The evaluation script now implements a full diagnostic stack with ten coordinate
 \subsection{Utilities and Orchestration}
 \texttt{utils.py} provides deterministic seed setup and checkpoint I/O wrappers used by both training and evaluation. \texttt{run\_report\_pipeline.py} is the automation layer used for report generation: it runs training, executes evaluation with all enabled diagnostics (UMAP, adversarial grid, confusion matrix, per-class accuracy, class-wise PRF1, reliability diagram, confidence-coverage curve, top-k profile, robustness sweep, and PGD-iteration sweep), and copies all generated artifacts into the report folder with deterministic names. This script also exposes sweep controls (\texttt{--sweep-epsilons}, \texttt{--sweep-iters}, \texttt{--sweep-max-batches}, \texttt{--topk-list}, \texttt{--pgd-iters-list}, \texttt{--iter-sweep-max-batches}) so users can trade off statistical resolution and runtime cost without code edits. The optional \texttt{runner.py} and minimal \texttt{trainers.py} provide lightweight programmatic entry points and helper abstractions for future refactoring, though the core pipeline currently runs through \texttt{train.py} and \texttt{eval.py}.
 
+\subsection{Module Input/Output Contract}
+Table~\ref{tab:moduleio} summarizes the I/O and side effects of each core module. This makes the pipeline auditable by showing exactly which artifacts are written and which inputs are consumed at each stage.
+
+\begin{table}[t]
+\caption{Module-level input/output contract}
+\label{tab:moduleio}
+\centering
+\footnotesize
+\begin{tabular}{p{0.28\columnwidth}p{0.30\columnwidth}p{0.34\columnwidth}}
+\toprule
+Module & Inputs & Outputs / Side Effects \\
+\midrule
+\texttt{datasets.py} & dataset name, batch size, augment flag & dataloaders, class count, channel count \\
+\texttt{models/resnet18\_custom.py} & input tensors, BN flag & logits, optional features \\
+\texttt{losses.py} & logits + labels & loss scalar (CE/LS/Circle) \\
+\texttt{attacks.py} & model, inputs, \(\epsilon,\alpha\) & adversarial inputs (clipped) \\
+\texttt{train.py} & args, dataloaders & checkpoints, history CSV/JSON, training curves \\
+\texttt{eval.py} & checkpoint, dataloader & plots, metrics JSON, sweeps \\
+\texttt{run\_report\_pipeline.py} & args & copied report figures + metrics summary \\
+\bottomrule
+\end{tabular}
+\end{table}
+
 \subsection{Channel Mismatch Handling and Artifact Contract}
 MNIST is single-channel while SVHN/CIFAR10 are RGB; the code resolves this by canonicalizing all data to 3 channels in the transform path, preserving a single model interface across experiments. The output contract is equally explicit: every run stores \texttt{best.pth}, \texttt{last.pth}, \texttt{training\_history.json}, \texttt{training\_history.csv}, and \texttt{training\_curves.png}, while evaluation can store \texttt{*.umap.png}, \texttt{*.grid.png}, \texttt{*.confusion.png}, \texttt{*.per\_class.png}, \texttt{*.prf1.png}, \texttt{*.calibration.png}, \texttt{*.confidence\_coverage.png}, \texttt{*.topk.png}, \texttt{*.robustness\_sweep.png}, \texttt{*.pgd\_iter\_sweep.png}, and \texttt{*.metrics.json}. This consistent contract is what makes the report pipeline reliable: downstream sections consume standardized files regardless of whether data came from full datasets or fallback mode, and new diagnostics can be added without breaking existing report logic.
 
@@ -164,6 +187,26 @@ export MPLCONFIGDIR=/tmp/mplconfig
 
 \subsection{Datasets, Normalization, and Preprocessing}
 The experiments target SVHN, MNIST, and CIFAR10. MNIST is grayscale while SVHN/CIFAR10 are RGB, so all inputs are canonicalized to three channels in \texttt{datasets.py} using PIL conversion to avoid mismatched model expectations. Dataset-specific normalization statistics are applied in the transform pipeline to keep input scaling consistent with standard conventions and to stabilize optimization. Augmentation is intentionally conservative in the default configuration: random crop, horizontal flip (for applicable RGB datasets), and mild color jitter are enabled for training, while test transforms are deterministic. This conservative design avoids label-violating transforms (e.g., strong rotations for digits) and keeps the augmentation policy aligned with the theoretical constraints discussed later in this report.
+
+\subsection{Dataset Statistics and Transform Contract}
+Table~\ref{tab:datastats} records the data-level contract enforced by \texttt{datasets.py}: image size, channels, class count, and normalization statistics. Explicitly stating these values is important because they determine the scale and conditioning of the optimization problem and must be consistent across training and evaluation to avoid subtle distribution shifts.
+
+\begin{table}[t]
+\caption{Dataset statistics and preprocessing contract}
+\label{tab:datastats}
+\centering
+\footnotesize
+\begin{tabular}{lcccc}
+\toprule
+Dataset & Size & Channels & Classes & Normalization (mean/std) \\
+\midrule
+SVHN & \(32\times32\) & 3 & 10 & (0.4377, 0.4438, 0.4728) / (0.1980, 0.2010, 0.1970) \\
+MNIST & \(32\times32\) & 1\(\rightarrow\)3 & 10 & (0.1307) / (0.3081) \\
+CIFAR10 & \(32\times32\) & 3 & 10 & (0.4914, 0.4822, 0.4465) / (0.2470, 0.2435, 0.2616) \\
+Fallback FakeData & \(32\times32\) & 3 & 10 & inherits SVHN/MNIST transform \\
+\bottomrule
+\end{tabular}
+\end{table}
 
 \subsection{Fallback Data Behavior and Demo Mode}
 When datasets cannot be accessed (e.g., offline execution), the pipeline falls back to \texttt{torchvision.datasets.FakeData} with deterministic sizes to keep the entire evaluation stack runnable. In fallback mode, the code uses \(8192\) training samples and \(2048\) test samples by default, and it converts all inputs to three channels for model compatibility. The \textbf{demo} mode further reduces runtime by subsetting to \(1024\) training samples and \(256\) test samples and by disabling multiprocessing in the dataloader to avoid pickling issues with lambda transforms. This explicit fallback logic guarantees that every table and plot in the report can be regenerated end-to-end even in restricted environments, while still preserving a clean path to real-data benchmarking.
@@ -478,6 +521,9 @@ Generalization interventions can be interpreted through bias--variance decomposi
 
 \subsection{Calibration and Trustworthiness}
 In trusted AI applications, confidence calibration is a first-class metric because downstream decision layers frequently threshold softmax outputs. Label smoothing, adversarial training, and normalization choices all influence calibration through different mechanisms: smoothing reduces logit extremity, adversarial training can flatten local confidence fields around data points, and normalization affects optimization dynamics that shape posterior sharpness. Even when top-1 accuracy remains unchanged, better calibration can reduce overconfident errors and improve human-AI interaction quality. This report now includes both ECE and reliability diagrams as part of the default evaluation contract, which upgrades trustworthiness analysis from qualitative intuition to measurable evidence. The theoretical implication is that model quality is now assessed in a triad (accuracy, robustness, calibration), which is substantially closer to real deployment requirements than accuracy-only reporting.
+
+\subsection{Structured Error Taxonomy}
+For deployment-oriented interpretation, errors are categorized by operational impact. \textbf{False positives} correspond to spurious alarms and can lead to unnecessary interventions, while \textbf{false negatives} correspond to missed detections and can be safety-critical in high-stakes contexts. \textbf{Misranked but top-k-correct} cases indicate that the model retains partial evidence but lacks decisive boundaries, suggesting that reranking or calibration may improve outcomes without full retraining. \textbf{Overconfident errors} indicate a mismatch between uncertainty and correctness and are particularly harmful because they undermine selective prediction and human override policies. This taxonomy connects the PRF1, top-k, and calibration diagnostics into a single actionable framework for triaging model improvements.
 
 \subsection{Theoretical Role of Each Diagnostic Plot}
 Each figure in this report corresponds to a distinct theoretical question, and this mapping is what makes the document scientifically coherent. Training curves answer an optimization-dynamics question (are empirical-risk updates stable and convergent under the selected objective and scheduler). Feature projections answer a representation-geometry question (do class-conditionals separate in latent space under the learned encoder). Adversarial grids, robustness sweeps, and PGD-iteration sweeps answer local-sensitivity and attack-strength questions (how quickly does performance degrade with perturbation budget and with stronger inner maximization). Confusion matrices, per-class accuracy bars, and class-wise PRF1 plots answer conditional-risk allocation and error-type questions (which classes absorb most error mass and whether the errors are dominated by false positives or false negatives). Top-k plots answer a ranking-quality question (whether uncertainty ordering contains useful class evidence beyond top-1). Reliability diagrams answer an uncertainty-quality question (whether confidence approximates correctness frequency), while confidence-coverage curves answer an operational selectivity question (whether confidence ranking actually supports safe deferral strategies). When these diagnostics are interpreted jointly, they provide a far stronger theoretical basis than any single scalar metric: one can distinguish optimization failure from representation overlap, distinguish global underfitting from class-specific collapse, distinguish robust invariance from merely weak attacks, and distinguish uncertainty quality from mere low confidence.
