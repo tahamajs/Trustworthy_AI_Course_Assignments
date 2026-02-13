@@ -66,42 +66,91 @@ Each `code/README.md` contains method-level docs and exact CLI flags — see tho
 
 ---
 
-## 3) Per-homework quick commands (examples) 💡
+## 3) Per-homework detailed reference (complete) 🔎
 
-HW1 (image classification / robustness)
+### HW1 — Image classification & robustness (HomeWorks/HW1/code) 🔧
 
-```bash
-cd HomeWorks/HW1/code
-python train.py --dataset svhn --epochs 80 --batch-size 128 --optimizer sgd --save-dir checkpoints/svhn_baseline
-python eval.py  --dataset svhn --checkpoint checkpoints/svhn_baseline/best.pth --umap
-```
+- Purpose: train image classifiers, evaluate robustness (FGSM/PGD), and generate visualization artifacts (UMAP, sample grids).
+- Key files:
+  - `train.py`, `eval.py`, `attacks.py`, `datasets.py`, `losses.py`, `utils.py`, `runner.py`, `run_report_pipeline.py`.
+- Main scripts & common flags:
+  - Training baseline: `python train.py --dataset {svhn,cifar10,mnist} --epochs <E> --batch-size <B>`
+  - Adversarial training: add `--adv-train --attack {fgsm,pgd} --epsilon <eps> --alpha <alpha> --iters <k>`
+  - Evaluation / UMAP: `python eval.py --dataset svhn --checkpoint <path> --umap`
+  - Quick artifacts: `python run_report_pipeline.py --epochs 3` (demo-safe) or `--full-run` for full experiments.
+- Recommended hyperparameters (starting point):
+  - Baseline: `--epochs 80`, `--batch-size 128`, `--optimizer sgd --lr 0.01 --momentum 0.9`.
+  - PGD adv-train: `--epsilon 8/255 --alpha 2/255 --iters 7`.
+- Outputs / where to look:
+  - Checkpoints: `HomeWorks/HW1/code/checkpoints/<exp>/best.pth` and `last.pth`.
+  - Figures: `<checkpoint>.umap.png`, `<checkpoint>.grid.png`, `training_curves.png`.
+  - Logs/history: `training_history.csv` or `training_history.json` under `--save-dir`.
+- Reproduce report figures: run `python run_report_pipeline.py --full-run` (long) or demo `--epochs 3` (fast).
+- Notes & troubleshooting:
+  - Datasets stored in `HomeWorks/HW1/code/data/` or fallback to FakeData when offline.
+  - Reduce `--batch-size` to avoid CUDA OOM; use CPU mode for small demo runs.
+  - For deterministic runs, set seeds via `utils.set_seed(...)` (used internally by runner scripts).
 
-HW2 (interpretability — tabular & vision)
+---
 
-```bash
-cd HomeWorks/HW2/code
-python tabular.py                # run tabular experiments on diabetes dataset (local fallback)
-python generate_report_plots.py  # generate figures used in the report
-# notebook workflow
-jupyter lab HomeWorks/HW2/notebooks/HW2_solution.ipynb
-```
+### HW2 — Interpretability (HomeWorks/HW2/code) 🧭
 
-HW3 (causal recourse)
+- Purpose: train tabular and simple vision models and demonstrate interpretability techniques (LIME, SHAP, Grad-CAM, Guided Backprop, SmoothGrad, activation maximization).
+- Key files:
+  - `tabular.py`, `models.py`, `interpretability.py`, `vision.py`, `generate_report_plots.py`, `notebooks/HW2_solution.ipynb`.
+- Tabular workflow:
+  - `python tabular.py` — loads `diabetes.csv` (local or remote), preprocesses, trains `MLPClassifier` / `NAMClassifier`, prints metrics.
+  - Internals: `load_diabetes()`, `preprocess()`, `make_splits()`, `train_model()`.
+- Vision interpretability:
+  - Utilities: `get_vgg16()`, `GradCAM`, `GuidedBackprop`, `smoothgrad()`, `activation_maximization()` in `vision.py`.
+  - Example: generate Grad-CAM heatmap for an image using `vision.preprocess_image()` + `GradCAM(model, target_layer)(tensor)`.
+- Notebook: `HomeWorks/HW2/notebooks/HW2_solution.ipynb` contains step‑by‑step experiments and plots used in the report.
+- Outputs: SHAP/LIME plots, Grad-CAM heatmaps, activation-maximization images; saved by `generate_report_plots.py`.
+- Runtime: tabular experiments are quick on CPU; vision utilities (activation maximization) are faster on GPU but runnable on CPU for small steps.
+- Offline behavior: `tabular.py` falls back to deterministic synthetic diabetes data; `vision.get_vgg16()` falls back to non‑pretrained weights if internet is unavailable.
 
-```bash
-cd HomeWorks/HW3/code/q5_codes
-python main.py --seed 0
-# full notebook: HomeWorks/HW3/code/HW3_complete_assignment.ipynb
-```
+---
 
-HW4 (security / privacy / fairness)
+### HW3 — Causal modeling & algorithmic recourse (HomeWorks/HW3/code/q5_codes) ⚖️
 
-```bash
-cd HomeWorks/HW4/code
-pip install -r requirements.txt
-pytest tests            # run unit tests included for HW4
-python generate_report_figs.py
-```
+- Purpose: implement SCMs, train classifiers (ERM/AF/ALLR/ROSS), and evaluate nearest-counterfactual vs causal recourse (linear & differentiable methods).
+- Key files & modules:
+  - `main.py`, `runner.py`, `trainers.py`, `recourse.py`, `scm.py`, `evaluate_recourse.py`, `utils.py`, `generate_report_artifacts.py`, `HW3_complete_assignment.ipynb`.
+- Entry points & typical runs:
+  - Full pipeline: `cd HomeWorks/HW3/code/q5_codes && python main.py --seed 0` (checks for existing checkpoints and reuses artifacts).
+  - Notebook: open `HomeWorks/HW3/code/HW3_complete_assignment.ipynb` for interactive exploration.
+- What the pipeline does:
+  - trains classifiers (logistic / MLP) with several trainers (ERM, AF, ROSS), calibrates thresholds by MCC, computes recourse (linear LP via CVXPY or greedy fallback and differentiable recourse), and aggregates results into plot-ready artifacts.
+- Important outputs (naming conventions):
+  - Results saved under `results/` with deterministic names: `<model>_<trainer>_e{eps}_s{seed}_{metric}.npy` (`_ids.npy`, `_valid.npy`, `_cost.npy`, `_accs.npy`).
+  - Trained model files under `HomeWorks/HW3/models/` (e.g., `health_AF_lin_s0.pth`).
+- Metrics reported: classifier accuracy, MCC-thresholded performance, recourse validity rate, valid-only mean cost.
+- Reproduction tips:
+  - Use `--seed` for deterministic splits; the pipeline is restart-safe—existing checkpoints are reused.
+  - CVXPY is used for LP-based linear recourse; a greedy solver fallback exists if CVXPY is not installed.
+- Runtime & resources: training linear models is fast on CPU; training MLPs and running many recourse solves (differentiable recourse) benefits from GPU for speed.
+
+---
+
+### HW4 — Security (Neural Cleanse), Privacy & Fairness (HomeWorks/HW4/code) 🔐
+
+- Purpose: demonstrate backdoor detection (Neural Cleanse), differential-privacy calculations (Laplace mechanism), and fairness measurement/mitigation.
+- Key files:
+  - `neural_cleanse.py`, `privacy.py`, `fairness.py`, `generate_report_figs.py`, `tests/`.
+- Neural Cleanse features:
+  - `reconstruct_trigger()` to optimize mask+pattern per target label, `detect_outlier_scales()` (MAD) for detection, `evaluate_asr()` for attack success rate.
+  - Helpers to extract provided poisoned checkpoints: `extract_poisoned_models_if_needed()` + `resolve_checkpoint_path()`.
+- Privacy utilities:
+  - Laplace scale & noise helpers: `laplace_scale()`, `add_laplace_noise()`, `laplace_cdf_threshold()`, `compose_epsilons()`.
+  - Scenario calculators for assignment Q2 are in `privacy.py`.
+- Fairness utilities:
+  - `train_baseline_model()`, `disparate_impact()`, `zemel_proxy_fairness()`, promotion/demotion label-swap mitigation, threshold optimization.
+- How to run & tests:
+  - `cd HomeWorks/HW4/code && pytest tests` runs the unit tests.
+  - Quick demos: run `python neural_cleanse.py` or `python fairness.py` (each has a `__main__` quick demo).
+- Outputs: detection plots, reconstructed trigger masks/patterns, fairness metric summaries, and report-ready figures produced by `generate_report_figs.py`.
+
+---
 
 General: many experiments provide `--save-dir` for checkpoints and `run_report_pipeline.py` helpers for quick artifact generation.
 
