@@ -1,0 +1,186 @@
+\documentclass[conference]{IEEEtran}
+
+\usepackage{amsmath,amssymb}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{float}
+\usepackage{subcaption}
+\usepackage[hidelinks]{hyperref}
+
+\newcommand{\authorname}{Taha Majlesi}
+\newcommand{\studentid}{810101504}
+\newcommand{\course}{Trustworthy Artificial Intelligence}
+\newcommand{\assignment}{HW4}
+
+% Fallback values; overwritten when report/results/results_macros.tex exists.
+\newcommand{\QOneDetectedLabel}{-1}
+\newcommand{\QOneExpectedLabel}{-1}
+\newcommand{\QOneCleanAccBefore}{-1}
+\newcommand{\QOneAsrBefore}{-1}
+\newcommand{\QOneCleanAccAfter}{-1}
+\newcommand{\QOneAsrAfter}{-1}
+\newcommand{\QTwoBBase}{-1}
+\newcommand{\QTwoBSequential}{-1}
+\newcommand{\QTwoBUnbounded}{-1}
+\newcommand{\QTwoProbBase}{-1}
+\newcommand{\QTwoProbSequential}{-1}
+\newcommand{\QTwoProbUnbounded}{-1}
+\newcommand{\QThreeBaseAcc}{-1}
+\newcommand{\QThreeBaseDi}{-1}
+\newcommand{\QThreeBaseZemel}{-1}
+\newcommand{\QThreeSwapAcc}{-1}
+\newcommand{\QThreeSwapDi}{-1}
+\newcommand{\QThreeSwapZemel}{-1}
+\newcommand{\QThreeNoGenderAcc}{-1}
+\newcommand{\QThreeNoGenderDi}{-1}
+\newcommand{\QThreeNoGenderZemel}{-1}
+\newcommand{\QThreeReweighedAcc}{-1}
+\newcommand{\QThreeReweighedDi}{-1}
+\newcommand{\QThreeReweighedZemel}{-1}
+\newcommand{\QThreeGroupThrAcc}{-1}
+\newcommand{\QThreeGroupThrDi}{-1}
+\newcommand{\QThreeGroupThrZemel}{-1}
+\newcommand{\QThreeGroupThrZero}{-1}
+\newcommand{\QThreeGroupThrOne}{-1}
+\IfFileExists{results/results_macros.tex}{\input{results/results_macros.tex}}{}
+
+\begin{document}
+
+\title{Security, Privacy, and Fairness Analysis for \assignment}
+\author{
+\IEEEauthorblockN{\authorname}
+\IEEEauthorblockA{
+Student ID: \studentid\\
+\course\\
+University of Tehran
+}
+}
+\maketitle
+
+\begin{abstract}
+This report presents a complete implementation and empirical analysis for three trustworthiness dimensions: backdoor detection and mitigation (security), Laplace mechanism calculations (privacy), and bias measurement/mitigation (fairness). The pipeline uses the real poisoned checkpoint corresponding to student ID digit 4, runs Neural Cleanse reconstruction over all labels, applies one-epoch unlearning on 20\% triggered samples, computes differential privacy scales and probabilities under base/sequential/unbounded scenarios, and compares five fairness strategies including two bonus methods. All figures and metrics are generated automatically for reproducibility.
+\end{abstract}
+
+\section{Introduction}
+Trustworthy machine learning systems require robustness against attacks, formal privacy guarantees, and equitable behavior across sensitive groups. This homework combines all three aspects in one workflow, where the same implementation stack both generates report artifacts and validates quantitative outcomes.
+
+\section{Theoretical Background}
+\subsection{Backdoor Attacks and Neural Cleanse}
+A backdoor attack implants a trigger pattern such that normal clean accuracy remains high while triggered inputs are forced into a target class. Neural Cleanse estimates, for each candidate target label, the minimum perturbation (mask and pattern) needed to induce that label. The key intuition is that the true attacked label requires a substantially smaller trigger than non-attacked labels, so robust outlier detection on trigger scale can identify the compromised class. We use Median Absolute Deviation (MAD) on reconstructed trigger norms and detect the lower-tail outlier because smaller trigger mass indicates a stronger latent shortcut in the attacked model.
+
+\subsection{Differential Privacy with Laplace Mechanism}
+For a numeric query with sensitivity $\Delta f$ under privacy budget $\epsilon$, Laplace noise with scale $b=\Delta f/\epsilon$ gives $\epsilon$-DP for the bounded case. Larger $b$ means stronger privacy but higher utility loss. Sequential composition splits the total budget across multiple queries, so each query receives $\epsilon_i=\epsilon/k$, which increases per-query scale linearly with $k$. In unbounded DP, record addition/removal changes sensitivity; therefore, if a fraction $p$ of population $n$ may differ, effective sensitivity scales by $\max(1,\lceil pn\rceil)$, further increasing $b$.
+
+\subsection{Fairness Metrics and Mitigation}
+We evaluate predictive quality via accuracy and group fairness via Disparate Impact (DI) and a Zemel-style proxy computed from cluster-wise outcome gaps. DI near $1$ indicates parity in positive prediction rates between protected and privileged groups. The assignment mitigation uses promotion/demotion label swapping before retraining, while bonus methods include reweighing (importance weighting of group-label pairs) and group-specific decision thresholds. These methods trace a classic fairness-utility frontier: fairness gains often require controlled accuracy trade-offs.
+
+\section{Experimental Setup}
+\begin{itemize}
+    \item Security: real checkpoint \texttt{poisened\_model\_4.pth}, MNIST test set, Neural Cleanse reconstruction over labels 0--9, 500 optimization steps per label (high-fidelity profile).
+    \item Unlearning: one epoch, trigger applied to 20\% of samples with true labels preserved.
+    \item Privacy constants: $\epsilon=0.1$, $\delta=10^{-5}$, $k=92$, $\Delta f=1$, threshold test $P(\tilde{q}>505 \mid q=500)$, unbounded fraction $p=0.01$, population $n=500$.
+    \item Fairness: 70/30 split, logistic regression baseline, assignment promotion/demotion ($k=10$), no-gender variant, reweighing, and group-threshold optimization.
+\end{itemize}
+
+\section{Results and Plot-by-Plot Explanation}
+
+\subsection{Reconstructed Trigger for Detected Label}
+\begin{figure}[H]
+    \centering
+    \IfFileExists{figures/trigger_reconstructed.png}{\includegraphics[width=0.42\linewidth]{figures/trigger_reconstructed.png}}{\fbox{\parbox[c][3.2cm][c]{0.42\linewidth}{\centering Missing figure: trigger\_reconstructed.png}}}
+    \caption{Reconstructed trigger mask for the detected attacked label.}
+    \label{fig:trigger_reconstructed}
+\end{figure}
+Figure~\ref{fig:trigger_reconstructed} visualizes the optimized mask with minimum support that still causes the model to predict the detected target class. The concentrated bright region indicates spatially localized vulnerability consistent with a backdoor mechanism rather than diffuse adversarial noise. Theoretically, Neural Cleanse solves a constrained inversion problem balancing target-class confidence against trigger sparsity; therefore, a compact mask with strong class induction is evidence that the classifier has internalized a trigger shortcut. In this setting, the detected label \QOneDetectedLabel{} is compared against the expected checkpoint label \QOneExpectedLabel{}, and agreement supports the hypothesis that the MAD outlier criterion is correctly isolating the compromised decision pathway.
+
+\subsection{All-Label Trigger Reconstruction Grid}
+\begin{figure}[H]
+    \centering
+    \IfFileExists{figures/trigger_all_labels_grid.png}{\includegraphics[width=0.95\linewidth]{figures/trigger_all_labels_grid.png}}{\fbox{\parbox[c][3.2cm][c]{0.95\linewidth}{\centering Missing figure: trigger\_all\_labels\_grid.png}}}
+    \caption{Reconstructed masks and scales for all candidate labels.}
+    \label{fig:trigger_all_labels}
+\end{figure}
+Figure~\ref{fig:trigger_all_labels} provides the comparative diagnostic that underpins MAD-based detection: each subplot shows the reconstructed mask for one target label and its associated trigger scale. The attacked class is expected to exhibit an anomalously small scale because the model already contains a latent feature subspace aligned with that target under trigger activation, so only a small perturbation is needed to exploit it. Non-attacked classes generally require larger, less coherent masks because forcing those outputs conflicts with the native decision boundaries. This cross-label distribution view is theoretically crucial because single-label reconstruction alone cannot distinguish true backdoor structure from optimization artifacts.
+
+\subsection{Security Metrics Before and After Unlearning}
+\begin{figure}[H]
+    \centering
+    \IfFileExists{figures/security_before_after.png}{\includegraphics[width=0.72\linewidth]{figures/security_before_after.png}}{\fbox{\parbox[c][3.2cm][c]{0.72\linewidth}{\centering Missing figure: security\_before\_after.png}}}
+    \caption{Clean accuracy and attack success rate (ASR) before/after one-epoch unlearning.}
+    \label{fig:security_before_after}
+\end{figure}
+Figure~\ref{fig:security_before_after} quantifies the mitigation trade-off: effective unlearning should reduce ASR from \QOneAsrBefore{} to \QOneAsrAfter{} while preserving as much clean accuracy as possible (from \QOneCleanAccBefore{} to \QOneCleanAccAfter{}). The mechanism is theoretically analogous to targeted fine-tuning with anti-backdoor exposure, where trigger-bearing inputs are reintroduced with correct labels so gradient updates re-align triggered representations with true class semantics. A successful outcome indicates partial erasure of malicious trigger associations while retaining clean manifold discrimination; any residual ASR reflects incomplete forgetting under the one-epoch constraint imposed by the assignment.
+
+\subsection{Privacy Scenario Comparison}
+\begin{figure}[H]
+    \centering
+    \IfFileExists{figures/privacy_scenarios.png}{\includegraphics[width=0.86\linewidth]{figures/privacy_scenarios.png}}{\fbox{\parbox[c][3.2cm][c]{0.86\linewidth}{\centering Missing figure: privacy\_scenarios.png}}}
+    \caption{Laplace scale and exceedance probability across base, sequential, and unbounded scenarios.}
+    \label{fig:privacy_scenarios}
+\end{figure}
+Figure~\ref{fig:privacy_scenarios} shows how privacy accounting directly controls uncertainty: sequential composition lowers per-query budget to $\epsilon_i=\epsilon/k$, inflating noise scale from \QTwoBBase{} to \QTwoBSequential{}, and unbounded sensitivity adjustment further inflates scale to \QTwoBUnbounded{}. Consequently, the probability of observing a noisy count above the fixed threshold shifts from \QTwoProbBase{} (base) toward \QTwoProbSequential{} and \QTwoProbUnbounded{}, illustrating the utility degradation expected under stricter privacy constraints. The theoretical interpretation is that stronger neighbor indistinguishability necessarily broadens the output distribution, increasing tail mass around nearby thresholds.
+
+\subsection{Fairness Comparison Across Baseline, Assignment, and Bonus Methods}
+\begin{figure}[H]
+    \centering
+    \IfFileExists{figures/fairness_comparison.png}{\includegraphics[width=0.98\linewidth]{figures/fairness_comparison.png}}{\fbox{\parbox[c][3.2cm][c]{0.98\linewidth}{\centering Missing figure: fairness\_comparison.png}}}
+    \caption{Accuracy, DI, and Zemel-proxy comparison for five model variants.}
+    \label{fig:fairness_comparison}
+\end{figure}
+Figure~\ref{fig:fairness_comparison} compares baseline, assignment swap mitigation, sensitive-feature removal, reweighing, and group-threshold post-processing to expose the fairness-accuracy frontier. The assignment method alters training labels for selected promotion/demotion cohorts, directly shifting class-conditional decision boundaries; reweighing rebalances empirical risk via sample weights to reduce group-label imbalance; and group thresholds decouple decision cutoffs by sensitive group to target parity at inference time. The observed movement of DI toward parity and Zemel-proxy reductions relative to baseline indicate improved fairness behavior, while any associated accuracy changes reflect the known tension between calibration on historical labels and counterfactual equity constraints.
+
+\section{Consolidated Metric Table}
+\begin{table}[H]
+\centering
+\caption{Final generated metrics used in this report}
+\label{tab:final_metrics}
+\begin{tabular}{lccc}
+\toprule
+Model/Scenario & Accuracy & DI & Zemel-proxy \\
+\midrule
+Fairness baseline & \QThreeBaseAcc{} & \QThreeBaseDi{} & \QThreeBaseZemel{} \\
+Promotion/Demotion & \QThreeSwapAcc{} & \QThreeSwapDi{} & \QThreeSwapZemel{} \\
+No-gender features & \QThreeNoGenderAcc{} & \QThreeNoGenderDi{} & \QThreeNoGenderZemel{} \\
+Reweighed (bonus) & \QThreeReweighedAcc{} & \QThreeReweighedDi{} & \QThreeReweighedZemel{} \\
+Group-thresholds (bonus) & \QThreeGroupThrAcc{} & \QThreeGroupThrDi{} & \QThreeGroupThrZemel{} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[H]
+\centering
+\caption{Security and privacy summary}
+\label{tab:security_privacy}
+\begin{tabular}{lc}
+\toprule
+Quantity & Value \\
+\midrule
+Detected attacked label & \QOneDetectedLabel{} \\
+Expected checkpoint label & \QOneExpectedLabel{} \\
+Clean accuracy before/after & \QOneCleanAccBefore{} / \QOneCleanAccAfter{} \\
+ASR before/after & \QOneAsrBefore{} / \QOneAsrAfter{} \\
+$b$ (base / sequential / unbounded) & \QTwoBBase{} / \QTwoBSequential{} / \QTwoBUnbounded{} \\
+$P(\tilde{q} > 505)$ (base / sequential / unbounded) & \QTwoProbBase{} / \QTwoProbSequential{} / \QTwoProbUnbounded{} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Conclusion}
+The integrated pipeline now satisfies end-to-end reproducibility for security, privacy, and fairness with IEEE-style reporting. The security plots and metrics validate trigger reconstruction, attacked-label detection, and unlearning effects on clean accuracy versus ASR. Privacy plots quantify how composition and unbounded sensitivity assumptions expand Laplace scale and tail probabilities. Fairness experiments demonstrate measurable shifts in parity metrics across mandatory and bonus mitigation methods, with explicit visibility into associated utility trade-offs.
+
+\begin{thebibliography}{1}
+\bibitem{wang2019neuralcleanse}
+B. Wang, Y. Yao, S. Shan, H. Li, B. Viswanath, H. Zheng, and B. Y. Zhao,
+``Neural Cleanse: Identifying and Mitigating Backdoor Attacks in Neural Networks,''
+in \emph{Proc. IEEE Symp. Security and Privacy}, 2019.
+
+\bibitem{dwork2014algorithmic}
+C. Dwork and A. Roth, \emph{The Algorithmic Foundations of Differential Privacy}.
+Now Publishers, 2014.
+
+\bibitem{zemel2013learning}
+R. Zemel, Y. Wu, K. Swersky, T. Pitassi, and C. Dwork,
+``Learning Fair Representations,'' in \emph{Proc. ICML}, 2013.
+\end{thebibliography}
+
+\end{document}
