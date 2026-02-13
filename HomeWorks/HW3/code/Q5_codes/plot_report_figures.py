@@ -1,7 +1,17 @@
 """Generate report-ready plots from saved benchmark artifacts."""
 
+import os
+import tempfile
 from pathlib import Path
 
+# Ensure matplotlib uses a non-interactive backend and writable cache inside the project.
+_mpl_cache_dir = Path(tempfile.gettempdir()) / "hw3_q5_mplconfig"
+_mpl_cache_dir.mkdir(parents=True, exist_ok=True)
+os.environ.setdefault("MPLCONFIGDIR", str(_mpl_cache_dir))
+
+import matplotlib
+
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -87,4 +97,3 @@ def export_report_plots(dataset, trainer, model_type, epsilon, seed, lambd, outp
     plt.close(fig)
 
     print(f"Saved plots to {output_dir}")
-
