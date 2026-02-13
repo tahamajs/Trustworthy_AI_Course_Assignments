@@ -1,0 +1,4 @@
+estimator,approx_effect (last-first)
+"E_WZ E[Y|t,W,Z]",0.34434602983983786
+"E_W E[Y|t,W] (causal)",0.3501346195794273
+E[Y|t],0.32526193853476254

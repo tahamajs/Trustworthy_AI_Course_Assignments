@@ -39,3 +39,10 @@ python main.py --seed 0
 Detailed method-level documentation is in:
 
 - `HomeWorks/HW3/code/README.md`
+
+## Complete Notebook
+
+A full notebook that covers all HW3 parts (Q1-Q6), including runnable Q5 causal recourse pipeline on the provided dataset folder, is available at:
+
+- `HomeWorks/HW3/code/HW3_complete_assignment.ipynb`
+- `HomeWorks/HW3/output/jupyter-notebook/hw3_complete_assignment.ipynb`

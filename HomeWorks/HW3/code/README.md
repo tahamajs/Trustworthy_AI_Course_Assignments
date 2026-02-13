@@ -90,3 +90,9 @@ Depending on working directory, outputs are created under:
 - `models/`
 - `results/`
 - `scms/`
+
+## Notebook Deliverable
+
+End-to-end HW3 notebook (Q1-Q6):
+
+- `HomeWorks/HW3/code/HW3_complete_assignment.ipynb`
