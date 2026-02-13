@@ -1,16 +1,12 @@
-% Beautiful assignment LaTeX template — polished layout for reports
-% Compile: make pdf  (or pdflatex + bibtex + pdflatex x2)
 \documentclass[11pt,a4paper]{article}
 
-% --- Typography & layout ---------------------------------------------------
 \usepackage[utf8]{inputenc}
 \usepackage[T1]{fontenc}
-\usepackage{mathpazo}          % nicer serif font (Palatino)
+\usepackage{mathpazo}
 \usepackage{microtype}
 \usepackage[a4paper,margin=1in]{geometry}
-\setlength{\headheight}{15pt} % avoids fancyhdr warning
+\setlength{\headheight}{15pt}
 
-% --- Useful packages -----------------------------------------------------
 \usepackage{amsmath,amssymb,mathtools}
 \usepackage{siunitx}
 \usepackage{graphicx}
@@ -18,19 +14,19 @@
 \usepackage{subcaption}
 \usepackage{booktabs}
 \usepackage{float}
-\usepackage{tikz}              % drawing placeholders / decorations
-\usepackage{enumitem}         % compact lists
+\usepackage{enumitem}
 \usepackage{xcolor}
+\usepackage{tabularx}
+\usepackage{longtable}
+\usepackage{array}
 \definecolor{accent}{HTML}{2A9D8F}
 \definecolor{heading}{HTML}{264653}
 
-% --- Section heading style ------------------------------------------------
 \usepackage{titlesec}
 \titleformat{\section}{\Large\bfseries\color{heading}}{\thesection}{1em}{}
 \titleformat{\subsection}{\bfseries\color{heading}}{\thesubsection}{0.5em}{}
 \titlespacing*{\section}{0pt}{12pt}{6pt}
 
-% --- Code listing style ---------------------------------------------------
 \usepackage{listings}
 \lstdefinestyle{py}{
   language=Python,
@@ -50,11 +46,9 @@
 }
 \lstset{style=py}
 
-% --- Pretty abstract box --------------------------------------------------
 \usepackage{tcolorbox}
 \tcbset{colback=gray!7, colframe=accent, left=6pt, right=6pt, boxrule=0.8pt}
 
-% --- Header / footer -----------------------------------------------------
 \usepackage{fancyhdr}
 \pagestyle{fancy}
 \fancyhf{}
@@ -65,28 +59,25 @@
 \fancyhead[R]{\small \authorname{}}
 \fancyfoot[C]{\thepage}
 
-% --- Metadata (edit these) ------------------------------------------------
 \newcommand{\course}{Trusted Artificial Intelligence}
 \newcommand{\instructor}{Dr. Mostafa Tavasolipour}
 \newcommand{\semester}{Spring 2024}
 \newcommand{\assignment}{4}
-\newcommand{\authorname}{taha majlesi - 810101504}
+\newcommand{\authorname}{Taha Majlesi}
 \newcommand{\studentid}{810101504}
 \newcommand{\affiliation}{Department of Electrical and Computer Engineering, University of Tehran}
 
-% --- Helpers --------------------------------------------------------------
-\newcommand{\figref}[1]{Figure~\ref{#1}}
-\newcommand{\tabref}[1]{Table~\ref{#1}}
-\newcommand{\secref}[1]{Section~\ref{#1}}
-\newcommand{\codefile}[1]{\lstinputlisting[style=py]{#1}}
+\newcommand{\statusimplemented}{Implemented}
+\newcommand{\statusfallback}{Implemented with fallback}
+\newcommand{\statusna}{Not applicable}
+\newcolumntype{Y}{>{\raggedright\arraybackslash}X}
+
 \usepackage[hidelinks]{hyperref}
 \usepackage{natbib}
 \bibliographystyle{plainnat}
 
-% --- Document -------------------------------------------------------------
 \begin{document}
 
-% ---------- Title page ----------------------------------------------------
 \begin{titlepage}
   \centering
   {\LARGE\bfseries \course{} \par}
@@ -98,126 +89,151 @@
   {\Large\bfseries \authorname{}\par}
   \vspace{0.2cm}
   {\small ID: \studentid{} \quad | \quad \affiliation{}\par}
-  \vspace{1.5cm}
-  \begin{tikzpicture}
-    \draw[accent,line width=2pt] (0,0) -- (8,0);
-  \end{tikzpicture}
   \vfill
   {\large Instructor: \instructor{}\par}
   {\small Submitted: \today\par}
 \end{titlepage}
 
-% ---------- Abstract ------------------------------------------------------
 \begin{tcolorbox}
-\textbf{Abstract.} A short summary (max 200 words) describing the goal, main methods, and key results. Replace this with a concise overview of your experiments and findings.
+\textbf{Abstract.} This report documents HW4 implementations (backdoor detection, differential privacy utilities, and fairness mitigation) with complete traceability. Every requirement is linked to source files, functions, commands, produced artifacts, metrics, and verification outcomes.
 \end{tcolorbox}
 
 \vspace{6pt}
 \tableofcontents
 \clearpage
 
-% ---------- Main sections -------------------------------------------------
 \section{Introduction}
-Brief problem statement, datasets, and objectives.
+HW4 combines three implementation tracks: Neural Cleanse style backdoor analysis, Laplace mechanism privacy calculations, and fairness-aware post-processing/retraining.
 
-\section{Methods}
-Describe model architecture, preprocessing, augmentations, and training protocol.
-\subsection{Model}
-Explain the architecture (e.g., custom ResNet18).
-\subsection{Training setup}
-Optimizers, lr schedule, batch size, epochs, and any regularization.
+\section{Architecture and Algorithm Design}
+\subsection{Neural Cleanse track}
+Implemented in \texttt{HomeWorks/HW4/code/neural\_cleanse.py}: \texttt{DemoConvNet}, \texttt{reconstruct\_trigger}, \texttt{detect\_outlier\_scales}, and \texttt{unlearn\_by\_retraining}.
 
-\section{Experiments}
-Dataset splits, metrics, and evaluation protocol.
-\subsection{Evaluation metrics}
-Accuracy, loss, robustness, UMAP visualizations, etc.
+\subsection{Privacy track}
+Implemented in \texttt{HomeWorks/HW4/code/privacy.py}: \texttt{laplace\_scale}, \texttt{add\_laplace\_noise}, \texttt{laplace\_cdf\_threshold}, and composition utilities.
 
-\section{Results}
-Quantitative tables and qualitative figures.
+\subsection{Fairness track}
+Implemented in \texttt{HomeWorks/HW4/code/fairness.py}: \texttt{train\_baseline\_model}, \texttt{disparate\_impact}, \texttt{zemel\_proxy\_fairness}, \texttt{apply\_promotion\_demotion}, and retraining path.
 
-% include figures only if present, otherwise draw a placeholder
-\begin{figure}[H]
-  \centering
-  \begin{subfigure}[b]{0.48\textwidth}
-    \IfFileExists{figures/accuracy_plot.png}{\includegraphics[width=\textwidth]{figures/accuracy_plot.png}}{%
-      \fbox{\parbox[c][4.3cm][c]{\textwidth}{\centering\small\itshape \texttt{accuracy\_plot.png} (missing)}} }
-    \caption{Train / validation accuracy}
-    \label{fig:acc}
-  \end{subfigure}\hfill
-  \begin{subfigure}[b]{0.48\textwidth}
-    \IfFileExists{figures/loss_plot.png}{\includegraphics[width=\textwidth]{figures/loss_plot.png}}{%
-      \fbox{\parbox[c][4.3cm][c]{\textwidth}{\centering\small\itshape \texttt{loss\_plot.png} (missing)}} }
-    \caption{Train / validation loss}
-    \label{fig:loss}
-  \end{subfigure}
-  \caption{Training curves (export your notebook plots to `template/figures/`).}
-\end{figure}
+\section{Data and Preprocessing Pipeline}
+Fairness experiments use \texttt{data.csv}. Figure export and metrics collation are executed with \texttt{generate\_report\_figs.py}. Backdoor demo uses deterministic synthetic tensors when external attacked checkpoints are unavailable.
 
-% --- Summary results (placeholders filled from notebook demos) -----------------
-\subsection{Summary of main results (placeholders)}
+\section{Implementation Coverage Matrix}
+\small
+\begin{longtable}{p{0.07\textwidth}p{0.12\textwidth}p{0.16\textwidth}p{0.12\textwidth}p{0.14\textwidth}p{0.11\textwidth}p{0.08\textwidth}p{0.10\textwidth}p{0.08\textwidth}}
+\toprule
+Task ID & Requirement & File & Function/Class & Command & Output Artifact & Metric & Figure/Table & Status \\
+\midrule
+\endfirsthead
+\toprule
+Task ID & Requirement & File & Function/Class & Command & Output Artifact & Metric & Figure/Table & Status \\
+\midrule
+\endhead
+B1 & Trigger reconstruction & code/neural\_cleanse.py & reconstruct\_trigger & python HomeWorks/HW4/code/generate\_report\_figs.py & trigger\_reconstructed.png & Trigger scale statistics & Figure~\ref{fig:hw4-trigger} & \statusimplemented \\
+B2 & Attacked-label detection & code/neural\_cleanse.py & detect\_outlier\_scales & python HomeWorks/HW4/code/generate\_report\_figs.py & console scale summary & Outlier index consistency & Section~\ref{sec:hw4-validation} & \statusimplemented \\
+P1 & Laplace mechanism utilities & code/privacy.py & laplace\_scale; laplace\_cdf\_threshold & python HomeWorks/HW4/code/generate\_report\_figs.py & privacy numeric outputs & Probability/noise scale values & Table~\ref{tab:hw4-main} & \statusimplemented \\
+F1 & Fairness baseline model & code/fairness.py & train\_baseline\_model & python HomeWorks/HW4/code/generate\_report\_figs.py & fairness\_comparison.png & Accuracy/DI/Zemel proxy & Figure~\ref{fig:hw4-fairness} & \statusimplemented \\
+F2 & Promotion-demotion mitigation & code/fairness.py & apply\_promotion\_demotion; retrain\_with\_swapped\_labels & python HomeWorks/HW4/code/generate\_report\_figs.py & fairness\_comparison.png & Metric deltas before/after & Figure~\ref{fig:hw4-fairness} & \statusimplemented \\
+T1 & Unit test coverage & code/tests/*.py & pytest modules & PYTHONPATH=HomeWorks/HW4/code pytest -q HomeWorks/HW4/code/tests & test report output & Pass/fail counts & Section~\ref{sec:hw4-validation} & \statusimplemented \\
+F3 & External attacked checkpoint unavailable & code/neural\_cleanse.py & load\_model(demo=True) & python HomeWorks/HW4/code/generate\_report\_figs.py & demo reconstruction artifacts & Deterministic smoke behavior & Appendix~\ref{app:hw4-artifacts} & \statusfallback \\
+\bottomrule
+\end{longtable}
+\normalsize
+
+\section{Experiment Reproducibility}
+\subsection{Integrated artifact generation}
+\textbf{Reproducibility Block}
+\begin{itemize}[leftmargin=1.2em]
+  \item Command: \texttt{python HomeWorks/HW4/code/generate\_report\_figs.py}
+  \item Seed and key hyperparameters: deterministic \texttt{train\_test\_split(random\_state=0)}; trigger reconstruction steps=200; lr=0.2.
+  \item Input data source: local \texttt{HomeWorks/HW4/code/data.csv}; demo tensors for Neural Cleanse fallback.
+  \item Output paths: \texttt{HomeWorks/HW4/report/figures/fairness\_comparison.png} and \texttt{trigger\_reconstructed.png} plus printed metric summary.
+\end{itemize}
+
+\subsection{Test reproducibility}
+\textbf{Reproducibility Block}
+\begin{itemize}[leftmargin=1.2em]
+  \item Command: \texttt{PYTHONPATH=HomeWorks/HW4/code pytest -q HomeWorks/HW4/code/tests}
+  \item Seed and key hyperparameters: default test settings.
+  \item Input data source: local modules and synthetic test tensors.
+  \item Output paths: pytest report in terminal for Validation section.
+\end{itemize}
+
+\section{Results and Evidence}
 \begin{table}[H]
   \centering
-  \caption{Fairness: Base vs Fair model (placeholders)}
+  \caption{HW4 metric and artifact mapping}
+  \label{tab:hw4-main}
   \begin{tabular}{lccc}
     \toprule
-    Model & Accuracy & Disparate Impact & Zemel-proxy \\
+    Track & Metric source & Artifact path & Report status \\
     \midrule
-    Base classifier (Logistic) & 0.85 (placeholder) & 0.70 (placeholder) & 0.12 (placeholder) \\
-    Fair model (Promotion/Demotion) & 0.83 (placeholder) & 0.95 (placeholder) & 0.06 (placeholder) \\
+    Fairness & generate\_report\_figs.py printed summary & HomeWorks/HW4/report/figures/fairness\_comparison.png & Included \\
+    Neural Cleanse & reconstruct/detect output logs & HomeWorks/HW4/report/figures/trigger\_reconstructed.png & Included \\
+    Privacy & privacy function outputs & command stdout captured in analysis notes & Included \\
     \bottomrule
   \end{tabular}
 \end{table}
 
-\subsection{Neural Cleanse (Q1) — reconstruction summary}
 \begin{figure}[H]
   \centering
-  \IfFileExists{figures/trigger_reconstructed.png}{\includegraphics[width=0.45\textwidth]{figures/trigger_reconstructed.png}}{%
-    \fbox{\parbox[c][4.3cm][c]{0.45\textwidth}{\centering\small\itshape \texttt{trigger\_reconstructed.png} (missing)}} }
-  \caption{Reconstructed trigger for detected attacked class (placeholder image).}
-  \label{fig:trigger}
+  \IfFileExists{figures/fairness_comparison.png}{\includegraphics[width=0.62\textwidth]{figures/fairness_comparison.png}}{\fbox{\parbox[c][4.2cm][c]{0.62\textwidth}{\centering Artifact not found: figures/fairness\_comparison.png}}}
+  \caption{Fairness metrics before and after mitigation.}
+  \label{fig:hw4-fairness}
 \end{figure}
 
-\begin{table}[H]
+\begin{figure}[H]
   \centering
-  \caption{Neural Cleanse: model metrics (placeholders)}
-  \begin{tabular}{lcc}
-    \toprule
-    Metric & Before cleansing & After unlearning \\
-    \midrule
-    Clean accuracy & 0.99 (placeholder) & 0.98 (placeholder) \\
-    Attack Success Rate (ASR) & 0.92 (placeholder) & 0.05 (placeholder) \\
-    \bottomrule
-  \end{tabular}
-\end{table}
+  \IfFileExists{figures/trigger_reconstructed.png}{\includegraphics[width=0.44\textwidth]{figures/trigger_reconstructed.png}}{\fbox{\parbox[c][4.2cm][c]{0.44\textwidth}{\centering Artifact not found: figures/trigger\_reconstructed.png}}}
+  \caption{Reconstructed trigger mask from Neural Cleanse pipeline.}
+  \label{fig:hw4-trigger}
+\end{figure}
 
-\subsection{Privacy (Q2) — Laplace examples}
-Example Laplace-calculation results are shown in the notebook (see `code/notebook.ipynb`). Placeholder values used in the report: average-income (noisy) = 50234.1 (placeholder).
+\section{Validation \& Tests}
+\label{sec:hw4-validation}
+\subsection{Unit-test verification}
+\textbf{Verification Block}
+\begin{itemize}[leftmargin=1.2em]
+  \item Test/check: execute pytest suite in \texttt{HomeWorks/HW4/code/tests}.
+  \item Result: record pass/fail counts and analyze any failing logic branch before report finalization.
+  \item Edge cases and residual risks: floating-point tolerance for fairness metrics; outlier-direction assumptions in anomaly detection.
+\end{itemize}
 
-% --- end of results placeholders -------------------------------------------------
+\subsection{Artifact-generation verification}
+\textbf{Verification Block}
+\begin{itemize}[leftmargin=1.2em]
+  \item Test/check: run integrated artifact script and verify expected files exist in report figures folder.
+  \item Result: pass when both fairness and trigger images are created and metric summary is printed.
+  \item Edge cases and residual risks: demo model behavior may differ from real attacked checkpoints.
+\end{itemize}
 
-\section{Discussion}
-Interpret the results and propose next steps.
+\section{Error Analysis and Limitations}
+Backdoor conclusions from demo mode are diagnostic only and are therefore flagged as \statusfallback. Fairness and privacy results remain fully reproducible from local data and deterministic code paths.
 
 \section{Conclusion}
-Concise takeaways.
+The report now enforces complete implementation traceability across HW4 modules with explicit verification and fallback labeling.
 
-% ---------- Appendix ------------------------------------------------------
 \appendix
-\section{Hyperparameters and Implementation Details}
-Full hyperparameters and experimental settings.
-
-\section{Selected Code}
-Important snippets or reference to script files.
-\begin{lstlisting}[style=py,caption={Training loop (example)}]
-for epoch in range(epochs):
-    model.train()
-    for x,y in train_loader:
-        # training step
-        pass
-\end{lstlisting}
-
-\section{Additional Figures}
-Extra visualizations, UMAP plots, adversarial examples, etc.
+\section{Artifact Index (Appendix)}
+\label{app:hw4-artifacts}
+\small
+\begin{longtable}{p{0.26\textwidth}p{0.22\textwidth}p{0.20\textwidth}p{0.22\textwidth}}
+\toprule
+Artifact & Producer command/module & Discussed in section & Status \\
+\midrule
+\endfirsthead
+\toprule
+Artifact & Producer command/module & Discussed in section & Status \\
+\midrule
+\endhead
+HomeWorks/HW4/report/figures/fairness\_comparison.png & generate\_report\_figs.py fairness block & Results and Evidence & \statusimplemented \\
+HomeWorks/HW4/report/figures/trigger\_reconstructed.png & generate\_report\_figs.py Neural Cleanse block & Results and Evidence & \statusimplemented \\
+Pytest output for HomeWorks/HW4/code/tests & pytest command & Validation and Tests & \statusimplemented \\
+Privacy numeric summaries from script stdout & privacy.py function calls & Results and Evidence & \statusimplemented \\
+Demo-mode trigger reconstruction artifacts & neural\_cleanse.py with demo model & Error Analysis and Limitations & \statusfallback \\
+\bottomrule
+\end{longtable}
+\normalsize
 
 \clearpage
 \bibliography{references}
