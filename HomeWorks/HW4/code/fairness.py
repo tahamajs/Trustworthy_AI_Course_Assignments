@@ -41,7 +41,13 @@ def disparate_impact(
     return float(p_prot / p_priv)
 
 
-def zemel_proxy_fairness(X: np.ndarray, y_pred: np.ndarray, sensitive: np.ndarray, n_clusters: int = 5) -> float:
+def zemel_proxy_fairness(
+    X: np.ndarray,
+    y_pred: np.ndarray,
+    sensitive: np.ndarray,
+    n_clusters: int = 5,
+    max_samples: int = 4000,
+) -> float:
     """A clustering-based proxy for the Zemel fairness objective.
 
     Steps:
@@ -51,8 +57,14 @@ def zemel_proxy_fairness(X: np.ndarray, y_pred: np.ndarray, sensitive: np.ndarra
     """
     if X.shape[0] == 0:
         return 0.0
+    if X.shape[0] > max_samples:
+        rng = np.random.RandomState(0)
+        keep = rng.choice(X.shape[0], size=max_samples, replace=False)
+        X = X[keep]
+        y_pred = y_pred[keep]
+        sensitive = sensitive[keep]
     k = min(n_clusters, X.shape[0])
-    km = KMeans(n_clusters=k, random_state=0, n_init=10)
+    km = KMeans(n_clusters=k, random_state=0, n_init=5)
     labels = km.fit_predict(X)
     diffs = []
     for c in np.unique(labels):

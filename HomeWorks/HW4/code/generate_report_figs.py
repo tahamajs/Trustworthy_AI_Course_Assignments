@@ -7,11 +7,14 @@ import re
 from pathlib import Path
 from typing import Dict, Tuple
 
-import matplotlib.pyplot as plt
+import matplotlib
 import numpy as np
 import torch
 from sklearn.model_selection import train_test_split
 from torch.utils.data import DataLoader
+
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
 
 from fairness import (
     apply_group_thresholds,
