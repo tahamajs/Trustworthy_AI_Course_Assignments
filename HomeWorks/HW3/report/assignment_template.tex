@@ -1,295 +1,129 @@
-\documentclass[11pt,a4paper]{article}
-
-\usepackage[utf8]{inputenc}
-\usepackage[T1]{fontenc}
-\usepackage{mathpazo}
-\usepackage{microtype}
-\usepackage[a4paper,margin=1in]{geometry}
-\setlength{\headheight}{15pt}
+\documentclass[10pt,journal]{IEEEtran}
 
 \usepackage{amsmath,amssymb,mathtools}
-\usepackage{siunitx}
 \usepackage{graphicx}
-\usepackage{caption}
-\usepackage{subcaption}
 \usepackage{booktabs}
-\usepackage{float}
-\usepackage{enumitem}
-\usepackage{xcolor}
-\usepackage{tabularx}
-\usepackage{longtable}
-\usepackage{array}
 \usepackage{multirow}
+\usepackage{siunitx}
+\usepackage{array}
+\usepackage{url}
+\usepackage{cite}
 \usepackage{listings}
+\usepackage{xcolor}
+\usepackage{float}
 
-\definecolor{accent}{HTML}{2A9D8F}
-\definecolor{heading}{HTML}{264653}
-\definecolor{codebg}{HTML}{F7F7F7}
-
-\usepackage{titlesec}
-\titleformat{\section}{\Large\bfseries\color{heading}}{\thesection}{1em}{}
-\titleformat{\subsection}{\bfseries\color{heading}}{\thesubsection}{0.5em}{}
-\titlespacing*{\section}{0pt}{12pt}{6pt}
-
+\definecolor{codebg}{RGB}{246,246,246}
 \lstdefinestyle{plainstyle}{
-  basicstyle=\ttfamily\small,
+  basicstyle=\ttfamily\footnotesize,
   backgroundcolor=\color{codebg},
   frame=single,
-  framesep=4pt,
-  rulecolor=\color{gray!40},
   breaklines=true,
   showstringspaces=false,
   numbers=left,
-  numberstyle=\tiny\color{gray}
+  numberstyle=\tiny
 }
 \lstset{style=plainstyle}
 
-\usepackage{tcolorbox}
-\tcbset{colback=gray!7, colframe=accent, left=6pt, right=6pt, boxrule=0.8pt}
+\title{Complete Causal Recourse Implementation on Health Data\\
+(IEEE-Style Report for Trusted AI HW3, Question 5)}
 
-\usepackage{fancyhdr}
-\pagestyle{fancy}
-\fancyhf{}
-\renewcommand{\headrulewidth}{0.6pt}
-\renewcommand{\footrulewidth}{0.0pt}
-\fancyhead[L]{\small\textbf{Trusted Artificial Intelligence}}
-\fancyhead[C]{\small Homework 3}
-\fancyhead[R]{\small Taha Majlesi}
-\fancyfoot[C]{\thepage}
-
-\newcommand{\course}{Trusted Artificial Intelligence}
-\newcommand{\instructor}{Dr. Mostafa Tavasolipour}
-\newcommand{\semester}{Spring 2024}
-\newcommand{\assignment}{3}
-\newcommand{\authorname}{Taha Majlesi}
-\newcommand{\studentid}{810101504}
-\newcommand{\affiliation}{Department of Electrical and Computer Engineering, University of Tehran}
-
-\usepackage[hidelinks]{hyperref}
-\usepackage{natbib}
-\bibliographystyle{plainnat}
+\author{Taha~Majlesi,
+        Student~ID~810101504\\
+        Department of Electrical and Computer Engineering, University of Tehran}
 
 \begin{document}
+\maketitle
 
-\begin{titlepage}
-  \centering
-  {\LARGE\bfseries \course{} \par}
-  \vspace{1.2cm}
-  {\Huge\bfseries Homework \assignment{} \par}
-  \vspace{0.6cm}
-  {\large \semester{} \par}
-  \vspace{1.2cm}
-  {\Large\bfseries \authorname{} \par}
-  \vspace{0.2cm}
-  {\small ID: \studentid{} \quad | \quad \affiliation{} \par}
-  \vfill
-  {\large Instructor: \instructor{} \par}
-  {\small Submitted: \today \par}
-\end{titlepage}
+\begin{abstract}
+This report presents a fully completed implementation and analysis of the causal recourse pipeline for Homework~3 Question~5 on the health dataset. The work includes completion of data actionability constraints, classifier training, structural causal model implementation, Jacobian derivation, robust recourse evaluation, and direct comparison between Nearest Counterfactual Explanation and Causal Algorithmic Recourse. The report is written in IEEE format and provides both empirical and theoretical interpretation. We evaluate linear and neural classifiers, report validity--cost tradeoffs across robustness radii, and show that causally informed interventions can reduce required intervention cost under matched conditions. All experiments are reproducible with explicit commands and generated artifacts.
+\end{abstract}
 
-\begin{tcolorbox}
-\textbf{Abstract.}
-This report provides a complete long-form implementation report for the causal recourse part of HW3 (Question 5)
-using the health dataset. The pipeline is fully executable from local code, including: (1) constrained data
-processing and actionability, (2) classifier training for linear and MLP models, (3) completed health SCM and Jacobian,
-(4) recourse evaluation across robustness radii, and (5) automatic export of publication-ready report figures.
+\begin{IEEEkeywords}
+Causal inference, structural causal model, algorithmic recourse, counterfactual explanation, robustness, trustworthy AI.
+\end{IEEEkeywords}
 
-The document includes direct answers to each Q5 sub-question, equations, implementation traceability (file-level),
-reproducibility commands, aggregated quantitative results over multiple seeds, and error analysis. In addition,
-Nearest Counterfactual and Causal Algorithmic Recourse are compared empirically under matched conditions.
-\end{tcolorbox}
+\section{Introduction}
+Algorithmic recourse asks: given an unfavorable model decision, what minimal actionable change should be recommended so the decision flips? In high-stakes settings, recourse quality is not only about decision flip rate but also about intervention realism and cost. If feature dependencies are ignored, recommended actions can be unrealistic or unnecessarily expensive. This is why causal recourse, which explicitly models how interventions propagate through a structural causal model (SCM), is central to trustworthy decision support.
 
-\vspace{6pt}
-\tableofcontents
-\clearpage
+This report focuses on complete implementation and verification of Question~5 in HW3. The practical objective is to classify healthy vs unhealthy individuals and generate efficient interventions that transform unhealthy predictions into healthy ones. Beyond a simple pipeline run, this submission completes missing SCM components, evaluates robustness across uncertainty radii, and explains each generated plot in a dedicated, theory-grounded paragraph.
 
-\section{Scope and Completion Statement}
-The practical deliverable in this repository is the causal recourse implementation located under
-\texttt{code/Q5\_codes}. This report therefore focuses on full completion of Question 5 requirements from the assignment,
-including data constraints, SCM completion, Jacobian completion, and quantitative comparison of recourse methods.
-
-\subsection{What is completed}
-The following deliverables are complete and verified by executable runs:
-\begin{itemize}[leftmargin=1.2em]
-  \item Health data processing constraints for actionable features and feature bounds.
-  \item End-to-end training and evaluation for linear and MLP classifiers.
-  \item Full \texttt{Health\_SCM} implementation with structural equations, inverse mapping, and Jacobian.
-  \item Recourse runs for 10 negatively classified instances under multiple robustness radii.
-  \item Automatic generation of report artifacts (figures and summary CSV tables).
-  \item PDF report build with included results and reproducibility commands.
-\end{itemize}
-
-\subsection{Key modified files}
-\begin{itemize}[leftmargin=1.2em]
-  \item \texttt{code/Q5\_codes/scm.py}
-  \item \texttt{code/Q5\_codes/evaluate\_recourse.py}
-  \item \texttt{code/Q5\_codes/utils.py}
-  \item \texttt{code/Q5\_codes/plot\_report\_figures.py}
-  \item \texttt{code/Q5\_codes/generate\_report\_artifacts.py}
-  \item \texttt{report/figures/*.png}
-\end{itemize}
-
-\section{Problem Setup (Question 5)}
-Question 5 asks for two recourse styles on the health dataset:
-\begin{enumerate}
-  \item Nearest Counterfactual Explanation (SCM disabled / independently manipulable assumption).
-  \item Causal Algorithmic Recourse (SCM enabled; intervention effects propagate through causal structure).
-\end{enumerate}
-This setup follows standard recourse formulations in actionable and causal recourse literature
-\citep{ustun2019actionable,karimi2021algorithmic,karimi2020algorithmic}.
-
-The classifier input variables are:
-\begin{itemize}[leftmargin=1.2em]
-  \item \texttt{age}
-  \item \texttt{insulin}
-  \item \texttt{blood\_glucose}
-  \item \texttt{blood\_pressure}
-\end{itemize}
-
-The target is \texttt{category} with label 0 = unhealthy, 1 = healthy.
-
-\section{Methodology and Equations}
-\subsection{Classifier objective}
-For a classifier score function $g_\theta(x)$ and threshold $\tau$, prediction is:
+\section{Theoretical Background}
+\subsection{Counterfactual and Causal Recourse}
+For a binary classifier with score function $g_\theta(x)$ and threshold $\tau$, prediction is
 \begin{equation}
-\hat{y} = \mathbb{I}[\sigma(g_\theta(x)) \ge \tau].
+\hat{y}=\mathbb{I}[\sigma(g_\theta(x)) \ge \tau].
 \end{equation}
+Nearest counterfactual recourse typically solves a constrained optimization that minimizes intervention magnitude while satisfying the decision constraint. In the linear case, this corresponds to an L1-minimization under feasibility constraints \cite{ustun2019actionable}. Causal recourse extends this by evaluating intervention effects through an SCM, using abduction-action-prediction logic \cite{pearl2009causality,karimi2021algorithmic}.
 
-Threshold $\tau$ is calibrated using max-MCC on the training split.
-
-\subsection{Nearest counterfactual recourse}
-For linear models, the recourse action $a$ solves:
+\subsection{Robust Linear Recourse Geometry}
+Under uncertainty radius $\epsilon$, robust linear recourse shifts the effective decision boundary by a dual-norm margin term. If $w$ is the classifier normal and $J$ is the intervention Jacobian under SCM, robust feasibility depends on
 \begin{equation}
-\min_a \; \|c \odot a\|_1
-\quad\text{s.t.}\quad
-\langle w, x + a \rangle \ge b,
+\langle w, x+J a \rangle \ge b + \|J^\top w\|_2\,\epsilon.
 \end{equation}
-plus actionability and bound constraints. In this mode, SCM is disabled and each feature can be modified only through
-its own action constraint.
+As $\epsilon$ increases, feasible interventions generally require larger norm. Therefore, monotonic recourse cost increase with $\epsilon$ is theoretically expected for fixed actionability and model class.
 
-\subsection{Causal algorithmic recourse}
-With SCM enabled, interventions on actionable variables propagate via structural equations. For a factual instance
-$x^{(n)}$ and intervention $\delta$, counterfactual generation uses:
-\begin{equation}
-X_{\mathrm{cf}} = f\bigl(U(X), \delta\bigr),
-\end{equation}
-where $U(X)$ is obtained by abduction via inverse structural equations.
-The abduction-action-prediction decomposition follows structural causal modeling principles
-\citep{pearl2009causality}.
+\subsection{Differentiable Recourse for Nonlinear Models}
+For MLP classifiers, recourse is obtained via iterative optimization over intervention variables. The objective combines classification loss toward favorable outcome and intervention sparsity/magnitude penalties. Because this is non-convex, validity and cost can be sensitive to initialization, learning rate, and regularization schedule \cite{mothilal2020explaining,karimi2020algorithmic}. This theoretical sensitivity motivates reporting both validity and cost, not just one metric.
 
-\subsection{Health SCM used in this implementation}
-Feature order is $[\text{age},\text{insulin},\text{blood\_glucose},\text{blood\_pressure}]$.
-The completed linear structural equations are:
+\section{Implementation Completion for Q5}
+\subsection{Q5.1 Data Processing and Actionability}
+In \texttt{code/Q5\_codes/data\_utils.py}, health preprocessing is configured so only \texttt{insulin} and \texttt{blood\_glucose} are actionable. Feature bounds are enforced using observed dataset limits, preventing interventions from leaving realistic ranges. Non-actionable features \texttt{age} and \texttt{blood\_pressure} remain fixed under direct intervention.
+
+\subsection{Q5.2 Running on 10 Unhealthy Individuals}
+The evaluation pipeline is executed with $N_{\text{explain}}=10$, sampling negatively classified test instances and computing valid recourse/cost arrays. For linear ERM with SCM enabled, seed-0 cost at $\epsilon=0$ is approximately 0.909, and the multi-seed mean is 0.889.
+
+\subsection{Q5.3 and Q5.4 Completing \texttt{Health\_SCM} and Jacobian}
+The \texttt{Health\_SCM} class was completed with structural equations $f$, inverse equations \texttt{inv\_f}, actionability mask, and linear coefficients:
 \begin{align}
 X_1 &= U_1, \\
-X_2 &= w_{21} X_1 + U_2, \quad w_{21}=\frac{1}{18}, \\
-X_3 &= w_{31} X_1 + w_{32} X_2 + U_3, \quad w_{31}=2.0,\; w_{32}=1.05, \\
-X_4 &= w_{42} X_2 + w_{43} X_3 + U_4, \quad w_{42}=0.4,\; w_{43}=0.3.
+X_2 &= \tfrac{1}{18}X_1 + U_2, \\
+X_3 &= 2.0 X_1 + 1.05 X_2 + U_3, \\
+X_4 &= 0.4 X_2 + 0.3 X_3 + U_4.
 \end{align}
+The corresponding Jacobian is implemented in \texttt{get\_Jacobian} and used by linear causal recourse.
 
-The corresponding Jacobian is:
-\begin{equation}
-J =
-\begin{bmatrix}
-1 & 0 & 0 & 0 \\
-w_{21} & 1 & 0 & 0 \\
-w_{31} & w_{32} & 1 & 0 \\
-0 & w_{42} & w_{43} & 1
-\end{bmatrix}.
-\end{equation}
-
-\section{Direct Answers to Question 5 Sub-Questions}
-\subsection{Q5.1: Completing \texttt{process\_health\_data}}
-Implemented behavior:
-\begin{itemize}[leftmargin=1.2em]
-  \item Actionable features: only \texttt{insulin} and \texttt{blood\_glucose}.
-  \item Non-actionable features: \texttt{age}, \texttt{blood\_pressure}.
-  \item Feature bounds: interventions are clamped to observed dataset min/max for bounded variables.
-\end{itemize}
-This is encoded in preprocessing constraints consumed by recourse algorithms.
-
-\subsection{Q5.2: Running for 10 unhealthy individuals and reporting cost}
-Using $N_{\text{explain}}=10$ on health data, the linear ERM model with SCM enabled reports:
-\begin{itemize}[leftmargin=1.2em]
-  \item Seed 0, $\epsilon=0$: valid recourse rate = 1.00, mean valid cost $\approx 0.909$.
-\end{itemize}
-Across seeds 0,1,2 (aggregated):
-\begin{itemize}[leftmargin=1.2em]
-  \item Mean valid cost (lin-ERM, $\epsilon=0$): \textbf{0.889}.
-\end{itemize}
-Interpretation: this cost is the mean magnitude of actionable intervention (L1 norm) needed to flip prediction
-from unhealthy to healthy while respecting actionability and feasibility constraints.
-
-\subsection{Q5.3: Completing \texttt{Health\_SCM}}
-The class was completed with:
-\begin{itemize}[leftmargin=1.2em]
-  \item Structural equations \texttt{self.f}.
-  \item Inverse equations \texttt{self.inv\_f} for abduction.
-  \item Actionability definition: \texttt{[1,2]} (insulin and blood glucose).
-  \item Hard intervention semantics for actionable variables.
-\end{itemize}
-This completion is necessary for causal (not merely nearest) recourse and for differentiable recourse on MLP models.
-
-\subsection{Q5.4: Completing \texttt{get\_Jacobian}}
-The Jacobian was completed exactly from the assumed linear SCM coefficients above and used by linear recourse.
-
-\subsection{Q5.5: Rerun with SCM enabled and report cost}
-With SCM enabled, linear ERM recourse remains fully valid (rate 1.00 for tested runs).
-For seed 0 and $N_{\text{explain}}=10$:
-\begin{itemize}[leftmargin=1.2em]
-  \item Causal recourse mean valid cost: \textbf{0.625} (matched comparison setup in Section~\ref{sec:nvscausal}).
-\end{itemize}
-Cost here represents intervention effort after propagating causal effects through the structural equations.
-
-\subsection{Q5.6: Compare Nearest Counterfactual and Causal Recourse}
-\label{sec:nvscausal}
-Using the same linear ERM model (seed 0) and same sampled unhealthy individuals:
-\begin{itemize}[leftmargin=1.2em]
-  \item Nearest Counterfactual (SCM off): valid rate = 1.00, mean cost = 0.779.
-  \item Causal Recourse (SCM on): valid rate = 1.00, mean cost = 0.625.
-\end{itemize}
-In this dataset/model configuration, causal propagation reduces average intervention cost while preserving full validity.
+\subsection{Q5.5 and Q5.6 SCM-On Rerun and Method Comparison}
+With SCM enabled, the pipeline computes causal recourse recommendations and saves validity/cost arrays. Matched comparison between SCM-off (Nearest Counterfactual) and SCM-on (Causal Recourse) is generated by \texttt{generate\_report\_artifacts.py}, yielding a direct numerical comparison under identical seed/model/sample settings.
 
 \section{Experimental Protocol}
-\subsection{Environment}
-\begin{itemize}[leftmargin=1.2em]
-  \item Python environment activated with:
-  \verb|source /Users/tahamajs/Documents/uni/venv/bin/activate|
-  \item Main code directory: \texttt{HomeWorks/HW3/code/Q5\_codes}
-  \item Report directory: \texttt{HomeWorks/HW3/report}
+\subsection{Environment and Reproducibility}
+All runs use:
+\begin{itemize}
+  \item Python environment: \texttt{/Users/tahamajs/Documents/uni/venv/bin/activate}
+  \item Code root: \texttt{HomeWorks/HW3/code/Q5\_codes}
+  \item Report root: \texttt{HomeWorks/HW3/report}
 \end{itemize}
 
-\subsection{Models and settings}
+\subsection{Evaluated Configurations}
 \begin{table}[H]
 \centering
-\caption{Evaluated model/trainer settings on health dataset}
-\label{tab:settings}
-\begin{tabular}{llll}
+\caption{Model and recourse settings used in this report}
+\begin{tabular}{lccc}
 \toprule
-Model & Trainer & Seeds & Epsilon values \\
+Configuration & Seeds & $\epsilon$ set & $N_{\text{explain}}$ \\
 \midrule
-Linear & ERM & 0,1,2 & 0.0, 0.1, 0.2 \\
-Linear & AF  & 0,1,2 & 0.0, 0.1, 0.2 \\
-MLP    & ERM & 0,1   & 0.0, 0.1, 0.2 \\
+lin-ERM & 0,1,2 & \{0.0, 0.1, 0.2\} & 10 \\
+lin-AF  & 0,1,2 & \{0.0, 0.1, 0.2\} & 10 \\
+mlp-ERM & 0,1   & \{0.0, 0.1, 0.2\} & 10 \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-\subsection{Generated artifacts}
-The script \texttt{generate\_report\_artifacts.py} writes:
-\begin{itemize}[leftmargin=1.2em]
-  \item \texttt{code/Q5\_codes/results/health\_report\_summary.csv}
-  \item \texttt{code/Q5\_codes/results/health\_report\_aggregate.csv}
-  \item \texttt{code/Q5\_codes/results/nearest\_vs\_causal\_lin\_seed0.csv}
-  \item Figures under \texttt{report/figures/}
+\subsection{Generated Analysis Artifacts}
+The script \texttt{generate\_report\_artifacts.py} produces:
+\begin{itemize}
+  \item \texttt{results/health\_report\_summary.csv}
+  \item \texttt{results/health\_report\_aggregate.csv}
+  \item \texttt{results/nearest\_vs\_causal\_lin\_seed0.csv}
+  \item Plot files under \texttt{report/figures/}
 \end{itemize}
 
-\section{Quantitative Results}
-\subsection{Classifier quality}
+\section{Results and Complete Plot Explanations}
+\subsection{Classifier Performance Summary}
 \begin{table}[H]
 \centering
-\caption{Classifier metrics (test split, mean $\pm$ std across seeds)}
-\label{tab:clfmetrics}
+\caption{Classifier quality (mean $\pm$ std across available seeds)}
+\label{tab:clf}
 \begin{tabular}{lcc}
 \toprule
 Configuration & Accuracy & MCC \\
@@ -302,17 +136,20 @@ mlp-ERM & $1.000 \pm 0.000$ & $1.000 \pm 0.000$ \\
 \end{table}
 
 \begin{figure}[H]
-  \centering
-  \includegraphics[width=0.72\textwidth]{figures/classifier_metrics.png}
-  \caption{Accuracy and MCC by configuration (error bars from available seeds).}
-  \label{fig:clfmetrics}
+\centering
+\includegraphics[width=0.95\columnwidth]{figures/classifier_metrics.png}
+\caption{Classifier metrics by model/trainer.}
+\label{fig:clfmetrics}
 \end{figure}
 
-\subsection{Recourse validity and cost across robustness radii}
+\textit{Complete interpretation of Fig.~\ref{fig:clfmetrics}:}
+This plot shows that linear ERM and linear AF are nearly identical in predictive discrimination (accuracy and MCC around 0.903 and 0.803), while the MLP reaches perfect scores on the tested split. Theoretically, this indicates that AF masking does not hurt linear predictive utility for this dataset because non-actionable features do not provide dominant unique information beyond actionable correlates in the chosen split. The MLP result suggests high function capacity relative to data complexity; however, in recourse theory high predictive accuracy does not imply low recourse burden, since the optimization landscape for intervention may remain sharp or constraint-limited even with near-perfect classification.
+
+\subsection{Validity--Cost Tradeoff Across Robustness Radius}
 \begin{table}[H]
 \centering
-\caption{Recourse outcomes (mean over seeds)}
-\label{tab:recourseagg}
+\caption{Recourse outcomes (mean across seeds)}
+\label{tab:recourse}
 \begin{tabular}{lccc}
 \toprule
 Configuration & $\epsilon$ & Valid rate & Mean valid cost \\
@@ -331,122 +168,103 @@ mlp-ERM & 0.2 & 0.90 & 0.885 \\
 \end{table}
 
 \begin{figure}[H]
-  \centering
-  \includegraphics[width=0.72\textwidth]{figures/valid_rate_vs_epsilon.png}
-  \caption{Valid recourse rate as robustness radius increases.}
-  \label{fig:validrate}
+\centering
+\includegraphics[width=0.95\columnwidth]{figures/valid_rate_vs_epsilon.png}
+\caption{Valid recourse rate vs robustness radius $\epsilon$.}
+\label{fig:validrate}
 \end{figure}
+
+\textit{Complete interpretation of Fig.~\ref{fig:validrate}:}
+The figure indicates that both linear settings preserve 100\% validity across all tested robustness radii, while MLP validity remains below 1.0 and varies with $\epsilon$. The linear stability is theoretically expected because robust linear recourse solves a convex feasibility problem with explicit Jacobian-adjusted boundary shift; as long as feasible action bounds remain wide enough, validity can stay saturated. In contrast, nonlinear recourse uses gradient optimization in a non-convex objective with finite iterations, so the algorithm may fail to find valid interventions for some points even when valid solutions exist, which explains sub-unity validity for MLP despite strong predictive accuracy.
 
 \begin{figure}[H]
-  \centering
-  \includegraphics[width=0.72\textwidth]{figures/valid_cost_vs_epsilon.png}
-  \caption{Mean cost of valid recourse vs robustness radius.}
-  \label{fig:validcost}
+\centering
+\includegraphics[width=0.95\columnwidth]{figures/valid_cost_vs_epsilon.png}
+\caption{Mean valid recourse cost vs robustness radius $\epsilon$.}
+\label{fig:validcost}
 \end{figure}
 
-\subsection{Instance-level recourse evidence}
+\textit{Complete interpretation of Fig.~\ref{fig:validcost}:}
+For both linear models, intervention cost increases monotonically with $\epsilon$, matching robust recourse theory where larger uncertainty enlarges the required safety margin from the decision boundary. AF consistently has lower cost than ERM, indicating that constraining classifier dependence to actionable dimensions can align decision geometry with feasible intervention directions and reduce required action magnitude. MLP costs are higher and less monotonic because the reported quantity is conditional on successful recourse instances; when validity changes with $\epsilon$, the set of included points also changes, so conditional mean cost can move non-monotonically even if underlying optimization becomes harder.
+
+\subsection{Instance-Level Cost Distribution}
 \begin{figure}[H]
-  \centering
-  \includegraphics[width=0.72\textwidth]{figures/recourse_costs.png}
-  \caption{Per-instance recourse costs for explained unhealthy individuals (example run).}
-  \label{fig:instancecost}
+\centering
+\includegraphics[width=0.95\columnwidth]{figures/recourse_costs.png}
+\caption{Per-instance recourse costs for explained unhealthy individuals.}
+\label{fig:instancecost}
 \end{figure}
 
-\subsection{Nearest vs causal comparison}
+\textit{Complete interpretation of Fig.~\ref{fig:instancecost}:}
+This plot visualizes heterogeneity of intervention effort across individuals: some instances require very small perturbations while others require significantly larger actions. Theoretically, this heterogeneity arises from local geometry of the classifier boundary and individual position relative to actionable feasibility constraints. Points near the boundary and aligned with high-gain actionable directions need small interventions; points deeper in the unfavorable region, or constrained by directional/box bounds, require larger L1 actions. Therefore, average recourse cost should always be interpreted together with distributional spread, not as a single universal burden.
+
+\subsection{Nearest Counterfactual vs Causal Recourse}
 \begin{figure}[H]
-  \centering
-  \includegraphics[width=0.75\textwidth]{figures/nearest_vs_causal.png}
-  \caption{Direct comparison of Nearest Counterfactual and Causal Recourse (lin-ERM, seed 0).}
-  \label{fig:nvscausal}
+\centering
+\includegraphics[width=0.95\columnwidth]{figures/nearest_vs_causal.png}
+\caption{Matched comparison: Nearest Counterfactual (SCM off) vs Causal Recourse (SCM on).}
+\label{fig:nvscausal}
 \end{figure}
 
-\section{Discussion}
-\subsection{Main findings}
-\begin{itemize}[leftmargin=1.2em]
-  \item Linear models (ERM and AF) achieved stable, high validity for all tested robustness radii.
-  \item AF regularization reduced intervention costs relative to ERM at every tested $\epsilon$.
-  \item Causal recourse improved intervention efficiency compared with nearest counterfactual under the matched setup.
-\end{itemize}
+\textit{Complete interpretation of Fig.~\ref{fig:nvscausal}:}
+Under matched seed/model/samples, both methods achieve full validity, but causal recourse yields lower mean intervention cost (0.625 vs 0.779). Theoretically, SCM-aware recourse can exploit downstream causal amplification: an intervention on one actionable parent can beneficially move child variables without paying direct action cost on all descendants. Nearest counterfactual methods, by ignoring structural propagation, often optimize in a feature space geometry that treats dependent variables as independent coordinates, which can overestimate required action. This result is consistent with causal recourse arguments that structural knowledge can improve intervention efficiency while retaining decision-flip reliability.
 
-\subsection{Why cost increases with $\epsilon$ in linear models}
-For robust linear recourse, increasing $\epsilon$ effectively tightens the decision constraint by accounting for uncertainty
-around the decision boundary. As expected, higher robustness requirements demand larger interventions, which is reflected
-in monotonic cost growth for lin-ERM and lin-AF.
+\section{Discussion and Theoretical Implications}
+First, robust recourse is not a free lunch: increasing uncertainty tolerance raises intervention cost, especially in linear models where this effect is analytically transparent. Second, classifier architecture alone does not determine recourse practicality. Even with perfect classification, nonlinear recourse can remain optimization-sensitive under causal constraints. Third, actionability-aware training (AF) can reduce practical intervention burden without compromising classifier quality, suggesting a principled route to train recourse-friendly models.
 
-\subsection{On perfect MLP classifier scores}
-The MLP reached perfect test metrics for available seeds in this split. This can happen due dataset size/split structure
-and model capacity. Recourse validity is still below 1.0 for MLP runs, indicating that prediction quality alone does not
-guarantee easy recourse, consistent with prior observations in counterfactual explanation studies
-\citep{mothilal2020explaining}.
+From a causal perspective, this homework confirms a central principle: interventions should be evaluated in a structural model, not only in observational feature space. When feature dependencies are strong, SCM-enabled recommendations can be both more realistic and cheaper.
 
-\section{Error Analysis and Threats to Validity}
-\subsection{Modeling assumptions}
-The health SCM is linear and additive-noise. Real physiological mechanisms are likely nonlinear and partially latent.
-Therefore, absolute recourse costs should be interpreted as model-conditional rather than causal ground truth.
+\section{Extended Theoretical Analysis}
+\subsection{Linear Recourse Cost Lower Bound}
+For a linear classifier with robust margin shift, any valid intervention must satisfy
+\begin{equation}
+\langle w, J a \rangle \ge \gamma(\epsilon) \triangleq b + \|J^\top w\|_2\epsilon - \langle w,x\rangle.
+\end{equation}
+By H\"older duality, a coarse lower bound on L1 action is
+\begin{equation}
+\|a\|_1 \ge \frac{\gamma(\epsilon)}{\|J^\top w\|_\infty},
+\end{equation}
+when $\gamma(\epsilon)>0$. This clarifies why increasing $\epsilon$ systematically increases minimal feasible action in linear settings and why slope depends on Jacobian-weight alignment.
 
-\subsection{Finite-sample and split sensitivity}
-Results are estimated on finite seeds and fixed train/test split routine. Additional seeds and stratified splits can
-change quantitative values, especially for MLP recourse.
+\subsection{Why AF Can Reduce Cost Without Hurting Accuracy}
+AF constrains model dependence to actionable coordinates. In geometric terms, decision normals are pushed toward directions where interventions are allowed, increasing effective directional derivative of decision score per unit actionable change. If predictive information in non-actionable variables is partially redundant with actionable ones, this rotation can reduce recourse distance while preserving classification quality, which matches the empirical parity of accuracy/MCC and lower AF costs.
 
-\subsection{Optimization effects}
-Differentiable recourse for MLP relies on iterative optimization and can be sensitive to hyperparameters. This is one
-reason to report both validity and cost instead of only one metric.
+\subsection{Causal Amplification Mechanism}
+Let an intervention apply on variable set $S$. Under SCM, total feature change is not only direct action but also propagated downstream:
+\begin{equation}
+\Delta x_{\text{total}} = J_S a_S.
+\end{equation}
+When downstream links are favorable for class flip, one unit intervention can produce more than one unit aggregate effect on classifier score. Nearest counterfactual methods (without SCM) ignore this propagation term and may therefore over-spend intervention magnitude.
 
-\section{Reproducibility Checklist}
-\subsection{Core commands}
-\begin{lstlisting}[caption={Primary commands used for completion and reporting}]
+\subsection{Validity-Cost Frontier Interpretation}
+Recourse quality can be viewed as a bi-objective frontier: maximize validity and minimize intervention burden. Linear models in this report sit near a high-validity region with predictable cost growth as robustness tightens. MLP settings display frontier instability due optimization non-convexity; therefore, robust deployment should report confidence intervals, not single-point estimates, and include optimization diagnostics.
+
+\section{Conclusion}
+This report completes HW3 Question~5 end-to-end in IEEE format with explicit theoretical and empirical analysis. The software pipeline is fully runnable, missing SCM components are completed, robust evaluations are produced, and each plot is interpreted in a dedicated theory-grounded paragraph. Empirically, linear recourse is highly stable on this dataset, AF reduces intervention cost, and causal recourse outperforms nearest counterfactual in matched cost comparison while maintaining full validity.
+
+\appendices
+\section{Reproducibility Commands}
+\begin{lstlisting}[caption={Exact commands used for the final report build}]
 cd /Users/tahamajs/Documents/uni/truthlyAI/HomeWorks/HW3/code/Q5_codes
 source /Users/tahamajs/Documents/uni/venv/bin/activate
 
-# End-to-end benchmark
 python main.py --seed 0
-
-# Build additional report artifacts and figures
 python generate_report_artifacts.py
 
-# Build PDF report
 cd /Users/tahamajs/Documents/uni/truthlyAI/HomeWorks/HW3/report
 make pdf
 \end{lstlisting}
 
-\subsection{Determinism}
-All reported experiments used explicit seed control in training/evaluation scripts. Report aggregates state seed count
-for each configuration.
+\section{Auto-Generated Aggregate CSV}
+\lstinputlisting[caption={Health report aggregate CSV}]{../code/Q5_codes/results/health_report_aggregate.csv}
 
-\section{Conclusion}
-This submission completes the causal recourse implementation pipeline for HW3 Question 5 in a fully runnable form.
-All required software components (constraints, SCM, Jacobian, recourse evaluation, and figure export) are implemented,
-validated, and documented with direct evidence. The empirical comparison shows that causal recourse can preserve validity
-while reducing intervention cost relative to nearest counterfactual recommendations in the tested setting.
+\section{Auto-Generated Per-Run CSV}
+\lstinputlisting[caption={Health report per-run summary CSV}]{../code/Q5_codes/results/health_report_summary.csv}
 
-\appendix
-\section{Implementation Traceability Matrix}
-\begin{longtable}{p{0.16\textwidth}p{0.22\textwidth}p{0.22\textwidth}p{0.32\textwidth}}
-\toprule
-Requirement & File & Function/Class & Evidence \\
-\midrule
-\endfirsthead
-\toprule
-Requirement & File & Function/Class & Evidence \\
-\midrule
-\endhead
-Q5.1 constraints & \texttt{code/Q5\_codes/data\_utils.py} & \texttt{process\_health\_data} & Actionable set and feature limits consumed by recourse \\
-Q5.2 run on 10 unhealthy & \texttt{code/Q5\_codes/evaluate\_recourse.py} & \texttt{eval\_recourse} & Saved \texttt{\_valid.npy} and \texttt{\_cost.npy} files \\
-Q5.3 SCM completion & \texttt{code/Q5\_codes/scm.py} & \texttt{Health\_SCM} & Structural and inverse equations added \\
-Q5.4 Jacobian completion & \texttt{code/Q5\_codes/scm.py} & \texttt{get\_Jacobian} & Closed-form Jacobian matrix used by linear recourse \\
-Q5.5 SCM-enabled rerun & \texttt{code/Q5\_codes/utils.py} & \texttt{get\_scm} & Health SCM loaded by evaluation pipeline \\
-Q5.6 method comparison & \texttt{code/Q5\_codes/generate\_report\_artifacts.py} & \texttt{nearest\_vs\_causal\_lin} & CSV and figure \texttt{nearest\_vs\_causal.png} \\
-Figure export & \texttt{code/Q5\_codes/plot\_report\_figures.py} & \texttt{export\_report\_plots} & \texttt{recourse\_costs.png}, summary plots \\
-\bottomrule
-\end{longtable}
+\section*{Acknowledgment}
+This submission was prepared for Trusted Artificial Intelligence coursework under Dr. Mostafa Tavasolipour.
 
-\section{Aggregated CSV Evidence}
-\subsection{Aggregate metrics table (auto-generated)}
-\lstinputlisting[caption={\texttt{health\_report\_aggregate.csv}}]{../code/Q5_codes/results/health_report_aggregate.csv}
-
-\subsection{Nearest-vs-causal comparison table (auto-generated)}
-\lstinputlisting[caption={\texttt{nearest\_vs\_causal\_lin\_seed0.csv}}]{../code/Q5_codes/results/nearest_vs_causal_lin_seed0.csv}
-
-\clearpage
+\bibliographystyle{IEEEtran}
 \bibliography{references}
+
 \end{document}
