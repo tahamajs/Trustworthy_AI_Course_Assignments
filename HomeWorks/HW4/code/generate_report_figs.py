@@ -5,7 +5,7 @@ import copy
 import json
 import re
 from pathlib import Path
-from typing import Dict, Tuple
+from typing import Dict, List, Tuple
 
 import matplotlib
 import numpy as np
@@ -37,7 +37,7 @@ from neural_cleanse import (
     resolve_checkpoint_path,
     unlearn_by_retraining,
 )
-from privacy import counting_query_results, income_query_results
+from privacy import counting_query_results, income_query_results, laplace_cdf_threshold
 
 
 def parse_args() -> argparse.Namespace:
@@ -107,6 +107,35 @@ def infer_expected_attacked_label(checkpoint_path: str) -> int | None:
     return None
 
 
+def _collect_predictions(
+    model: torch.nn.Module,
+    dataloader: DataLoader,
+    device: str = "cpu",
+    trigger_fn=None,
+) -> Tuple[np.ndarray, np.ndarray]:
+    model.eval()
+    y_true: List[np.ndarray] = []
+    y_pred: List[np.ndarray] = []
+    with torch.no_grad():
+        for xb, yb in dataloader:
+            xb = xb.to(device)
+            if trigger_fn is not None:
+                xb = trigger_fn(xb)
+            out = model(xb)
+            pred = out.argmax(dim=1).cpu().numpy()
+            y_pred.append(pred)
+            y_true.append(yb.numpy())
+    return np.concatenate(y_true), np.concatenate(y_pred)
+
+
+def _confusion_matrix(y_true: np.ndarray, y_pred: np.ndarray, n_classes: int = 10) -> np.ndarray:
+    cm = np.zeros((n_classes, n_classes), dtype=int)
+    for t, p in zip(y_true, y_pred):
+        if 0 <= int(t) < n_classes and 0 <= int(p) < n_classes:
+            cm[int(t), int(p)] += 1
+    return cm
+
+
 def run_security(
     args: argparse.Namespace,
     paths: Dict[str, Path],
@@ -147,6 +176,7 @@ def run_security(
     scales = [recon[label].scale for label in range(10)]
     attacked_label = detect_outlier_scales(scales)
     attacked_trigger = recon[attacked_label]
+    expected_label = infer_expected_attacked_label(checkpoint_path)
 
     trigger_mask_path = paths["figures_dir"] / "trigger_reconstructed.png"
     plt.figure(figsize=(3.2, 3.2))
@@ -168,6 +198,31 @@ def run_security(
     plt.tight_layout()
     plt.savefig(trigger_grid_path, dpi=180)
     plt.close(fig)
+
+    scale_profile_path = paths["figures_dir"] / "security_scale_profile.png"
+    fig_scale, ax_scale = plt.subplots(figsize=(8.0, 3.6))
+    labels = np.arange(10)
+    bar_colors = ["#4e79a7"] * 10
+    bar_colors[attacked_label] = "#e15759"
+    if expected_label is not None and expected_label != attacked_label:
+        bar_colors[int(expected_label)] = "#f28e2c"
+    ax_scale.bar(labels, scales, color=bar_colors)
+    ax_scale.set_xticks(labels)
+    ax_scale.set_xlabel("Target label")
+    ax_scale.set_ylabel("Reconstructed trigger scale (L1)")
+    ax_scale.set_title("Neural Cleanse scale profile across labels")
+    if expected_label is not None:
+        ax_scale.legend(
+            handles=[
+                plt.Rectangle((0, 0), 1, 1, color="#e15759", label=f"Detected={attacked_label}"),
+                plt.Rectangle((0, 0), 1, 1, color="#f28e2c", label=f"Expected={expected_label}"),
+            ],
+            loc="upper right",
+            fontsize=8,
+        )
+    plt.tight_layout()
+    plt.savefig(scale_profile_path, dpi=180)
+    plt.close(fig_scale)
 
     def trigger_fn(x: torch.Tensor) -> torch.Tensor:
         return apply_trigger(x, attacked_trigger.mask, attacked_trigger.pattern)
@@ -210,7 +265,34 @@ def run_security(
     plt.savefig(security_bar_path, dpi=180)
     plt.close(fig2)
 
-    expected_label = infer_expected_attacked_label(checkpoint_path)
+    y_true_clean, y_pred_clean_before = _collect_predictions(model, eval_loader, device="cpu")
+    _, y_pred_clean_after = _collect_predictions(model_unlearn, eval_loader, device="cpu")
+    cm_before = _confusion_matrix(y_true_clean, y_pred_clean_before, n_classes=10)
+    cm_after = _confusion_matrix(y_true_clean, y_pred_clean_after, n_classes=10)
+
+    def _norm_rows(cm: np.ndarray) -> np.ndarray:
+        row_sum = cm.sum(axis=1, keepdims=True)
+        row_sum[row_sum == 0] = 1
+        return cm / row_sum
+
+    conf_path = paths["figures_dir"] / "security_confusion_before_after.png"
+    fig_cm, axes_cm = plt.subplots(1, 2, figsize=(9.5, 3.9))
+    im0 = axes_cm[0].imshow(_norm_rows(cm_before), cmap="Blues", vmin=0.0, vmax=1.0)
+    axes_cm[0].set_title("Before unlearning")
+    axes_cm[0].set_xlabel("Predicted")
+    axes_cm[0].set_ylabel("True")
+    im1 = axes_cm[1].imshow(_norm_rows(cm_after), cmap="Blues", vmin=0.0, vmax=1.0)
+    axes_cm[1].set_title("After unlearning")
+    axes_cm[1].set_xlabel("Predicted")
+    for ax in axes_cm:
+        ax.set_xticks(range(10))
+        ax.set_yticks(range(10))
+        ax.tick_params(labelsize=7)
+    cbar = fig_cm.colorbar(im1, ax=axes_cm.ravel().tolist(), fraction=0.046, pad=0.02)
+    cbar.set_label("Row-normalized rate")
+    plt.tight_layout()
+    plt.savefig(conf_path, dpi=180)
+    plt.close(fig_cm)
 
     summary = {
         "checkpoint_path": checkpoint_path,
@@ -220,11 +302,16 @@ def run_security(
         "asr_before": float(asr_before),
         "clean_accuracy_after": float(clean_acc_after),
         "asr_after": float(asr_after),
+        "reconstructed_scales": [float(s) for s in scales],
+        "smallest_scale": float(min(scales)),
+        "largest_scale": float(max(scales)),
     }
     figure_paths = {
         "trigger_reconstructed": str(trigger_mask_path),
         "trigger_all_labels_grid": str(trigger_grid_path),
+        "security_scale_profile": str(scale_profile_path),
         "security_before_after": str(security_bar_path),
+        "security_confusion_before_after": str(conf_path),
     }
     return summary, figure_paths
 
@@ -273,7 +360,36 @@ def run_privacy(args: argparse.Namespace, paths: Dict[str, Path]) -> Tuple[Dict[
     plt.savefig(privacy_plot, dpi=180)
     plt.close(fig)
 
-    return {"income": income, "counting": counting}, {"privacy_scenarios": str(privacy_plot)}
+    tail_curve_path = paths["figures_dir"] / "privacy_tail_curves.png"
+    thresholds = np.arange(480, 521)
+    epsilon = counting["epsilon"]
+    epsilon_i = counting["epsilon_i"]
+    delta_f_unbounded = counting["delta_f_unbounded"]
+    p_base = [laplace_cdf_threshold(float(t), 500.0, 1.0, epsilon) for t in thresholds]
+    p_seq = [laplace_cdf_threshold(float(t), 500.0, 1.0, epsilon_i) for t in thresholds]
+    p_unbounded = [laplace_cdf_threshold(float(t), 500.0, delta_f_unbounded, epsilon_i) for t in thresholds]
+
+    fig_tail, ax_tail = plt.subplots(figsize=(8.2, 3.8))
+    ax_tail.plot(thresholds, p_base, label="Base", linewidth=2)
+    ax_tail.plot(thresholds, p_seq, label="Sequential", linewidth=2)
+    ax_tail.plot(thresholds, p_unbounded, label="Unbounded", linewidth=2)
+    ax_tail.axvline(505, linestyle="--", color="black", linewidth=1, label="Threshold=505")
+    ax_tail.set_xlabel("Threshold t")
+    ax_tail.set_ylabel("P(noisy > t)")
+    ax_tail.set_title("Laplace tail behavior under privacy scenarios")
+    ax_tail.set_ylim(0.0, 1.0)
+    ax_tail.legend(fontsize=8)
+    plt.tight_layout()
+    plt.savefig(tail_curve_path, dpi=180)
+    plt.close(fig_tail)
+
+    return {
+        "income": income,
+        "counting": counting,
+    }, {
+        "privacy_scenarios": str(privacy_plot),
+        "privacy_tail_curves": str(tail_curve_path),
+    }
 
 
 def run_fairness(args: argparse.Namespace, paths: Dict[str, Path]) -> Tuple[Dict[str, Dict[str, float]], Dict[str, str]]:
@@ -306,7 +422,9 @@ def run_fairness(args: argparse.Namespace, paths: Dict[str, Path]) -> Tuple[Dict
     pred_test_base = (proba_test_base >= 0.5).astype(int)
 
     fairness_metrics: Dict[str, Dict[str, float]] = {}
+    model_preds: Dict[str, np.ndarray] = {}
     fairness_metrics["baseline"] = compute_fairness_metrics(Xs_test_base, y_test, pred_test_base, sens_test)
+    model_preds["baseline"] = pred_test_base
 
     # Assignment mitigation (promotion/demotion)
     swap_mask = apply_promotion_demotion(
@@ -320,6 +438,7 @@ def run_fairness(args: argparse.Namespace, paths: Dict[str, Path]) -> Tuple[Dict
     pred_test_swap = (clf_swap.predict_proba(Xs_test_swap)[:, 1] >= 0.5).astype(int)
     fairness_metrics["promotion_demotion"] = compute_fairness_metrics(Xs_test_swap, y_test, pred_test_swap, sens_test)
     fairness_metrics["promotion_demotion"]["swap_count"] = float(swap_mask.sum())
+    model_preds["promotion_demotion"] = pred_test_swap
 
     # Sensitive-feature removal baseline
     X_no_gender = np.delete(X_with_gender, sens_col_idx, axis=1)
@@ -329,12 +448,14 @@ def run_fairness(args: argparse.Namespace, paths: Dict[str, Path]) -> Tuple[Dict
     Xngs_test = clf_no_gender._scaler.transform(Xng_test)
     pred_no_gender = (clf_no_gender.predict_proba(Xngs_test)[:, 1] >= 0.5).astype(int)
     fairness_metrics["no_gender"] = compute_fairness_metrics(Xngs_test, y_test, pred_no_gender, sens_test)
+    model_preds["no_gender"] = pred_no_gender
 
     # Bonus method 1: reweighing
     clf_reweighed = train_reweighed_model(X_train, y_train, sens_train)
     Xs_test_rw = clf_reweighed._scaler.transform(X_test)
     pred_rw = (clf_reweighed.predict_proba(Xs_test_rw)[:, 1] >= 0.5).astype(int)
     fairness_metrics["reweighed"] = compute_fairness_metrics(Xs_test_rw, y_test, pred_rw, sens_test)
+    model_preds["reweighed"] = pred_rw
 
     # Bonus method 2: group thresholds
     thresholds = optimize_group_thresholds(y_true=y_train, y_proba=proba_train_base, sensitive=sens_train)
@@ -342,6 +463,7 @@ def run_fairness(args: argparse.Namespace, paths: Dict[str, Path]) -> Tuple[Dict
     fairness_metrics["group_thresholds"] = compute_fairness_metrics(Xs_test_base, y_test, pred_group_thr, sens_test)
     fairness_metrics["group_thresholds"]["threshold_group_0"] = float(thresholds[0])
     fairness_metrics["group_thresholds"]["threshold_group_1"] = float(thresholds[1])
+    model_preds["group_thresholds"] = pred_group_thr
 
     plot_path = paths["figures_dir"] / "fairness_comparison.png"
     model_order = ["baseline", "promotion_demotion", "no_gender", "reweighed", "group_thresholds"]
@@ -369,7 +491,53 @@ def run_fairness(args: argparse.Namespace, paths: Dict[str, Path]) -> Tuple[Dict
     plt.tight_layout()
     plt.savefig(plot_path, dpi=180)
     plt.close(fig)
-    return fairness_metrics, {"fairness_comparison": str(plot_path)}
+
+    for model_key in model_order:
+        pred = model_preds[model_key]
+        male = pred[sens_test == 1]
+        female = pred[sens_test == 0]
+        fairness_metrics[model_key]["male_positive_rate"] = float(male.mean()) if male.size > 0 else 0.0
+        fairness_metrics[model_key]["female_positive_rate"] = float(female.mean()) if female.size > 0 else 0.0
+        fairness_metrics[model_key]["di_gap_to_one"] = abs(1.0 - fairness_metrics[model_key]["disparate_impact"])
+
+    group_rate_path = paths["figures_dir"] / "fairness_group_rates.png"
+    male_rates = [fairness_metrics[k]["male_positive_rate"] for k in model_order]
+    female_rates = [fairness_metrics[k]["female_positive_rate"] for k in model_order]
+    x = np.arange(len(model_order))
+    w = 0.36
+    fig_rate, ax_rate = plt.subplots(figsize=(9.6, 3.8))
+    ax_rate.bar(x - w / 2, female_rates, width=w, label="Female (protected)", color="#f28e2c")
+    ax_rate.bar(x + w / 2, male_rates, width=w, label="Male (privileged)", color="#4e79a7")
+    ax_rate.set_xticks(x)
+    ax_rate.set_xticklabels(display, rotation=20)
+    ax_rate.set_ylabel("Positive prediction rate")
+    ax_rate.set_ylim(0.0, 1.0)
+    ax_rate.set_title("Group positive-rate decomposition for DI interpretation")
+    ax_rate.legend(fontsize=8)
+    plt.tight_layout()
+    plt.savefig(group_rate_path, dpi=180)
+    plt.close(fig_rate)
+
+    tradeoff_path = paths["figures_dir"] / "fairness_tradeoff.png"
+    fig_tr, ax_tr = plt.subplots(figsize=(6.3, 4.2))
+    for mk, label in zip(model_order, display):
+        acc = fairness_metrics[mk]["accuracy"]
+        di_gap = fairness_metrics[mk]["di_gap_to_one"]
+        ax_tr.scatter(di_gap, acc, s=70)
+        ax_tr.annotate(label, (di_gap, acc), textcoords="offset points", xytext=(5, 4), fontsize=8)
+    ax_tr.set_xlabel("|1 - Disparate Impact| (lower is fairer)")
+    ax_tr.set_ylabel("Accuracy")
+    ax_tr.set_title("Fairness-accuracy tradeoff map")
+    ax_tr.grid(alpha=0.3)
+    plt.tight_layout()
+    plt.savefig(tradeoff_path, dpi=180)
+    plt.close(fig_tr)
+
+    return fairness_metrics, {
+        "fairness_comparison": str(plot_path),
+        "fairness_group_rates": str(group_rate_path),
+        "fairness_tradeoff": str(tradeoff_path),
+    }
 
 
 def write_results(paths: Dict[str, Path], payload: Dict) -> Tuple[str, str]:
