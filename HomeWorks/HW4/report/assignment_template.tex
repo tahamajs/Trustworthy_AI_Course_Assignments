@@ -3,9 +3,12 @@
 \usepackage{amsmath,amssymb}
 \usepackage{graphicx}
 \usepackage{booktabs}
+\usepackage{array}
 \usepackage{float}
 \usepackage{subcaption}
+\usepackage{microtype}
 \usepackage[hidelinks]{hyperref}
+\emergencystretch=1.2em
 
 \newcommand{\authorname}{Taha Majlesi}
 \newcommand{\studentid}{810101504}
@@ -83,10 +86,11 @@ for many clean inputs $x$, while preserving clean behavior when the trigger is a
 \begin{equation}
 \min_{m,p}\;\mathbb{E}_{x\sim\mathcal{D}}\left[\ell\left(f_\theta(\mathcal{T}(x;m,p)),y\right)\right] + \lambda_1\|m\|_1 + \lambda_2\|p\|_1.
 \end{equation}
-The first term forces target-label prediction; regularizers encourage sparse, low-energy triggers. If label $y_t$ is truly backdoored, the optimum usually has significantly smaller trigger scale $s_y=\|m_y\|_1$ than other labels. To detect this anomaly robustly, we compute the modified z-score with MAD:
+The first term forces target-label prediction; regularizers encourage sparse, low-energy triggers. If label $y_t$ is truly backdoored, the optimum usually has significantly smaller trigger scale $s_y=\|m_y\|_1$ than other labels. To detect this anomaly robustly, we compute the modified z-score:
 \begin{equation}
-z_y = 0.6745\frac{s_y - \mathrm{median}(s)}{\mathrm{MAD}(s)},\quad \mathrm{MAD}(s)=\mathrm{median}\left(|s-\mathrm{median}(s)|\right),
+z_y = 0.6745\frac{s_y - \mathrm{median}(s)}{\mathrm{MAD}(s)}.
 \end{equation}
+Here $\mathrm{MAD}(s)=\mathrm{median}\left(|s-\mathrm{median}(s)|\right)$.
 and choose the strongest lower-tail outlier (smallest $z_y$). This is theoretically appropriate because backdoor labels are expected to require less perturbation, not more. Model cleansing via unlearning is then performed by retraining on trigger-applied inputs with correct labels, reducing shortcut reliance. Attack Success Rate (ASR) is defined as
 \begin{equation}
 \mathrm{ASR}=\Pr\left(f_\theta(\mathcal{T}(x;m,p))=y_t\right),
@@ -129,12 +133,12 @@ to debias empirical risk under imbalanced group-label combinations. Group-thresh
 
 \section{Assumptions and Reproducibility Guarantees}
 \begin{itemize}
-    \item Real security checkpoint is selected from \texttt{poisened\_models.rar} using student-ID suffix (ID \texttt{810101504} $\rightarrow$ model 4).
+    \item Real security checkpoint is selected from \path{poisened_models.rar} using student-ID suffix (ID \texttt{810101504} $\rightarrow$ model 4).
     \item Security profile is high-fidelity (500 optimization steps per target label).
     \item Unlearning applies trigger to 20\% of data for one epoch with true labels unchanged.
     \item Privacy constants are fixed to assignment values, with $p=0.01$ for unbounded DP.
     \item Fairness split is 70/30 with \texttt{random\_state=0} and deterministic seed control.
-    \item All figures/tables come from \texttt{code/generate\_report\_figs.py}; no manual metric editing is used.
+    \item All figures/tables come from \path{code/generate_report_figs.py}; no manual metric editing is used.
 \end{itemize}
 
 \subsection{Theory Robustness Guardrails}
@@ -142,16 +146,16 @@ To keep theoretical quality stable across reruns, the report uses three guardrai
 
 \section{Complete Code Walkthrough}
 \subsection{Security Pipeline (\texttt{code/neural\_cleanse.py})}
-The security module is structured as a robust production-style pipeline. \texttt{AttackedMNISTCNN} matches the exact checkpoint architecture, allowing strict state-dict verification in \texttt{load\_model}. Archive extraction and checkpoint resolution are automated by \texttt{extract\_poisoned\_models\_if\_needed} and \texttt{resolve\_checkpoint\_path}, preventing manual mismatch errors. \texttt{load\_mnist\_test} handles deterministic subsampling and explicit offline failure messages. \texttt{reconstruct\_trigger} optimizes mask and pattern logits, maps them to valid ranges via sigmoid, and minimizes class-induction plus regularization terms. \texttt{reconstruct\_all\_labels} executes this optimization for labels 0--9 and returns structured results. \texttt{detect\_outlier\_scales} applies lower-tail MAD to identify the attacked label. \texttt{evaluate\_clean\_accuracy} and \texttt{evaluate\_asr} separate clean and triggered behaviors. Finally, \texttt{unlearn\_by\_retraining} performs assignment-constrained cleansing with controlled trigger exposure.
+The security module follows a production-style flow: checkpoint extraction/resolution, deterministic MNIST loading, per-label trigger reconstruction, lower-tail MAD detection, clean/triggered evaluation, and one-epoch constrained unlearning. The architecture is matched exactly by \texttt{AttackedMNISTCNN}, and checkpoint loading is strict to prevent silent shape mismatches. Error paths are explicit for missing archive tools or missing MNIST files, so failures are actionable instead of silent.
 
 \subsection{Privacy Pipeline (\texttt{code/privacy.py})}
-The privacy module separates primitive mechanisms from assignment scenarios. Primitive functions implement Laplace scale, perturbation, threshold probability, and epsilon composition. \texttt{income\_query\_results} computes Q2-Part1 values deterministically and includes split-budget effects. \texttt{counting\_query\_results} computes Q2-Part2 base, sequential, and unbounded cases with locked assumptions; it returns all intermediate quantities (e.g., $\epsilon_i$, $\delta_i$, $\Delta f_{\mathrm{unbounded}}$) to ensure transparent traceability from theory to final probabilities.
+The privacy module cleanly separates primitives from assignment scenarios. Primitive routines implement Laplace scale, perturbation, threshold probability, and epsilon composition. Scenario routines generate deterministic Q2 outputs for base, sequential, and unbounded settings while exposing all intermediate quantities (including $\epsilon_i$, $\delta_i$, and $\Delta f_{\mathrm{unbounded}}$) for direct theory-to-number traceability.
 
 \subsection{Fairness Pipeline (\texttt{code/fairness.py})}
-The fairness module provides a unified evaluation surface across baseline, assignment mitigation, and bonus methods. \texttt{train\_baseline\_model} standardizes features and preserves scaler state for reproducible inference. \texttt{apply\_promotion\_demotion} now uses prediction-based cohorts, consistent with assignment-style procedural fairness correction. \texttt{retrain\_with\_swapped\_labels} realizes the new training targets. Bonus method 1 (\texttt{train\_reweighed\_model}) injects sample-importance correction from group-label marginals. Bonus method 2 (\texttt{optimize\_group\_thresholds} + \texttt{apply\_group\_thresholds}) performs post-hoc parity adjustment at decision time. \texttt{compute\_fairness\_metrics} enforces a consistent metric schema for comparison tables and plots.
+The fairness module provides one evaluation surface across baseline, assignment mitigation, and bonus methods. It includes prediction-based promotion/demotion cohorts, retraining on swapped labels, reweighing from group-label marginals, and post-hoc group-threshold optimization. Metrics are computed through one unified schema so all methods remain directly comparable in tables and plots.
 
-\subsection{Artifact Orchestration (\texttt{code/generate\_report\_figs.py})}
-The orchestrator converts all analysis into one CLI-driven run. It parses experiment controls, initializes deterministic paths/seeds, and executes security/privacy/fairness runners. The script now includes additional educational artifacts: security scale profile, before/after confusion matrices, privacy tail-probability curves, and fairness decomposition/tradeoff plots. Outputs are persisted as: figures under \texttt{report/figures}, structured metrics in \texttt{report/results/metrics\_summary.json}, and LaTeX macros in \texttt{report/results/results\_macros.tex}. This design guarantees report freshness and removes manual transcription risk.
+\subsection{Artifact Orchestration}
+The CLI orchestrator in \path{code/generate_report_figs.py} executes the full pipeline end to end. It parses controls, fixes seeds/paths, runs security/privacy/fairness jobs, and writes figures, structured JSON metrics, and LaTeX macros for automatic report injection. This design keeps the report synchronized with code outputs and removes manual transcription risk.
 
 \section{Results and Full Plot Interpretation}
 
@@ -279,7 +283,7 @@ Group-thresholds (bonus) & \QThreeGroupThrAcc{} & \QThreeGroupThrDi{} & \QThreeG
 \centering
 \caption{Security and privacy summary}
 \label{tab:security_privacy}
-\begin{tabular}{lc}
+\begin{tabular}{>{\raggedright\arraybackslash}p{0.55\linewidth} >{\raggedright\arraybackslash}p{0.38\linewidth}}
 \toprule
 Quantity & Value \\
 \midrule
@@ -287,8 +291,8 @@ Detected attacked label & \QOneDetectedLabel{} \\
 Expected checkpoint label & \QOneExpectedLabel{} \\
 Clean accuracy before/after & \QOneCleanAccBefore{} / \QOneCleanAccAfter{} \\
 ASR before/after & \QOneAsrBefore{} / \QOneAsrAfter{} \\
-$b$ (base / sequential / unbounded) & \QTwoBBase{} / \QTwoBSequential{} / \QTwoBUnbounded{} \\
-$P(\tilde{q} > 505)$ (base / sequential / unbounded) & \QTwoProbBase{} / \QTwoProbSequential{} / \QTwoProbUnbounded{} \\
+$b$ (base / seq. / unb.) & \QTwoBBase{} / \QTwoBSequential{} / \QTwoBUnbounded{} \\
+$P(\tilde{q} > 505)$ (base / seq. / unb.) & \QTwoProbBase{} / \QTwoProbSequential{} / \QTwoProbUnbounded{} \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -300,7 +304,7 @@ This report is organized to fully cover both assignment deliverables and standar
     \item Formal theoretical definitions and equations for all three tracks are provided in Section II.
     \item Full implementation details are documented in Section IV at module and function level.
     \item Security requirements are covered by attacked-label detection, per-label reconstruction evidence, before/after mitigation metrics, and ablation analysis (Figures~1--6, Table~II).
-    \item Privacy requirements are covered by base/sequential/unbounded scenarios, threshold-tail interpretation, and epsilon sensitivity analysis (Figures~7--9, Table~II).
+    \item Privacy requirements are covered by scenario outputs, threshold-tail interpretation, and epsilon sensitivity analysis (Figures~7--9, Table~II).
     \item Fairness requirements are covered by baseline, assignment-required mitigation, sensitive-feature removal, and two bonus methods with decomposition and tradeoff visualization (Figures~10--13, Table~I).
     \item Reproducibility requirements are covered by deterministic seeds, fixed assumptions, generated macros, and machine-readable metrics outputs (Section III and Section IV).
     \item Verification requirements are covered by automated tests for security/privacy/fairness computations and theory-presence guard tests for this report template.
@@ -357,11 +361,13 @@ Sequential composition with fixed total budget uses $\epsilon_i=\epsilon/k$ and 
 b_{\mathrm{seq}}=\frac{\Delta f}{\epsilon_i}=k\frac{\Delta f}{\epsilon}.
 \end{equation}
 Under unbounded adjacency with change fraction $p$ over population $n$, effective sensitivity is
-\begin{equation}
-\Delta f_{\mathrm{unbounded}}=\max(1,\lceil pn\rceil)\Delta f,\quad
-b_{\mathrm{unbounded}}=\frac{\Delta f_{\mathrm{unbounded}}}{\epsilon_i}.
-\end{equation}
-With assignment constants $(\epsilon,\Delta f,k,p,n)=(0.1,1,92,0.01,500)$, these evaluate to $b_{\mathrm{base}}=10$, $b_{\mathrm{seq}}=920$, and $b_{\mathrm{unbounded}}=4600$, which directly explains the observed flattening of tail probabilities.
+\begin{align}
+\Delta f_{\mathrm{unbounded}} &= \max(1,\lceil pn\rceil)\Delta f,\\
+b_{\mathrm{unbounded}} &= \frac{\Delta f_{\mathrm{unbounded}}}{\epsilon_i}.
+\end{align}
+For assignment constants $(\epsilon,\Delta f,k,p,n)=(0.1,1,92,0.01,500)$, the resulting scales are
+$b_{\mathrm{base}}=10$, $b_{\mathrm{seq}}=920$, and $b_{\mathrm{unbounded}}=4600$.
+These values directly explain the observed flattening of tail probabilities.
 
 \section{Extended Fairness Derivation and Optimization View}
 Let $p_i=\Pr(\hat{y}=1\mid x_i)$ and $\hat{y}_i=\mathbf{1}[p_i\ge 0.5]$. The assignment promotion/demotion candidate sets are
