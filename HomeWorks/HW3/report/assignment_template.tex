@@ -135,6 +135,8 @@ Question 5 asks for two recourse styles on the health dataset:
   \item Nearest Counterfactual Explanation (SCM disabled / independently manipulable assumption).
   \item Causal Algorithmic Recourse (SCM enabled; intervention effects propagate through causal structure).
 \end{enumerate}
+This setup follows standard recourse formulations in actionable and causal recourse literature
+\citep{ustun2019actionable,karimi2021algorithmic,karimi2020algorithmic}.
 
 The classifier input variables are:
 \begin{itemize}[leftmargin=1.2em]
@@ -172,6 +174,8 @@ $x^{(n)}$ and intervention $\delta$, counterfactual generation uses:
 X_{\mathrm{cf}} = f\bigl(U(X), \delta\bigr),
 \end{equation}
 where $U(X)$ is obtained by abduction via inverse structural equations.
+The abduction-action-prediction decomposition follows structural causal modeling principles
+\citep{pearl2009causality}.
 
 \subsection{Health SCM used in this implementation}
 Feature order is $[\text{age},\text{insulin},\text{blood\_glucose},\text{blood\_pressure}]$.
@@ -372,7 +376,8 @@ in monotonic cost growth for lin-ERM and lin-AF.
 \subsection{On perfect MLP classifier scores}
 The MLP reached perfect test metrics for available seeds in this split. This can happen due dataset size/split structure
 and model capacity. Recourse validity is still below 1.0 for MLP runs, indicating that prediction quality alone does not
-guarantee easy recourse.
+guarantee easy recourse, consistent with prior observations in counterfactual explanation studies
+\citep{mothilal2020explaining}.
 
 \section{Error Analysis and Threats to Validity}
 \subsection{Modeling assumptions}
