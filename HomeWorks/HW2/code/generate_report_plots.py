@@ -796,17 +796,70 @@ def _build_demo_images() -> list[Image.Image]:
     return imgs
 
 
-def _plot_vgg16_image_set(model: torch.nn.Module, categories: list[str]) -> tuple[list[dict[str, float | str]], Image.Image]:
-    imgs = _build_demo_images()
-    rows: list[dict[str, float | str]] = []
+def _make_candidate_image(rng: np.random.Generator, idx: int) -> Image.Image:
+    base = tuple(int(c) for c in rng.integers(20, 235, size=3))
+    img = Image.new("RGB", (224, 224), color=base)
+    draw = ImageDraw.Draw(img)
 
-    fig, axes = plt.subplots(2, 3, figsize=(12, 7))
-    for i, (img, ax) in enumerate(zip(imgs, axes.ravel())):
+    # Blend geometric primitives and texture so VGG receives varied structures.
+    for _ in range(5 + (idx % 4)):
+        shape_type = int(rng.integers(0, 3))
+        color = tuple(int(c) for c in rng.integers(0, 255, size=3))
+        x1, y1 = [int(v) for v in rng.integers(0, 160, size=2)]
+        x2, y2 = [int(v) for v in rng.integers(64, 224, size=2)]
+        if shape_type == 0:
+            draw.rectangle((min(x1, x2), min(y1, y2), max(x1, x2), max(y1, y2)), outline=color, width=3)
+        elif shape_type == 1:
+            draw.ellipse((min(x1, x2), min(y1, y2), max(x1, x2), max(y1, y2)), outline=color, width=3)
+        else:
+            xm, ym = int(rng.integers(0, 224)), int(rng.integers(0, 224))
+            draw.polygon([(x1, y1), (x2, y2), (xm, ym)], outline=color)
+
+    for k in range(0, 224, int(rng.integers(10, 28))):
+        line_color = tuple(int(c) for c in rng.integers(30, 220, size=3))
+        if idx % 2 == 0:
+            draw.line((0, k, 223, (k + int(rng.integers(-20, 20))) % 224), fill=line_color, width=1)
+        else:
+            draw.line((k, 0, (k + int(rng.integers(-20, 20))) % 224, 223), fill=line_color, width=1)
+    return img
+
+
+def _plot_vgg16_image_set(model: torch.nn.Module, categories: list[str]) -> tuple[list[dict[str, float | str]], Image.Image]:
+    seed_imgs = _build_demo_images()
+    rng = np.random.default_rng(SEED)
+    candidates = seed_imgs + [_make_candidate_image(rng, i) for i in range(30)]
+
+    selected_imgs: list[Image.Image] = []
+    rows: list[dict[str, float | str]] = []
+    used_classes: set[int] = set()
+    fallback_rows: list[tuple[Image.Image, dict[str, float | str]]] = []
+
+    for cand_idx, img in enumerate(candidates):
         inp = preprocess_image(img)
         idx, name, conf = _predict_top(model, inp, categories)
-        rows.append({"image_id": i, "pred_idx": idx, "pred_name": name, "confidence": conf})
+        row = {"image_id": cand_idx, "pred_idx": idx, "pred_name": name, "confidence": conf}
+        if idx not in used_classes and len(selected_imgs) < 6:
+            used_classes.add(idx)
+            selected_imgs.append(img)
+            rows.append(row)
+        else:
+            fallback_rows.append((img, row))
+        if len(selected_imgs) == 6:
+            break
+
+    # If unique-class selection is insufficient, fill deterministically by confidence.
+    if len(selected_imgs) < 6:
+        fallback_rows.sort(key=lambda item: float(item[1]["confidence"]), reverse=True)
+        for img, row in fallback_rows:
+            selected_imgs.append(img)
+            rows.append(row)
+            if len(selected_imgs) == 6:
+                break
+
+    fig, axes = plt.subplots(2, 3, figsize=(12, 7))
+    for i, (img, row, ax) in enumerate(zip(selected_imgs, rows, axes.ravel())):
         ax.imshow(img)
-        ax.set_title(f"Img {i}: {name}\nconf={conf:.3f}", fontsize=8)
+        ax.set_title(f"Img {i}: {row['pred_name']}\nconf={float(row['confidence']):.3f}", fontsize=8)
         ax.axis("off")
     fig.suptitle("Six analyzed images with VGG16 predictions")
     fig.tight_layout()
@@ -814,7 +867,7 @@ def _plot_vgg16_image_set(model: torch.nn.Module, categories: list[str]) -> tupl
     fig.savefig(out, dpi=150)
     plt.close(fig)
     print(f"[vision] saved {out}")
-    return rows, imgs[0]
+    return rows, selected_imgs[0]
 
 
 def _plot_adversarial_comparison(

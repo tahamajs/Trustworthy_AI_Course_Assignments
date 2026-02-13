@@ -96,12 +96,18 @@
         0.00487012987012983,
         -0.0024350649350649706
       ]
+    },
+    "grace_counterfactual": {
+      "top_feature": "Pregnancies",
+      "p_before": 0.4024967849254608,
+      "p_after": 0.4669630229473114,
+      "delta_p": 0.06446623802185059
     }
   },
   "vision": {
-    "smoothgrad_cosine_5_20": 0.9413833044154495,
-    "smoothgrad_cosine_20_50": 0.975826785041178,
-    "smoothgrad_cosine_5_50": 0.9507065917360941,
+    "smoothgrad_cosine_5_20": 0.7977114432671951,
+    "smoothgrad_cosine_20_50": 0.8781128781084458,
+    "smoothgrad_cosine_5_50": 0.8022061506292871,
     "smoothgrad_ks": [
       5,
       10,
@@ -109,16 +115,66 @@
       50
     ],
     "smoothgrad_entropy": [
-      0.9925470491362378,
-      0.9938770918241321,
-      0.9951507169156297,
-      0.9961033494623138
+      0.9307470922320088,
+      0.9302748688588711,
+      0.9249147637003003,
+      0.9167411036770651
     ],
     "smoothgrad_total_variation": [
-      0.23811596544600605,
-      0.23141157750894908,
-      0.2134222443021484,
-      0.1673087928993789
-    ]
+      0.022211696732976113,
+      0.021813445214405563,
+      0.022853745483554996,
+      0.01569592671973791
+    ],
+    "six_image_predictions": [
+      {
+        "image_id": 0,
+        "pred_idx": 451,
+        "pred_name": "bolo tie",
+        "confidence": 0.6775129437446594
+      },
+      {
+        "image_id": 1,
+        "pred_idx": 549,
+        "pred_name": "envelope",
+        "confidence": 0.7176491022109985
+      },
+      {
+        "image_id": 3,
+        "pred_idx": 905,
+        "pred_name": "window shade",
+        "confidence": 0.2629864811897278
+      },
+      {
+        "image_id": 4,
+        "pred_idx": 769,
+        "pred_name": "rule",
+        "confidence": 0.15675991773605347
+      },
+      {
+        "image_id": 6,
+        "pred_idx": 489,
+        "pred_name": "chainlink fence",
+        "confidence": 0.41030994057655334
+      },
+      {
+        "image_id": 7,
+        "pred_idx": 688,
+        "pred_name": "oscilloscope",
+        "confidence": 0.3037172853946686
+      }
+    ],
+    "adversarial_demo": {
+      "epsilon": 0.12,
+      "orig_class_idx": 451,
+      "orig_class_name": "bolo tie",
+      "adv_class_idx": 752,
+      "adv_class_name": "racket",
+      "changed": true
+    },
+    "feature_visualization": {
+      "hen_class_idx": 8,
+      "n_regularized_images": 5
+    }
   }
 }
