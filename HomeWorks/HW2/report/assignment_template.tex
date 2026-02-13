@@ -109,6 +109,23 @@ which acts as a variance-reduction estimator for pixel-level sensitivity.
 \subsection{Theoretical Basis for Plot Interpretation}
 Each result plot is interpreted using a common decomposition principle: prediction behavior is explained by either additive feature contributions (tabular) or spatial sensitivity decomposition (vision). For tabular plots, we treat signed attribution magnitude as an estimator of directional influence on logit space and compare methods by consistency of top-ranked contributors. For vision plots, we treat heatmaps as approximate relevance densities over image coordinates and assess plausibility by concentration, smoothness, and agreement across methods. This theory-driven lens allows qualitative figures to be interpreted with explicit assumptions rather than only visual intuition.
 
+\subsection{Diagnostic and Stability Metrics}
+To move beyond accuracy-only reporting, the expanded pipeline adds threshold-free discrimination metrics, probability-quality metrics, attribution-consistency metrics, and saliency-stability metrics. ROC-AUC is interpreted as ranking quality and can be written as
+\begin{equation}
+\mathrm{AUC}=\int_0^1 \mathrm{TPR}(u)\,du,
+\end{equation}
+where \(u=\mathrm{FPR}\), while average precision summarizes precision-recall behavior under class imbalance. Calibration quality is quantified through the Brier score
+\begin{equation}
+\mathrm{BS}=\frac{1}{N}\sum_{i=1}^{N}(p_i-y_i)^2,
+\end{equation}
+which is a proper scoring rule, so lower values correspond to better probabilistic forecasts.
+For local explanation agreement, the report uses Spearman rank correlation between SHAP and LIME feature vectors plus top-3 overlap, distinguishing directional rank-consistency from exact magnitude matching.
+For vision stability, SmoothGrad maps at different sample counts \(K\) are compared with cosine similarity
+\begin{equation}
+\cos(a,b)=\frac{a^\top b}{\|a\|_2\|b\|_2},
+\end{equation}
+which operationalizes convergence of saliency structure as Monte Carlo averaging strength increases.
+
 \section{Code-Level Implementation Walkthrough}
 \subsection{Execution Entry Point}
 The report-generation script is designed as a single deterministic orchestrator that guarantees reproducible artifacts from one command. The \texttt{main()} routine first sets global seeds through \texttt{\_set\_seed()} for \texttt{random}, \texttt{numpy}, and \texttt{torch}, then guarantees output availability via \texttt{\_ensure\_dirs()}, and finally executes \texttt{generate\_tabular\_figures()} followed by \texttt{generate\_vision\_figures()} in a fixed order. This ordering is intentional: tabular plots and metrics are produced first to validate the data/model path before invoking vision explainability components, so failures are easier to localize. Two helper routines are especially important for robustness: \texttt{\_predict\_fn\_factory()} adapts a PyTorch logit model into a LIME-compatible \texttt{predict\_proba}-style callable returning an \(N\times2\) probability matrix, while \texttt{\_normalize\_shap\_output()} resolves SHAP API shape differences across versions (class-first, sample-first, or flat vectors), preventing silent plotting bugs when library behavior changes.
@@ -117,7 +134,7 @@ The report-generation script is designed as a single deterministic orchestrator 
 The classification models are intentionally minimal but structurally aligned with homework requirements. \texttt{MLPClassifier} uses the architecture \(8\rightarrow100\rightarrow50\rightarrow50\rightarrow20\rightarrow1\) with \texttt{BatchNorm1d} at the first hidden layer and dropout regularization in the middle block, returning raw logits for numerically stable BCE-with-logits optimization. In contrast, \texttt{NAMClassifier} implements a neural additive model by constructing one independent subnetwork per feature (each \texttt{Linear-ReLU-Linear}), then summing all per-feature outputs into a scalar logit; this directly encodes the additive hypothesis \(f(x)=\sum_j g_j(x_j)\). The design tradeoff is explicit: MLP offers richer interaction modeling capacity, while NAM constrains interactions to obtain intrinsic decomposability and direct feature-function inspection without post-hoc approximation.
 
 \subsection{Tabular Data and Training Pipeline (\texttt{tabular.py})}
-The tabular module handles data reliability, preprocessing, training, and evaluation as one coherent pipeline. \texttt{load\_diabetes()} first attempts local CSV loading, then remote download, and finally deterministic synthetic fallback through \texttt{\_make\_synthetic\_diabetes()} when offline; this fallback is not random noise but a structured generative process with clinically plausible ranges and a noisy logistic boundary, ensuring that downstream behavior remains realistic. After load, column names are normalized and reordered to maintain stable feature indexing for explainers and plots. \texttt{preprocess()} applies \texttt{StandardScaler}, \texttt{make\_splits()} performs stratified 70/10/20 train-val-test partitioning, and \texttt{to\_loader()} creates tensor dataloaders. \texttt{train\_model()} performs epoch-wise optimization with Adam and \texttt{binary\_cross\_entropy\_with\_logits}, tracking the best validation loss and restoring the best state dictionary, which acts as lightweight checkpoint-based early stopping. Inference then flows through \texttt{predict\_binary()} (sigmoid + 0.5 threshold) and \texttt{evaluate\_preds()} (accuracy, recall, F1, confusion matrix), so every metric in the report is directly traceable to explicit, test-time deterministic functions.
+The tabular module handles data reliability, preprocessing, training, and evaluation as one coherent pipeline. \texttt{load\_diabetes()} first attempts local CSV loading, then remote download, and finally deterministic synthetic fallback through \texttt{\_make\_synthetic\_diabetes()} when offline; this fallback is not random noise but a structured generative process with clinically plausible ranges and a noisy logistic boundary, ensuring that downstream behavior remains realistic. After load, column names are normalized and reordered to maintain stable feature indexing for explainers and plots. \texttt{preprocess()} applies \texttt{StandardScaler}, \texttt{make\_splits()} performs stratified 70/10/20 train-val-test partitioning, and \texttt{to\_loader()} creates tensor dataloaders. The expanded \texttt{train\_model()} now tracks per-epoch train/validation losses and stores the best validation checkpoint with deep-copied state restoration, which enables reliable post-hoc learning-curve diagnostics without sacrificing deterministic behavior. Inference then flows through \texttt{predict\_binary()} (sigmoid + 0.5 threshold) and \texttt{evaluate\_preds()} (accuracy, recall, F1, confusion matrix), so every metric in the report is directly traceable to explicit, test-time deterministic functions.
 
 \subsection{Tabular Explainers (\texttt{interpretability.py})}
 Interpretability helpers isolate LIME and SHAP wrappers from model-training code. \texttt{lime\_explain()} builds \texttt{LimeTabularExplainer} with explicit feature and class names, then explains one instance with all features included, producing signed local surrogate coefficients. \texttt{shap\_explain()} uses \texttt{KernelExplainer} on a bounded background subset (\(100\) rows) with fixed sampling budget (\texttt{nsamples=200}), balancing computational cost and attribution stability. Separating these wrappers keeps the explainability API narrow and stable: each function accepts a model-compatible prediction callable and NumPy arrays, so the rest of the pipeline remains independent from specific explainer internals and can be replaced or extended with minimal refactoring.
@@ -126,10 +143,10 @@ Interpretability helpers isolate LIME and SHAP wrappers from model-training code
 The vision module implements all required saliency methods with explicit fallback and hook management logic. \texttt{get\_vgg16()} supports both newer and older torchvision APIs and gracefully falls back to randomly initialized weights if pretrained loading fails, which preserves pipeline executability in offline environments. \texttt{GradCAM} registers a forward hook on a target feature layer to cache activations and a gradient hook to cache backpropagated class gradients; in \texttt{\_\_call\_\_()}, class score backpropagation computes channel weights by global average pooling of gradients, forms a weighted activation sum, applies ReLU, upsamples to input resolution, and normalizes to \([0,1]\). \texttt{GuidedBackprop} modifies ReLU backward behavior by forcing positive gradient flow and disabling in-place ReLUs, ensuring correct gradient capture for guided saliency. \texttt{smoothgrad()} estimates denoised saliency by averaging gradients from multiple Gaussian-perturbed inputs, directly implementing a Monte Carlo variance-reduction estimator over input-space derivatives.
 
 \subsection{Figure Production Logic and Artifact Contracts}
-The plotting logic is explicitly tied to report requirements through fixed filenames and deterministic ordering. In tabular generation, the pipeline exports class distribution first, trains MLP and prints metrics, then produces three LIME-SHAP comparison figures for stable test indices \([0,1,2]\), and finally trains NAM and exports per-feature response plots by sweeping each feature while fixing others at median values. In vision generation, three synthetic \(224\times224\) RGB inputs are used to guarantee fully local execution with no external assets: one for Grad-CAM, one for Guided Grad-CAM fusion, and one for SmoothGrad-vs-guided comparison. Each exported file is written to \texttt{report/figures} with names referenced verbatim in the LaTeX source, creating a strict artifact contract between code and report so that missing or renamed plots are immediately detectable at compile time.
+The plotting logic is explicitly tied to report requirements through fixed filenames and deterministic ordering. In tabular generation, the expanded pipeline exports class distribution, model learning curves, confusion-matrix comparison, ROC/PR comparison, calibration curves, LIME-SHAP agreement diagnostics, three local explanation figures for stable test indices \([0,1,2]\), and NAM feature-response functions; this progression intentionally moves from global data/optimization behavior to local explanation behavior. In vision generation, synthetic \(224\times224\) RGB inputs are used to guarantee fully local execution with no external assets, and the expanded outputs include Grad-CAM heatmaps, Grad-CAM overlays, Guided Grad-CAM composition, SmoothGrad-vs-guided comparison, and SmoothGrad sample-count sweep diagnostics. All metrics and stability statistics are serialized to \texttt{report/figures/metrics\_summary.json}, creating a machine-readable traceability layer between generated artifacts and manuscript claims.
 
 \subsection{Reproducibility and Engineering Safeguards}
-At engineering level, reproducibility is enforced by seed control, deterministic sample-index selection, stable directory contracts, and explicit offline fallbacks at both data and model-loading boundaries. The combination of modular wrappers (training, explainers, saliency), shape-normalization guards for SHAP outputs, and hook lifecycle handling (\texttt{close()} in Grad-CAM) reduces common failure modes such as API drift, memory leaks, and inconsistent figure outputs across machines. Consequently, the codebase is not only functionally complete for Homework 2 but also operationally robust: the same commands regenerate the same figures and compatible IEEE PDF structure even when network-dependent resources are unavailable.
+At engineering level, reproducibility is enforced by seed control, deterministic sample-index selection, stable directory contracts, and explicit offline fallbacks at both data and model-loading boundaries. The combination of modular wrappers (training, explainers, saliency), shape-normalization guards for SHAP outputs, checkpoint restoration in training, and hook lifecycle handling (\texttt{close()} in Grad-CAM) reduces common failure modes such as API drift, memory leaks, and inconsistent figure outputs across machines. Consequently, the codebase is not only functionally complete for Homework 2 but also operationally robust: the same commands regenerate the same extended diagnostics, figures, and compatible IEEE PDF structure even when network-dependent resources are unavailable.
 
 \section{Quantitative Summary}
 \begin{table}[H]
@@ -140,14 +157,42 @@ At engineering level, reproducibility is enforced by seed control, deterministic
 \toprule
 Model & Accuracy & Recall & F1 \\
 \midrule
-MLPClassifier & 0.7013 & 0.4528 & 0.5106 \\
-NAMClassifier & 0.6883 & 0.3585 & 0.4419 \\
+MLPClassifier & 0.6948 & 0.3208 & 0.4198 \\
+NAMClassifier & 0.6818 & 0.3019 & 0.3951 \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-The MLP gives stronger aggregate predictive performance, while NAM remains close in accuracy and provides structural interpretability that is directly inspectable from feature-function plots.
-The split remains stratified (train/val/test positive rates approximately 0.348/0.351/0.344), supporting fair comparison between models.
+\begin{table}[H]
+\caption{Threshold-Free and Calibration Metrics}
+\label{tab:extended_metrics}
+\centering
+\begin{tabular}{lccc}
+\toprule
+Model & ROC-AUC & Avg Precision & Brier \\
+\midrule
+MLPClassifier & 0.7097 & 0.5913 & 0.1973 \\
+NAMClassifier & 0.6957 & 0.5702 & 0.2021 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[H]
+\caption{SmoothGrad Stability (Cosine Similarity)}
+\label{tab:smoothgrad_stability}
+\centering
+\begin{tabular}{lc}
+\toprule
+Pair & Cosine Similarity \\
+\midrule
+\(K=5\) vs \(K=20\) & 0.9407 \\
+\(K=20\) vs \(K=50\) & 0.9753 \\
+\(K=5\) vs \(K=50\) & 0.9507 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The expanded quantitative view shows that MLP remains stronger than NAM across thresholded and threshold-free discrimination metrics while NAM stays competitively close with higher structural interpretability, and the lower MLP Brier score indicates modestly better probability calibration quality; additionally, high SmoothGrad cosine similarities across sample counts indicate stable saliency structure under increased Monte Carlo averaging, which supports using larger \(K\) for smoother yet semantically consistent visual explanations.
 
 \section{Plot-by-Plot Result Interpretation}
 
@@ -160,6 +205,51 @@ The split remains stratified (train/val/test positive rates approximately 0.348/
 \end{figure}
 The class-distribution plot shows a moderate imbalance (about 34.8\% positive class), which is not extreme but is still large enough to influence threshold-dependent behavior and the interpretation of raw accuracy; in practical terms, the figure justifies emphasizing recall and F1 alongside accuracy because a majority-favoring classifier can look deceptively strong while still missing many positives, and this is exactly the risk predicted by decision theory where the prior \(\pi=P(Y=1)\) shifts Bayes-optimal thresholding under asymmetric error costs, making prior-sensitive metrics necessary for faithful evaluation.
 
+\subsection{Training Loss Curves}
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.98\columnwidth]{figures/training_loss_curves.png}
+\caption{Train/validation BCE trajectories for MLP and NAM.}
+\label{fig:training_curves}
+\end{figure}
+The training-curves plot shows monotonic optimization progress with validation-aware checkpoint behavior for both models, where MLP reaches a lower validation-loss basin than NAM and both avoid severe late-epoch divergence, which supports the observed generalization ordering in downstream metrics; theoretically, this figure operationalizes empirical-risk minimization dynamics by exposing the optimization-generalization gap over epochs, so lower and smoother validation trajectories indicate better bias-variance balance under fixed architecture and data split.
+
+\subsection{Confusion Matrix Comparison}
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.95\columnwidth]{figures/confusion_matrix_comparison.png}
+\caption{Confusion matrices for MLP and NAM on the test split.}
+\label{fig:cm_compare}
+\end{figure}
+The confusion-matrix comparison shows that both models achieve similar true-negative counts while MLP attains a slightly better true-positive count and slightly fewer false negatives, explaining its higher recall and F1; from a statistical decision perspective, this plot decomposes total error into class-conditional error rates \(\mathrm{FNR}\) and \(\mathrm{FPR}\), making explicit that performance differences are primarily driven by minority-class miss behavior rather than majority-class discrimination.
+
+\subsection{ROC and Precision-Recall Comparison}
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.98\columnwidth]{figures/roc_pr_comparison.png}
+\caption{Threshold-free discrimination comparison (ROC and PR).}
+\label{fig:roc_pr}
+\end{figure}
+The ROC/PR plot confirms that MLP consistently dominates NAM across threshold sweeps, yielding higher ROC-AUC and average precision, which indicates better score ranking quality and better positive-class retrieval under class imbalance; theoretically, ROC isolates ordering quality independent of class prior while PR emphasizes positive predictive utility under skewed prevalence, so agreement of both curves provides stronger evidence of genuine discrimination advantage than any single thresholded metric.
+
+\subsection{Calibration Comparison}
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.95\columnwidth]{figures/calibration_comparison.png}
+\caption{Reliability curves with Brier-score annotations.}
+\label{fig:calibration}
+\end{figure}
+The calibration plot shows both models are reasonably close to the diagonal reliability line with MLP exhibiting a slightly lower Brier score, implying modestly better probability calibration and not just better ranking; in probabilistic terms, calibration evaluates whether predicted probabilities approximate empirical frequencies, so this figure complements ROC/PR by validating that confidence values are meaningful for risk-aware decisions rather than merely useful for ranking.
+
+\subsection{LIME-SHAP Agreement Plot}
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.95\columnwidth]{figures/lime_shap_agreement.png}
+\caption{Per-sample agreement between LIME and SHAP explanations.}
+\label{fig:agreement}
+\end{figure}
+The agreement plot shows high positive Spearman correlations (roughly \(0.74\) to \(0.93\)) and strong top-3 overlap across the three analyzed samples, indicating that LIME and SHAP generally preserve similar feature-importance ordering even when exact local coefficients differ; theoretically this is important because rank agreement is more stable than raw magnitude agreement under different attribution scales, so concurrent high rank consistency and high top-k overlap strengthen confidence that highlighted explanatory drivers are method-robust rather than estimator artifacts.
+
 \subsection{LIME--SHAP Comparison, Sample 0}
 \begin{figure}[H]
 \centering
@@ -167,7 +257,7 @@ The class-distribution plot shows a moderate imbalance (about 34.8\% positive cl
 \caption{Local explanation comparison for test sample 0.}
 \label{fig:lime_shap_0}
 \end{figure}
-For sample 0 (predicted positive probability \(\approx 0.397\), true label 0), SHAP and LIME identify a mixed-sign attribution pattern in which \textit{DiabetesPedigreeFunction} and a mid-range \textit{Glucose} interval increase risk while lower \textit{Pregnancies} and age-related effects decrease it, yielding a near-boundary explanation where competing factors nearly cancel; the shared top-level story but imperfect rank/scale agreement is theoretically expected because SHAP enforces additive credit allocation from Shapley axioms whereas LIME fits a locality-weighted surrogate whose coefficients are more sensitive to neighborhood sampling and therefore less stable near the decision margin.
+For sample 0 (true label 0), SHAP and LIME identify a mixed-sign attribution pattern in which \textit{DiabetesPedigreeFunction} and a mid-range \textit{Glucose} interval increase risk while lower \textit{Pregnancies} and age-related effects decrease it, yielding a near-boundary explanation where competing factors nearly cancel; the shared top-level story but imperfect rank/scale agreement is theoretically expected because SHAP enforces additive credit allocation from Shapley axioms whereas LIME fits a locality-weighted surrogate whose coefficients are more sensitive to neighborhood sampling and therefore less stable near the decision margin.
 
 \subsection{LIME--SHAP Comparison, Sample 1}
 \begin{figure}[H]
@@ -176,7 +266,7 @@ For sample 0 (predicted positive probability \(\approx 0.397\), true label 0), S
 \caption{Local explanation comparison for test sample 1.}
 \label{fig:lime_shap_1}
 \end{figure}
-For sample 1 (predicted positive probability \(\approx 0.342\), true label 0), both methods assign the strongest positive contribution to high \textit{Glucose} while \textit{BloodPressure} and \textit{SkinThickness} pull in the opposite direction, producing a coherent explanation in which a salient risk signal is present but outweighed by compensating evidence; theoretically this is a direct demonstration of additive logit composition, because the decision depends on the signed sum \(\sum_j \phi_j\) relative to the boundary, so even one large positive component cannot flip the class when the remaining terms generate a sufficiently negative aggregate.
+For sample 1 (true label 0), both methods assign the strongest positive contribution to high \textit{Glucose} while \textit{BloodPressure} and \textit{SkinThickness} pull in the opposite direction, producing a coherent explanation in which a salient risk signal is present but outweighed by compensating evidence; theoretically this is a direct demonstration of additive logit composition, because the decision depends on the signed sum \(\sum_j \phi_j\) relative to the boundary, so even one large positive component cannot flip the class when the remaining terms generate a sufficiently negative aggregate.
 
 \subsection{LIME--SHAP Comparison, Sample 2}
 \begin{figure}[H]
@@ -185,7 +275,7 @@ For sample 1 (predicted positive probability \(\approx 0.342\), true label 0), b
 \caption{Local explanation comparison for test sample 2.}
 \label{fig:lime_shap_2}
 \end{figure}
-For sample 2 (predicted positive probability \(\approx 0.261\), true label 0), SHAP and LIME both indicate that lower \textit{DiabetesPedigreeFunction} and lower \textit{Glucose} provide the dominant negative evidence, with only modest positive offsets from \textit{Pregnancies} and \textit{BloodPressure}, so the net attribution remains clearly on the negative side and aligns with the predicted class; compared with samples 0 and 1, the tighter cross-method agreement suggests higher local explanation stability, which is theoretically consistent with a lower-curvature neighborhood where attribution estimates are less sensitive to perturbation and sampling choices.
+For sample 2 (true label 0), SHAP and LIME both indicate that lower \textit{DiabetesPedigreeFunction} and lower \textit{Glucose} provide the dominant negative evidence, with only modest positive offsets from \textit{Pregnancies} and \textit{BloodPressure}, so the net attribution remains clearly on the negative side and aligns with the predicted class; compared with samples 0 and 1, the tighter cross-method agreement suggests higher local explanation stability, which is theoretically consistent with a lower-curvature neighborhood where attribution estimates are less sensitive to perturbation and sampling choices.
 
 \subsection{NAM Feature-Function Plot}
 \begin{figure}[H]
@@ -205,6 +295,15 @@ The NAM feature-function figure provides intrinsic structural interpretability b
 \end{figure}
 The Grad-CAM plot confirms correct class-conditioned localization because the resulting heatmap is spatially concentrated rather than diffuse, indicating that gradient hooks, channel-weight averaging, ReLU gating, and upsampling are operating coherently; under the Grad-CAM formulation \(L_{\text{Grad-CAM}}^c=\mathrm{ReLU}(\sum_k \alpha_k^c A^k)\), this concentration is theoretically expected since ReLU removes negative evidence and preserves regions with positive contribution to the class score \(y^c\), so the figure supports both implementation validity and interpretive plausibility even in fallback-weight conditions.
 
+\subsection{Grad-CAM Overlay Plot}
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.98\columnwidth]{figures/gradcam_overlay_demo.png}
+\caption{Input image, Grad-CAM map, and heatmap overlay.}
+\label{fig:gradcam_overlay}
+\end{figure}
+The overlay plot strengthens interpretability beyond raw heatmaps by explicitly showing spatial correspondence between relevance intensity and image coordinates, where high-response regions align with coherent contiguous zones rather than scattered artifacts; theoretically, overlaying \(L_{\text{Grad-CAM}}^c\) onto the input makes the localization prior visually testable as a joint density over image support, so plausibility can be assessed by whether activated regions coincide with semantically meaningful structures under the class-conditional gradient model.
+
 \subsection{Guided Grad-CAM Example Plot}
 \begin{figure}[H]
 \centering
@@ -223,13 +322,22 @@ The Guided Grad-CAM example demonstrates the expected complementarity in which G
 \end{figure}
 The SmoothGrad comparison plot shows that averaging gradients over noisy perturbations suppresses high-frequency variance while preserving salient regions, and when contrasted with absolute Guided Backprop and Guided Grad-CAM it reveals a principled bias-variance tradeoff in saliency estimation: SmoothGrad is most stable but less edge-sharp, Guided Backprop is most detailed but noisier, and Guided Grad-CAM sits between them by adding localization priors from class-activation weighting; estimator-wise, increasing \(K\) in SmoothGrad reduces attribution variance roughly by averaging independent perturbation noise, at the cost of some detail attenuation, which matches the observed smoother appearance.
 
+\subsection{SmoothGrad Sample-Sweep Plot}
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.98\columnwidth]{figures/smoothgrad_sample_sweep.png}
+\caption{SmoothGrad maps for \(K=5\), \(K=20\), and \(K=50\).}
+\label{fig:smoothgrad_sweep}
+\end{figure}
+The SmoothGrad sweep plot demonstrates convergence behavior as sample count \(K\) increases: the \(K=5\) map retains more stochastic texture, while \(K=20\) and \(K=50\) progressively stabilize major relevance regions with reduced speckle, and this qualitative trend is quantitatively supported by high cosine similarities (notably stronger between \(K=20\) and \(K=50\) than between \(K=5\) and \(K=20\)); theoretically this matches Monte Carlo estimator convergence, where variance decays with additional perturbation samples and saliency structure approaches a stable expectation under the noise model.
+
 \section{Discussion}
-The complete set of figures supports a consistent interpretation narrative: tabular attributions from LIME/SHAP are locally coherent with model decisions, NAM provides transparent global feature-shape behavior, and vision methods provide progressively richer saliency views from localization to fused detailed maps.
-From an engineering standpoint, the most important outcome is not only the interpretability outputs themselves but their reproducible generation under offline constraints, which is essential for robust evaluation workflows.
+The complete expanded figure set supports a consistent interpretation narrative with stronger theoretical grounding: tabular diagnostics now cover optimization dynamics, thresholded and threshold-free discrimination, calibration quality, and local attribution agreement, while vision diagnostics progress from localization to overlay validation, guided fusion, and Monte Carlo stability analysis.
+From an engineering standpoint, the key outcome is not only richer interpretability content but also traceable reproducibility, because all claims are linked to deterministic artifacts and serialized summary metrics generated by the same offline-robust pipeline.
 
 \section{Conclusion}
-The report is now fully aligned with IEEE formatting conventions and includes complete, plot-specific interpretation coverage.
-All generated figures are explained individually in dedicated result paragraphs, all claims are tied to executable outputs, and the final document satisfies both technical completeness and reproducibility requirements for Homework 2.
+The report now provides comprehensive theoretical explanation across methods, metrics, and visual diagnostics while remaining aligned with IEEE formatting conventions.
+All generated figures are explained individually in dedicated one-paragraph interpretations, quantitative claims are supported by deterministic metric tables and stability statistics, and the final document satisfies technical completeness, interpretability depth, and reproducibility requirements for Homework 2.
 
 \appendices
 \section{Reproduction Commands}
