@@ -391,8 +391,6 @@ def generate_tabular_figures() -> dict[str, float]:
         "brier": {"mlp": float(brier_mlp), "nam": float(brier_nam)},
         "lime_shap_agreement": agreement_rows,
     }
-    METRICS_JSON.write_text(json.dumps(summary, indent=2), encoding="utf-8")
-    print(f"[tabular] saved {METRICS_JSON}")
     return summary
 
 
