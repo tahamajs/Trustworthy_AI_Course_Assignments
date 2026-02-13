@@ -495,6 +495,48 @@ Before model release, the following gate should pass under fixed seeds and docum
 \subsection{Monitoring and Incident Response}
 After deployment, metrics should be monitored as time series rather than one-time snapshots. Security incidents should trigger targeted re-analysis of trigger scales and ASR. Privacy policy updates should trigger re-evaluation of epsilon allocations and threshold probabilities. Fairness drift should be tracked at both aggregate and group-rate decomposition levels. This operational framing converts the report from a static deliverable into a repeatable governance workflow.
 
+\section{Assignment Traceability Matrix}
+Table~\ref{tab:traceability} maps assignment requirements to concrete equations, code modules, and generated artifacts. This matrix is included so reviewers can verify coverage without searching through the full text.
+
+\begin{table}[!t]
+\centering
+\caption{Requirement-to-evidence traceability matrix}
+\label{tab:traceability}
+\setlength{\tabcolsep}{3pt}
+\footnotesize
+\begin{tabular}{>{\raggedright\arraybackslash}p{0.16\linewidth} >{\raggedright\arraybackslash}p{0.24\linewidth} >{\raggedright\arraybackslash}p{0.24\linewidth} >{\raggedright\arraybackslash}p{0.26\linewidth}}
+\toprule
+Track & Core theory evidence & Code evidence & Report evidence \\
+\midrule
+Security & Backdoor objective + MAD detection equations & \path{neural_cleanse.py} reconstruction, outlier detection, ASR/accuracy evaluation, one-epoch unlearning & Figures~1--6 and Table~II \\
+Privacy & Laplace CDF/tail and composition equations & Privacy module scenario outputs for base, seq., and unbounded settings & Figures~7--9 and Table~II \\
+Fairness & DI definition, reweighing equation, threshold optimization objective & \path{fairness.py} assignment method + bonus methods + unified metrics & Figures~10--13 and Table~I \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Claim-Evidence Ledger}
+To strengthen defensibility, each major conclusion is paired with its required evidence bundle.
+\begin{itemize}
+    \item Security claim (detected attacked label is valid): must include all-label reconstruction plus lower-tail scale outlier evidence and expected-label match.
+    \item Security claim (mitigation is effective): must include ASR decrease, clean-accuracy non-collapse, and improved clean confusion structure.
+    \item Privacy claim (stronger privacy increases uncertainty): must include scale inflation and threshold-tail flattening under composed/unbounded settings.
+    \item Fairness claim (method improves parity): must include DI movement plus group-rate decomposition and utility position in the tradeoff map.
+    \item Reproducibility claim: must include regenerated figures, machine-readable metrics output, and macro-driven table injection.
+\end{itemize}
+This ledger prevents one-metric arguments and enforces multi-view evidence discipline across all tracks.
+
+\section{Replication and Audit Procedure}
+The report can be independently audited by following a deterministic sequence:
+\begin{enumerate}
+    \item Regenerate analysis artifacts from the CLI orchestrator under fixed seed and assignment constants.
+    \item Validate that figure files, metrics JSON, and macro outputs are present and timestamp-consistent.
+    \item Rebuild the PDF and confirm all numeric tables match generated macros rather than hand-edited literals.
+    \item Check compilation diagnostics and ensure there are no unresolved references or typography defects.
+    \item Execute report-theory guard tests and module-level tests to validate both theory presence and computational behavior.
+\end{enumerate}
+This protocol converts the document from a narrative report into an auditable scientific artifact pipeline.
+
 \section{Requirement Coverage Checklist}
 This report is organized to fully cover both assignment deliverables and standard scientific-paper structure.
 \begin{itemize}
@@ -798,6 +840,46 @@ This appendix maps major implementation functions to practical review questions.
     \item Executed notebook archived in the code directory as \path{notebook_executed.ipynb}.
     \item Machine-readable results preserved in JSON and TeX macro outputs.
 \end{itemize}
+
+\section{Extended Statistical Reliability Notes}
+\subsection{Wilson Interval for Bernoulli Metrics}
+For binomial metrics such as ASR and clean accuracy, a robust confidence interval can be computed with Wilson score bounds:
+\begin{equation}
+\hat{p}_{\pm}=
+\frac{\hat{p}+\frac{z^2}{2n}\pm z\sqrt{\frac{\hat{p}(1-\hat{p})}{n}+\frac{z^2}{4n^2}}}{1+\frac{z^2}{n}}.
+\end{equation}
+This form remains numerically stable near extreme probabilities and is therefore preferable to naive normal approximation in small or highly skewed subsets.
+
+\subsection{Approximate DI Uncertainty via Delta Method}
+Let $\widehat{\mathrm{DI}}=\hat{r}_0/\hat{r}_1$, where $\hat{r}_g$ are group positive-rate estimates. A first-order variance approximation is
+\begin{equation}
+\mathrm{Var}(\widehat{\mathrm{DI}})
+\approx
+\frac{\mathrm{Var}(\hat{r}_0)}{\hat{r}_1^2}
+\;+\;
+\frac{\hat{r}_0^2}{\hat{r}_1^4}\mathrm{Var}(\hat{r}_1).
+\end{equation}
+Although this report emphasizes point estimates and decomposition plots, this approximation clarifies how group sample-size imbalance affects fairness uncertainty.
+
+\section{Sensitivity Summary Across Control Knobs}
+\begin{table}[!t]
+\centering
+\caption{Primary control knobs and expected directional effects}
+\label{tab:knob_sensitivity}
+\setlength{\tabcolsep}{3pt}
+\footnotesize
+\begin{tabular}{>{\raggedright\arraybackslash}p{0.20\linewidth} >{\raggedright\arraybackslash}p{0.23\linewidth} >{\raggedright\arraybackslash}p{0.24\linewidth} >{\raggedright\arraybackslash}p{0.23\linewidth}}
+\toprule
+Knob & Primary target & Typical effect & Failure indicator \\
+\midrule
+Unlearning fraction & Reduce ASR & Higher fraction tends to suppress trigger behavior & Clean-accuracy collapse or class-wise confusion drift \\
+Privacy epsilon & Utility-privacy balance & Lower epsilon increases noise and threshold uncertainty & Decision instability near policy thresholds \\
+Swap budget $k$ & Fairness parity under assignment method & Moderate increase can reduce DI gap & Non-monotonic fairness-utility movement \\
+Threshold pair $(\tau_0,\tau_1)$ & Post-hoc parity correction & Can move DI toward 1 with explicit utility cost & Over-correction with unacceptable accuracy loss \\
+\bottomrule
+\end{tabular}
+\end{table}
+This summary table is intended as an operational quick-reference for selecting stable operating points without losing theoretical context.
 
 \begin{thebibliography}{1}
 \bibitem{wang2019neuralcleanse}
