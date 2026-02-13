@@ -51,6 +51,8 @@ Interpretability, LIME, SHAP, Neural Additive Model, Grad-CAM, SmoothGrad, Guide
 Interpretable AI is critical in settings where predictions affect high-impact decisions, because model quality must be understood in terms of both aggregate performance and individual rationale.
 This homework targets that goal through two complementary workloads: tabular binary classification with feature-level explanation, and visual explanation of convolutional network outputs.
 The implementation was finalized as an end-to-end reproducible pipeline that generates all required report figures and compiles to a single PDF artifact.
+Beyond basic performance, the report emphasizes explanation stability, probabilistic calibration, and method agreement, because interpretability is only useful when explanations are consistent under reasonable perturbations and aligned with the trained model's actual decision logic.
+Accordingly, each required method is not only implemented but also supported by explicit theoretical framing, diagnostic metrics, and plot-level interpretations that make the reasoning traceable rather than impressionistic.
 
 \section{Reproducible Setup}
 The project code is organized under \texttt{HomeWorks/HW2/code} with dedicated modules for models, training, tabular explainers, and vision explainers.
@@ -59,6 +61,21 @@ All stochastic components are controlled with seed 42 for \texttt{random}, \text
 
 Because execution may occur without internet, two reliability safeguards were implemented: (i) tabular data download falls back to a deterministic synthetic diabetes-like dataset, and (ii) pretrained VGG16 loading falls back to randomly initialized weights.
 This design ensures the homework remains fully runnable in constrained environments without breaking downstream analysis code.
+
+\subsection{Dataset and Preprocessing Summary}
+The tabular dataset contains eight numerical features and a binary outcome.
+Input features are standardized using \texttt{StandardScaler}, i.e.,
+\begin{equation}
+x'_j=\frac{x_j-\mu_j}{\sigma_j},
+\end{equation}
+which equalizes scale across heterogeneous medical measurements and stabilizes both gradient descent and distance-based explainers.
+Data are split into train/validation/test with a 70/10/20 stratified partition to preserve class priors across splits, which is critical for stable recall and F1 measurement under moderate imbalance.
+These preprocessing and split constraints are explicitly enforced in the pipeline to make downstream comparisons (MLP vs NAM and LIME vs SHAP) statistically meaningful.
+
+\subsection{Evaluation Protocol and Reporting Guarantees}
+The evaluation protocol reports thresholded metrics (accuracy, recall, F1, confusion matrix) and threshold-free metrics (ROC-AUC, average precision), along with calibration (Brier score).
+This is a deliberate completeness requirement: thresholded metrics quantify operational behavior at a specific decision rule, while threshold-free metrics describe ranking capability independent of threshold choice, and calibration quantifies probability quality.
+All metrics are computed on the held-out test split only, and every figure is tied to a deterministic artifact with a fixed filename to prevent reporting drift.
 
 \section{Requirement Coverage Map}
 \begin{table}[H]
@@ -233,6 +250,14 @@ For vision stability, SmoothGrad maps at different sample counts \(K\) are compa
 \end{equation}
 which operationalizes convergence of saliency structure as Monte Carlo averaging strength increases.
 Complementary smoothness diagnostics use normalized entropy and total variation, where decreasing total variation with increasing \(K\) indicates suppression of high-frequency attribution noise and entropy trends indicate how saliency mass spreads across spatial support.
+
+\subsection{Method Sensitivity and Validity Checks}
+Each explanation method has explicit hyperparameters that control fidelity--stability tradeoffs, so the report treats them as part of the method definition rather than afterthoughts.
+For LIME, kernel width \(\sigma_\pi\) and sampling budget determine locality and variance; small \(\sigma_\pi\) increases fidelity but can destabilize coefficients.
+For SHAP/KernelSHAP, the number of coalition samples controls estimator variance, and the masking definition (interventional vs conditional) governs the notion of ``missing'' features; this report uses a fixed background subset and sampling budget to keep SHAP stable and reproducible.
+For Grad-CAM, layer choice controls spatial granularity: deeper layers yield stronger semantic focus but coarser resolution, while earlier layers yield sharper but more class-ambiguous maps.
+For SmoothGrad, the noise standard deviation \(\sigma\) and sample count \(K\) control the bias--variance tradeoff: higher \(\sigma\) can over-smooth, while low \(\sigma\) may preserve noise.
+The pipeline locks these settings and reports convergence metrics so the interpretability claims can be traced to explicit algorithmic assumptions rather than undocumented defaults.
 
 \section{Code-Level Implementation Walkthrough}
 \subsection{Execution Entry Point}
@@ -649,6 +674,17 @@ The feature-visualization figure demonstrates the expected transition from an in
 The complete expanded figure set supports a consistent interpretation narrative with stronger theoretical grounding: tabular diagnostics now cover EDA structure checks, optimization dynamics, thresholded and threshold-free discrimination, calibration quality, threshold-operating behavior, global permutation sensitivity, local attribution agreement, SHAP force decomposition, correlation-attribution linkage, and GRACE-style counterfactual response, while vision diagnostics progress from class-diverse input setup to localization, overlay validation, guided fusion, multi-metric SmoothGrad stability, adversarial stress testing, and regularized activation maximization.
 From an engineering standpoint, the key outcome is not only richer interpretability content but also traceable reproducibility, because all claims are linked to deterministic artifacts and serialized summary metrics generated by the same offline-robust pipeline.
 
+\subsection{Limitations and Scope}
+Interpretability results in this report explain the behavior of the trained models under fixed preprocessing and data splits; they do not constitute causal evidence about the real-world data-generating process.
+LIME explanations depend on perturbation distributions and kernel width, while SHAP explanations depend on coalition sampling and missingness assumptions; both should be interpreted as model-conditional diagnostics rather than ground-truth feature effects.
+The vision experiments use deterministic synthetic probes to ensure local reproducibility; this satisfies the algorithmic requirements but does not replace evaluation on curated natural images, which would be required for real deployment claims.
+These constraints are explicitly acknowledged so that the theoretical conclusions remain within correct epistemic bounds.
+
+\subsection{Ethical and Reliability Considerations}
+In medical-risk contexts, explanation stability and calibration are safety-critical.
+The report therefore emphasizes calibration, threshold selection, and adversarial robustness analysis as part of the interpretability story, because a confident but miscalibrated model can mislead decision makers even when its explanations are visually plausible.
+The inclusion of robustness checks (SmoothGrad convergence and FGSM sensitivity) is intended to reduce over-trust in saliency maps by showing where explanations may be fragile.
+
 \section{Conclusion}
 The report now provides comprehensive theoretical explanation across methods, metrics, and visual diagnostics while remaining aligned with IEEE formatting conventions.
 All generated figures are explained individually in dedicated one-paragraph interpretations, quantitative claims are supported by deterministic metric tables and stability statistics, and the final document now covers the full assignment checklist including bonus contrastive analysis and feature-visualization regularization rationale.
@@ -792,6 +828,26 @@ acts as a localization prior multiplied by fine-grained gradient detail, which t
 All theoretical interpretations in this report are conditioned on explicit assumptions: model differentiability for gradient-based vision methods, locally meaningful perturbation neighborhoods for LIME/SHAP, and stable data preprocessing for tabular attribution comparability.
 Consequently, attributions are explanatory diagnostics of the trained model, not direct causal effects in the data-generating process.
 This distinction is critical: the report interprets explanations as model-behavior evidence under fixed training and preprocessing contracts, which is the correct epistemic scope for trustworthy interpretability analysis.
+
+\subsection{Method Assumption Matrix}
+\begin{table}[H]
+\caption{Interpretability Method Assumptions and Primary Failure Modes}
+\label{tab:assumption_matrix}
+\centering
+\begin{tabular}{p{0.22\columnwidth}p{0.33\columnwidth}p{0.35\columnwidth}}
+\toprule
+Method & Core Assumption & Typical Failure Mode \\
+\midrule
+LIME & Local linearity under sampled neighborhood & Coefficients unstable under high curvature or poor sampling \\
+SHAP & Additive credit under coalition model & Sensitivity to background distribution and masking choice \\
+NAM & Additive structure captures true effects & Underfits genuine feature interactions \\
+Grad-CAM & Gradient-weighted maps reflect class evidence & Layer choice may blur or mislocalize evidence \\
+Guided BP & Positive-gradient flow reflects saliency & Noisy, edge-heavy maps without localization prior \\
+SmoothGrad & Noise-averaged gradients stabilize saliency & Over-smoothing can hide fine details \\
+FGSM test & First-order linearization approximates worst-case & Underestimates robustness under nonlinearity \\
+\bottomrule
+\end{tabular}
+\end{table}
 
 \bibliographystyle{IEEEtran}
 \bibliography{references}
