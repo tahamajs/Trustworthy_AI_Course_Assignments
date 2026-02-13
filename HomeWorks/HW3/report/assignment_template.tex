@@ -158,10 +158,10 @@ The script \texttt{generate\_report\_artifacts.py} produces:
 \toprule
 Configuration & Accuracy & MCC \\
 \midrule
-lin-ERM & $0.907 \pm 0.003$ & $0.817 \pm 0.005$ \\
-lin-AF  & $0.906 \pm 0.001$ & $0.817 \pm 0.001$ \\
-mlp-ERM & $0.999 \pm 0.001$ & $0.999 \pm 0.002$ \\
-mlp-AF  & $0.999 \pm 0.001$ & $0.999 \pm 0.001$ \\
+lin-ERM & $0.900 \pm 0.001$ & $0.805 \pm 0.001$ \\
+lin-AF  & $0.899 \pm 0.002$ & $0.798 \pm 0.005$ \\
+mlp-ERM & $0.997 \pm 0.002$ & $0.995 \pm 0.003$ \\
+mlp-AF  & $0.998 \pm 0.001$ & $0.995 \pm 0.002$ \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -174,7 +174,7 @@ mlp-AF  & $0.999 \pm 0.001$ & $0.999 \pm 0.001$ \\
 \end{figure}
 
 \textit{Complete interpretation of Fig.~\ref{fig:clfmetrics}:}
-This plot shows two clear regimes: linear models (ERM and AF) have nearly identical predictive strength around 0.906--0.907 accuracy and 0.817 MCC, while MLP models (ERM and AF) are substantially higher near 0.999 accuracy and 0.999 MCC. Theoretically, this supports the claim that actionability masking does not impose a major predictive penalty when actionable variables already capture most task-relevant signal. At the same time, the figure emphasizes a key recourse principle: predictive quality and intervention quality are different objectives. Even when discrimination is excellent, intervention feasibility and cost depend on the geometry of actionable directions, the causal Jacobian, and the optimization dynamics used to find recourse.
+This plot shows two clear regimes: linear models (ERM and AF) have similar predictive strength around 0.899--0.900 accuracy and 0.798--0.805 MCC, while MLP models (ERM and AF) are substantially higher near 0.997--0.998 accuracy and about 0.995 MCC. Theoretically, this supports the claim that actionability masking does not impose a major predictive penalty when actionable variables already capture most task-relevant signal. At the same time, the figure emphasizes a key recourse principle: predictive quality and intervention quality are different objectives. Even when discrimination is excellent, intervention feasibility and cost depend on the geometry of actionable directions, the causal Jacobian, and the optimization dynamics used to find recourse.
 
 \subsection{Validity--Cost Tradeoff Across Robustness Radius}
 \begin{table}[!t]
@@ -241,7 +241,7 @@ This plot visualizes heterogeneity of intervention effort across individuals: so
 \end{figure}
 
 \textit{Complete interpretation of Fig.~\ref{fig:nvscausal}:}
-Under matched seed/model/samples, both methods achieve full validity, but causal recourse yields lower mean intervention cost (0.851 versus 1.061). Theoretically, SCM-aware optimization can leverage causal amplification: modifying an actionable parent induces beneficial downstream shifts through structural equations, increasing classifier score per unit direct intervention. In contrast, nearest counterfactual search without SCM treats correlated descendants as independent dimensions and may spend action budget redundantly. This cost gap therefore reflects an efficiency benefit from structural knowledge, not merely a random optimization artifact, and aligns with intervention-based recourse theory.
+Under matched seed/model/samples, both methods achieve full validity, but causal recourse yields lower mean intervention cost (0.589 versus 0.733). Theoretically, SCM-aware optimization can leverage causal amplification: modifying an actionable parent induces beneficial downstream shifts through structural equations, increasing classifier score per unit direct intervention. In contrast, nearest counterfactual search without SCM treats correlated descendants as independent dimensions and may spend action budget redundantly. This cost gap therefore reflects an efficiency benefit from structural knowledge, not merely a random optimization artifact, and aligns with intervention-based recourse theory.
 
 \subsection{Expanded Diagnostic Features for Complete Understanding}
 \begin{figure}[!t]

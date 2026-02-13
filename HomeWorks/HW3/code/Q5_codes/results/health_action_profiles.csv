@@ -1,0 +1,17 @@
+model,trainer,config,epsilon,seed,feature,mean_abs_action_all,mean_abs_action_valid,nonzero_rate_all,nonzero_rate_valid,actionable
+lin,AF,LIN-AF,0.1,0,age,0.0,0.0,0.0,0.0,0
+lin,AF,LIN-AF,0.1,0,insulin,0.26181564489063913,0.26181564489063913,0.2,0.2,1
+lin,AF,LIN-AF,0.1,0,blood_glucose,0.0,0.0,0.0,0.0,1
+lin,AF,LIN-AF,0.1,0,blood_pressure,0.0,0.0,0.0,0.0,0
+lin,ERM,LIN-ERM,0.1,0,age,0.0,0.0,0.0,0.0,0
+lin,ERM,LIN-ERM,0.1,0,insulin,0.4521024343304031,0.4521024343304031,0.6,0.6,1
+lin,ERM,LIN-ERM,0.1,0,blood_glucose,0.0,0.0,0.0,0.0,1
+lin,ERM,LIN-ERM,0.1,0,blood_pressure,0.0,0.0,0.0,0.0,0
+mlp,AF,MLP-AF,0.1,0,age,0.0,0.0,0.0,0.0,0
+mlp,AF,MLP-AF,0.1,0,insulin,0.24029699489474296,0.3003712436184287,0.5,0.625,1
+mlp,AF,MLP-AF,0.1,0,blood_glucose,0.14958224296569825,0.1869778037071228,0.1,0.125,1
+mlp,AF,MLP-AF,0.1,0,blood_pressure,0.0,0.0,0.0,0.0,0
+mlp,ERM,MLP-ERM,0.1,0,age,0.0,0.0,0.0,0.0,0
+mlp,ERM,MLP-ERM,0.1,0,insulin,0.02044838070869446,0.02272042300966051,0.2,0.2222222222222222,1
+mlp,ERM,MLP-ERM,0.1,0,blood_glucose,0.0870448887348175,0.09671654303868611,0.1,0.1111111111111111,1
+mlp,ERM,MLP-ERM,0.1,0,blood_pressure,0.0,0.0,0.0,0.0,0

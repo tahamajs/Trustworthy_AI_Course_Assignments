@@ -13,30 +13,30 @@
     "baseline": {
       "accuracy": 0.82106053367911,
       "disparate_impact": 0.17846544686099422,
-      "zemel_proxy": 0.12549296631924392
+      "zemel_proxy": 0.04071879262670704
     },
     "group_thresholds": {
       "accuracy": 0.7994949839623285,
       "disparate_impact": 1.0291739835250906,
       "threshold_group_0": 0.17500000000000002,
       "threshold_group_1": 0.5750000000000001,
-      "zemel_proxy": 0.12528587627373358
+      "zemel_proxy": 0.11328974637413407
     },
     "no_gender": {
       "accuracy": 0.8145089742714803,
       "disparate_impact": 0.5110253086813239,
-      "zemel_proxy": 0.02561344040853524
+      "zemel_proxy": 0.019742708476369795
     },
     "promotion_demotion": {
       "accuracy": 0.8198321162901795,
       "disparate_impact": 0.15547655416283146,
       "swap_count": 20.0,
-      "zemel_proxy": 0.12662425920970588
+      "zemel_proxy": 0.04382935921909168
     },
     "reweighed": {
       "accuracy": 0.8140312563980072,
       "disparate_impact": 0.5959942352013524,
-      "zemel_proxy": 0.10906445138569713
+      "zemel_proxy": 0.11017484444163053
     }
   },
   "figures": {
