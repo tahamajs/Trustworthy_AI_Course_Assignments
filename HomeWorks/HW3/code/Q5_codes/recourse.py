@@ -344,7 +344,7 @@ class DifferentiableRecourse:
                     delta[:] = torch.min(torch.max(delta, bounds[..., 0]), bounds[..., 1])
 
                 # For early stopping
-                if self.early_stop and inner_iter % (inner_iters // 10) == 0:
+                if self.early_stop and inner_iter % (max(1, self.inner_iters // 10)) == 0:
                     if loss_mean > prev_batch_loss * (1 - ae_tol):
                         break
                     prev_batch_loss = loss_mean

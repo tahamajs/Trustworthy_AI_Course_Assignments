@@ -1,22 +1,55 @@
-HW2 — code
+# HW2 Code Guide
 
-Files added by the helper:
-- `models.py` — `MLPClassifier`, `NAMClassifier`
-- `tabular.py` — data download, preprocessing, training + evaluation for Pima dataset
-- `interpretability.py` — LIME / SHAP helper wrappers
-- `vision.py` — Grad-CAM, Guided Backprop, SmoothGrad, activation maximization
-- `requirements.txt` — packages required to run the notebook / scripts
+This directory contains all implementations for HW2.
 
-Quickstart
-1. Create a virtualenv and install requirements:
-   python -m venv .venv && source .venv/bin/activate
-   pip install -r HomeWorks/HW2/code/requirements.txt
+## Implemented methods
 
-2. Run the tabular demo (auto-downloads dataset):
-   python HomeWorks/HW2/code/tabular.py
+### 1) Tabular models (`models.py`)
 
-3. Use the notebook `HomeWorks/HW2/notebooks/HW2_solution.ipynb` for the full step-by-step report.
+- `MLPClassifier`
+  - Architecture: `8 -> 100 -> 50 -> 50 -> 20 -> 1`
+  - Uses BatchNorm, ReLU, Dropout.
+  - Trained with `BCEWithLogitsLoss`.
+- `NAMClassifier`
+  - One small subnetwork per feature (`Linear -> ReLU -> Linear`).
+  - Per-feature outputs are summed for interpretable additive effects.
 
-Notes
-- The code is minimal but complete for demonstration and grading. Adjust training hyperparams in `tabular.py` if you want a longer run.
-- LIME/SHAP examples are implemented in the notebook using the helper functions in `interpretability.py`.
+### 2) Data + training pipeline (`tabular.py`)
+
+- `load_diabetes(...)`: loads local CSV or downloads Pima dataset.
+- `preprocess(...)`: standard scaling.
+- `make_splits(...)`: stratified 70/10/20 train/val/test split.
+- `train_model(...)`: Adam optimizer + validation selection.
+- `evaluate_preds(...)`: accuracy, recall, F1, confusion matrix.
+
+### 3) Tabular interpretability (`interpretability.py`)
+
+- `lime_explain(...)`: local explanation per sample via LIME.
+- `shap_explain(...)`: SHAP values with KernelExplainer for selected samples.
+
+### 4) Vision interpretability (`vision.py`)
+
+- `get_vgg16(...)`: pretrained VGG16 (or fallback without pretrained weights).
+- `GradCAM`: class activation maps from feature gradients.
+- `GuidedBackprop`: ReLU backward hooks for positive-gradient saliency.
+- `smoothgrad(...)`: gradient averaging over noisy inputs.
+- `activation_maximization(...)`: gradient ascent on input image with TV regularization and jitter.
+
+## Quick run
+
+```bash
+cd HomeWorks/HW2/code
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+python tabular.py
+```
+
+Notebook workflow:
+
+- Open `HomeWorks/HW2/notebooks/HW2_solution.ipynb` for full experiments and report plots.
+
+## Notes
+
+- If internet is unavailable, `tabular.py` uses a synthetic fallback dataset.
+- Vision utilities are modular and can be imported independently into the notebook.

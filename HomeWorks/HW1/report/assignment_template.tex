@@ -137,6 +137,7 @@ G4 & Label smoothing experiment & code/losses.py & LabelSmoothingCrossEntropy & 
 R1 & FGSM robustness & code/attacks.py & fgsm\_attack & python HomeWorks/HW1/code/train.py --dataset cifar10 --adv-train --attack fgsm --epsilon 8/255 --epochs 100 --save-dir HomeWorks/HW1/code/checkpoints/cifar\_fgsm & checkpoints/cifar\_fgsm/best.pth & Robust accuracy & Figure~\ref{fig:hw1-adv} & \statusimplemented \\
 R2 & PGD robustness & code/attacks.py & pgd\_attack & python HomeWorks/HW1/code/train.py --dataset cifar10 --adv-train --attack pgd --epsilon 8/255 --alpha 2/255 --iters 7 --epochs 100 --save-dir HomeWorks/HW1/code/checkpoints/cifar\_pgd & checkpoints/cifar\_pgd/best.pth & Robust accuracy & Figure~\ref{fig:hw1-adv} & \statusimplemented \\
 R3 & Missing external dataset path & code/datasets.py & get\_dataloaders & python HomeWorks/HW1/code/train.py --dataset svhn --demo --epochs 2 --save-dir HomeWorks/HW1/code/checkpoints/svhn\_demo & checkpoints/svhn\_demo/best.pth & Smoke accuracy & Appendix~\ref{app:artifacts} & \statusfallback \\
+E1 & Feature embedding \& grid (demo) & code/eval.py & main; plot\_umap; save\_example\_grid & python HomeWorks/HW1/code/eval.py --dataset svhn --checkpoint HomeWorks/HW1/code/checkpoints/svhn\_demo/best.pth --umap --save-grid --demo & best.pth.umap.png; best.pth.grid.png & Qualitative separation & Figure~\ref{fig:hw1-umap} & \statusfallback \\
 \bottomrule
 \end{longtable}
 \normalsize
@@ -158,6 +159,15 @@ R3 & Missing external dataset path & code/datasets.py & get\_dataloaders & pytho
   \item Seed and key hyperparameters: seed=42, epsilon=8/255, alpha=2/255, iters=7, epochs=100.
   \item Input data source: local CIFAR10; deterministic demo fallback if unavailable.
   \item Output paths: \texttt{HomeWorks/HW1/code/checkpoints/cifar\_pgd}; robustness figures in \texttt{HomeWorks/HW1/report/figures}.
+\end{itemize}
+
+\subsection{Demo smoke reproducibility}
+\textbf{Reproducibility Block}
+\begin{itemize}[leftmargin=1.2em]
+  \item Command: \texttt{python HomeWorks/HW1/code/eval.py --dataset svhn --checkpoint HomeWorks/HW1/code/checkpoints/svhn\_demo/best.pth --umap --save-grid --demo}
+  \item Seed and key hyperparameters: seed=42, batch-size=128, demo=True.
+  \item Input data source: synthetic \texttt{FakeData} fallback (no internet access).
+  \item Output paths: \texttt{HomeWorks/HW1/code/checkpoints/svhn\_demo/best.pth.umap.png} copied to \texttt{HomeWorks/HW1/report/figures/umap\_features.png} and \texttt{HomeWorks/HW1/report/figures/adv\_examples.png}.
 \end{itemize}
 
 \section{Results and Evidence}
@@ -233,9 +243,11 @@ HomeWorks/HW1/code/checkpoints/svhn\_baseline/best.pth & train.py baseline comma
 HomeWorks/HW1/code/checkpoints/svhn\_no\_bn/best.pth & train.py no-BN command & Results and Evidence & \statusimplemented \\
 HomeWorks/HW1/code/checkpoints/svhn\_label\_smooth/best.pth & train.py label smoothing command & Results and Evidence & \statusimplemented \\
 HomeWorks/HW1/code/checkpoints/cifar\_pgd/best.pth & train.py PGD command & Results and Evidence & \statusimplemented \\
-HomeWorks/HW1/report/figures/umap\_features.png & eval.py --umap & Results and Evidence & \statusimplemented \\
-HomeWorks/HW1/report/figures/adv\_examples.png & attack evaluation export & Results and Evidence & \statusimplemented \\
+HomeWorks/HW1/report/figures/umap\_features.png & eval.py --umap --demo & Results and Evidence & \statusfallback \\
+HomeWorks/HW1/report/figures/adv\_examples.png & eval.py --save-grid --demo & Results and Evidence & \statusfallback \\
 HomeWorks/HW1/code/checkpoints/svhn\_demo/best.pth & train.py --demo & Error Analysis and Limitations & \statusfallback \\
+HomeWorks/HW1/code/checkpoints/svhn\_demo/best.pth.umap.png & eval.py --umap --demo & Results and Evidence & \statusfallback \\
+HomeWorks/HW1/code/checkpoints/svhn\_demo/best.pth.grid.png & eval.py --save-grid --demo & Results and Evidence & \statusfallback \\
 \bottomrule
 \end{longtable}
 \normalsize

@@ -1,44 +1,25 @@
-Beautiful assignment LaTeX template — usage notes
+# LaTeX Template Guide
 
-Files included
+This folder provides reusable LaTeX templates for homework reports.
 
-- `assignment_template.tex` — redesigned, modern template (edit metadata near the top)
-- `references.bib` — sample bibliography entries
-- `Makefile` — build with `make pdf`
+## Files
 
-Quick start
+- `assignment_template.tex`: standard assignment/report layout.
+- `paper_template.tex`: compact paper-style layout.
+- `references.bib`: bibliography database.
+- `Makefile`: build helpers (`make pdf`, `make paper`).
 
-1. Edit metadata in `assignment_template.tex`: `\authorname{}`, `\studentid{}`, `\assignment{}`.
-2. (Optional) Place exported figures in `template/figures/` — the template will show a tasteful placeholder if an image is missing.
-3. Add citations to `references.bib` and use `\citep{key}`.
-4. Insert code via `\begin{lstlisting}...\end{lstlisting}` or `\lstinputlisting{path/to/file.py}`.
-5. Build: `make pdf` (needs `pdflatex` + `bibtex` or `latexmk`).
+## Quick start
 
-What changed in the visual update
+1. Edit metadata in the selected template (`\authorname`, `\studentid`, `\assignment`).
+2. Export plots to `template/figures/`.
+3. Add references to `references.bib` and cite via `\citep{key}`.
+4. Build:
+   - `make pdf` for `assignment_template.tex`
+   - `make paper` for `paper_template.tex`
 
-- Improved typography (Palatino), colored accents, and refined section headings.
-- Conditional figure placeholders (safe build even when example images are absent).
-- Cleaner code listings and a boxed abstract for better readability.
+## Customization notes
 
-Customization tips
-
-- Change the accent color: edit `\definecolor{accent}{HTML}{2A9D8F}` in the .tex file.
-- Swap font: change `\usepackage{mathpazo}` to another font package (e.g., `newpx` or `lmodern`).
-- Use `minted` for advanced code highlighting (requires `-shell-escape` and Python Pygments).
-
-Notes
-
-- Export critical plots from your notebooks into `template/figures/` to replace placeholders.
-- Keep `references.bib` updated with any papers or libraries you cite.
-
-Available alternatives
-
-- `assignment_template.tex` — full report / assignment layout.
-- `paper_template.tex` — compact IEEE-style paper format (use `make paper` to build).
-
-If you want, I can also:
-
-- enable `minted` for improved code highlighting (requires `-shell-escape`), or
-- adapt the paper template to an ACM / Springer template.
-
-Tell me which and I’ll update the template.
+- Accent color is defined in the TeX source (`\definecolor{accent}{...}`).
+- Font package can be swapped by editing the corresponding `\usepackage{...}` line.
+- `minted` can be used instead of `listings` if `-shell-escape` is enabled.
