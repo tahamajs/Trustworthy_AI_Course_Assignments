@@ -1,6 +1,6 @@
 {
   "config": {
-    "download_mnist": true,
+    "download_mnist": false,
     "model_index": null,
     "population_n": 500,
     "security_profile": "high-fidelity",
@@ -12,37 +12,57 @@
   "fairness": {
     "baseline": {
       "accuracy": 0.82106053367911,
+      "di_gap_to_one": 0.8215345531390058,
       "disparate_impact": 0.17846544686099422,
+      "female_positive_rate": 0.03640431157209681,
+      "male_positive_rate": 0.20398520953163518,
       "zemel_proxy": 0.04071879262670704
     },
     "group_thresholds": {
       "accuracy": 0.7994949839623285,
+      "di_gap_to_one": 0.029173983525090597,
       "disparate_impact": 1.0291739835250906,
+      "female_positive_rate": 0.16310758592637786,
+      "male_positive_rate": 0.15848397699260477,
       "threshold_group_0": 0.17500000000000002,
       "threshold_group_1": 0.5750000000000001,
       "zemel_proxy": 0.11328974637413407
     },
     "no_gender": {
       "accuracy": 0.8145089742714803,
+      "di_gap_to_one": 0.4889746913186761,
       "disparate_impact": 0.5110253086813239,
+      "female_positive_rate": 0.08440105755541998,
+      "male_positive_rate": 0.16516023007395234,
       "zemel_proxy": 0.019742708476369795
     },
     "promotion_demotion": {
       "accuracy": 0.8198321162901795,
+      "di_gap_to_one": 0.8445234458371685,
       "disparate_impact": 0.15547655416283146,
+      "female_positive_rate": 0.031523286556843604,
+      "male_positive_rate": 0.20275267050123255,
       "swap_count": 20.0,
       "zemel_proxy": 0.04382935921909168
     },
     "reweighed": {
       "accuracy": 0.8140312563980072,
+      "di_gap_to_one": 0.4040057647986476,
       "disparate_impact": 0.5959942352013524,
+      "female_positive_rate": 0.0921293471629042,
+      "male_positive_rate": 0.1545809367296631,
       "zemel_proxy": 0.11017484444163053
     }
   },
   "figures": {
     "fairness_comparison": "/Users/tahamajs/Documents/uni/truthlyAI/HomeWorks/HW4/report/figures/fairness_comparison.png",
+    "fairness_group_rates": "/Users/tahamajs/Documents/uni/truthlyAI/HomeWorks/HW4/report/figures/fairness_group_rates.png",
+    "fairness_tradeoff": "/Users/tahamajs/Documents/uni/truthlyAI/HomeWorks/HW4/report/figures/fairness_tradeoff.png",
     "privacy_scenarios": "/Users/tahamajs/Documents/uni/truthlyAI/HomeWorks/HW4/report/figures/privacy_scenarios.png",
+    "privacy_tail_curves": "/Users/tahamajs/Documents/uni/truthlyAI/HomeWorks/HW4/report/figures/privacy_tail_curves.png",
     "security_before_after": "/Users/tahamajs/Documents/uni/truthlyAI/HomeWorks/HW4/report/figures/security_before_after.png",
+    "security_confusion_before_after": "/Users/tahamajs/Documents/uni/truthlyAI/HomeWorks/HW4/report/figures/security_confusion_before_after.png",
+    "security_scale_profile": "/Users/tahamajs/Documents/uni/truthlyAI/HomeWorks/HW4/report/figures/security_scale_profile.png",
     "trigger_all_labels_grid": "/Users/tahamajs/Documents/uni/truthlyAI/HomeWorks/HW4/report/figures/trigger_all_labels_grid.png",
     "trigger_reconstructed": "/Users/tahamajs/Documents/uni/truthlyAI/HomeWorks/HW4/report/figures/trigger_reconstructed.png"
   },
@@ -84,6 +104,20 @@
     "clean_accuracy_after": 0.9637,
     "clean_accuracy_before": 0.3518,
     "detected_attacked_label": 4,
-    "expected_attacked_label": 4
+    "expected_attacked_label": 4,
+    "largest_scale": 178.7239990234375,
+    "reconstructed_scales": [
+      135.81256103515625,
+      74.41639709472656,
+      96.81234741210938,
+      74.31498718261719,
+      9.81291389465332,
+      107.80194091796875,
+      164.03285217285156,
+      83.4474868774414,
+      178.7239990234375,
+      145.02560424804688
+    ],
+    "smallest_scale": 9.81291389465332
   }
 }

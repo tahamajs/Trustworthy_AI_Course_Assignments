@@ -27,6 +27,7 @@ RESULTS_DIR = Path(__file__).resolve().parent / "results"
 MODELS_DIR = Path(__file__).resolve().parent / "models"
 REPORT_FIG_DIR = ROOT / "report" / "figures"
 REPORT_FIG_DIR.mkdir(parents=True, exist_ok=True)
+FEATURE_NAMES = ["age", "insulin", "blood_glucose", "blood_pressure"]
 
 
 def _parse_model_filename(path: Path):
@@ -185,7 +186,6 @@ def collect_action_profiles(
     Compute per-feature action diagnostics for a representative setup.
     We use epsilon=0.1 and seed=0 across available model/trainer configurations.
     """
-    feature_names = ["age", "insulin", "blood_glucose", "blood_pressure"]
     rows = []
 
     configs = (
@@ -237,7 +237,7 @@ def collect_action_profiles(
         if not valid_mask.any():
             valid_mask = np.ones(actions.shape[0], dtype=bool)
 
-        for feat_idx, feat_name in enumerate(feature_names):
+        for feat_idx, feat_name in enumerate(FEATURE_NAMES):
             abs_all = np.abs(actions[:, feat_idx])
             abs_valid = np.abs(actions[valid_mask, feat_idx])
             rows.append(
@@ -258,6 +258,187 @@ def collect_action_profiles(
 
     out = pd.DataFrame(rows)
     out.to_csv(RESULTS_DIR / "health_action_profiles.csv", index=False)
+    return out
+
+
+def collect_action_instance_stats(
+    df: pd.DataFrame,
+    X_train: np.ndarray,
+    Y_train: np.ndarray,
+    X_test: np.ndarray,
+    constraints: dict,
+    epsilon: float = 0.1,
+    seed: int = 0,
+) -> pd.DataFrame:
+    """
+    Collect per-instance action vectors and sparsity statistics for detailed diagnostics.
+    """
+    rows = []
+    configs = (
+        df[["model", "trainer"]]
+        .drop_duplicates()
+        .sort_values(["model", "trainer"])
+        .itertuples(index=False)
+    )
+    for model_type, trainer_name in configs:
+        lambd = utils.get_lambdas("health", model_type, trainer_name)
+        save_base = Path(utils.get_metrics_save_dir("health", trainer_name, lambd, model_type, epsilon, seed))
+        id_path = Path(str(save_base) + "_ids.npy")
+        model_path = MODELS_DIR / f"health_{trainer_name}_{model_type}_s{seed}.pth"
+        if not id_path.exists() or not model_path.exists():
+            continue
+
+        model = _build_model_for_eval(model_type, trainer_name, X_train.shape[-1], constraints["actionable"])
+        model.load_state_dict(torch.load(model_path, map_location="cpu"))
+        model.set_max_mcc_threshold(X_train, Y_train)
+
+        ids = np.load(id_path).reshape(-1).astype(int)
+        if ids.size == 0:
+            continue
+        X_explain = X_test[ids]
+
+        scmm = utils.get_scm(model_type, "health")
+        if model_type == "lin":
+            w, b = model.get_weights()
+            Jw = w if scmm is None else scmm.get_Jacobian().T @ w
+            dual_norm = np.sqrt(Jw.T @ Jw)
+            explain = recourse.LinearRecourse(w, b + dual_norm * epsilon)
+            actions, valids, costs, _, _ = recourse.causal_recourse(
+                X_explain, explain, constraints, scm=scmm, verbose=False
+            )
+        else:
+            hyperparams = utils.get_recourse_hyperparams(trainer_name)
+            explain = recourse.DifferentiableRecourse(model, hyperparams)
+            actions, valids, costs, _, _ = recourse.causal_recourse(
+                X_explain,
+                explain,
+                constraints,
+                scm=scmm,
+                epsilon=epsilon,
+                robust=epsilon > 0,
+                verbose=False,
+            )
+
+        for i in range(actions.shape[0]):
+            act = actions[i]
+            nonzero = np.abs(act) > 1e-5
+            rows.append(
+                {
+                    "model": model_type,
+                    "trainer": trainer_name,
+                    "config": f"{model_type.upper()}-{trainer_name}",
+                    "epsilon": epsilon,
+                    "seed": seed,
+                    "instance_id": int(i),
+                    "valid": bool(valids[i]),
+                    "l0_nonzero": int(nonzero.sum()),
+                    "l1_norm": float(np.abs(act).sum()),
+                    "l2_norm": float(np.sqrt((act ** 2).sum())),
+                    "cost": float(costs[i]),
+                    "action_age": float(act[0]),
+                    "action_insulin": float(act[1]),
+                    "action_blood_glucose": float(act[2]),
+                    "action_blood_pressure": float(act[3]),
+                }
+            )
+
+    out = pd.DataFrame(rows)
+    out.to_csv(RESULTS_DIR / "health_action_instance_stats.csv", index=False)
+    return out
+
+
+def summarize_sparsity(action_stats: pd.DataFrame) -> pd.DataFrame:
+    if action_stats.empty:
+        out = pd.DataFrame(
+            columns=[
+                "model",
+                "trainer",
+                "config",
+                "epsilon",
+                "seed",
+                "valid_rate",
+                "mean_l0_valid",
+                "std_l0_valid",
+                "mean_l1_valid",
+                "std_l1_valid",
+                "mean_l2_valid",
+                "std_l2_valid",
+            ]
+        )
+        out.to_csv(RESULTS_DIR / "health_sparsity_summary.csv", index=False)
+        return out
+
+    rows = []
+    grp = action_stats.groupby(["model", "trainer", "config", "epsilon", "seed"], as_index=False)
+    for (model, trainer, config, eps, seed), g in grp:
+        valid_mask = g["valid"].astype(bool).to_numpy()
+        valid_rate = float(valid_mask.mean()) if len(valid_mask) else 0.0
+        gv = g[valid_mask] if valid_mask.any() else g
+        rows.append(
+            {
+                "model": model,
+                "trainer": trainer,
+                "config": config,
+                "epsilon": float(eps),
+                "seed": int(seed),
+                "valid_rate": valid_rate,
+                "mean_l0_valid": float(gv["l0_nonzero"].mean()),
+                "std_l0_valid": float(gv["l0_nonzero"].std(ddof=0)),
+                "mean_l1_valid": float(gv["l1_norm"].mean()),
+                "std_l1_valid": float(gv["l1_norm"].std(ddof=0)),
+                "mean_l2_valid": float(gv["l2_norm"].mean()),
+                "std_l2_valid": float(gv["l2_norm"].std(ddof=0)),
+            }
+        )
+
+    out = pd.DataFrame(rows)
+    out.to_csv(RESULTS_DIR / "health_sparsity_summary.csv", index=False)
+    return out
+
+
+def collect_bootstrap_summary(
+    instance_costs: pd.DataFrame, n_boot: int = 2000, seed: int = 123
+) -> pd.DataFrame:
+    """
+    Bootstrap confidence intervals for valid_rate and valid_cost from instance-level recourse rows.
+    """
+    rng = np.random.default_rng(seed)
+    rows = []
+    grouped = instance_costs.groupby(["model", "trainer", "epsilon"], as_index=False)
+    for (model, trainer, eps), g in grouped:
+        valid = g["valid"].astype(bool).to_numpy()
+        cost = g["cost"].to_numpy(dtype=float)
+        n = len(g)
+        if n == 0:
+            continue
+
+        vr_samples = np.zeros(n_boot, dtype=float)
+        vc_samples = np.zeros(n_boot, dtype=float)
+        for b in range(n_boot):
+            idx = rng.integers(0, n, size=n)
+            v = valid[idx]
+            c = cost[idx]
+            vr_samples[b] = v.mean() if v.size else 0.0
+            vc_samples[b] = np.nanmean(c[v]) if np.any(v) else np.nan
+
+        rows.append(
+            {
+                "model": model,
+                "trainer": trainer,
+                "config": f"{model.upper()}-{trainer}",
+                "epsilon": float(eps),
+                "valid_rate_mean": float(valid.mean()),
+                "valid_rate_ci_low": float(np.nanpercentile(vr_samples, 2.5)),
+                "valid_rate_ci_high": float(np.nanpercentile(vr_samples, 97.5)),
+                "valid_cost_mean": float(np.nanmean(cost[valid])) if np.any(valid) else np.nan,
+                "valid_cost_ci_low": float(np.nanpercentile(vc_samples, 2.5)),
+                "valid_cost_ci_high": float(np.nanpercentile(vc_samples, 97.5)),
+                "n_rows": int(n),
+            }
+        )
+
+    out = pd.DataFrame(rows).sort_values(["model", "trainer", "epsilon"])
+    out.to_csv(RESULTS_DIR / "health_bootstrap_summary.csv", index=False)
     return out
 
 
@@ -322,6 +503,9 @@ def make_figures(
     nearest_vs_causal: pd.DataFrame,
     instance_costs: pd.DataFrame,
     action_profiles: pd.DataFrame,
+    action_instance_stats: pd.DataFrame,
+    sparsity_summary: pd.DataFrame,
+    bootstrap_summary: pd.DataFrame,
 ):
     sns.set_theme(style="whitegrid", font_scale=1.0)
     df = df.copy()
@@ -462,6 +646,93 @@ def make_figures(
         fig.savefig(REPORT_FIG_DIR / "feature_nonzero_rate.png", dpi=220)
         plt.close(fig)
 
+    # Bootstrap uncertainty bands for validity and cost curves.
+    if not bootstrap_summary.empty:
+        boot = bootstrap_summary.sort_values(["config", "epsilon"]).copy()
+        fig, axes = plt.subplots(1, 2, figsize=(11.2, 4.3))
+        for cfg, g in boot.groupby("config"):
+            g = g.sort_values("epsilon")
+            axes[0].plot(g["epsilon"], g["valid_rate_mean"], marker="o", label=cfg)
+            axes[0].fill_between(
+                g["epsilon"],
+                g["valid_rate_ci_low"],
+                g["valid_rate_ci_high"],
+                alpha=0.18,
+            )
+            axes[1].plot(g["epsilon"], g["valid_cost_mean"], marker="o", label=cfg)
+            axes[1].fill_between(
+                g["epsilon"],
+                g["valid_cost_ci_low"],
+                g["valid_cost_ci_high"],
+                alpha=0.18,
+            )
+
+        axes[0].set_title("Bootstrap CI: Validity")
+        axes[0].set_xlabel("Epsilon")
+        axes[0].set_ylabel("Valid Rate")
+        axes[0].set_ylim(0.6, 1.02)
+        axes[1].set_title("Bootstrap CI: Valid Cost")
+        axes[1].set_xlabel("Epsilon")
+        axes[1].set_ylabel("Valid L1 Cost")
+        axes[1].legend(loc="best", fontsize=8)
+        fig.tight_layout()
+        fig.savefig(REPORT_FIG_DIR / "bootstrap_ci_curves.png", dpi=220)
+        plt.close(fig)
+
+    # Sparsity-cost relation of valid recourse.
+    if not sparsity_summary.empty:
+        ss = sparsity_summary.copy()
+        fig, ax = plt.subplots(figsize=(7.8, 4.6))
+        sns.scatterplot(
+            data=ss,
+            x="mean_l0_valid",
+            y="mean_l1_valid",
+            hue="config",
+            style="epsilon",
+            s=95,
+            ax=ax,
+        )
+        for _, r in ss.iterrows():
+            ax.text(r["mean_l0_valid"] + 0.01, r["mean_l1_valid"] + 0.01, r["config"], fontsize=7)
+        ax.set_title("Sparsity-Cost Operating Points (Valid Recourse)")
+        ax.set_xlabel("Mean L0 (nonzero features)")
+        ax.set_ylabel("Mean L1 cost")
+        fig.tight_layout()
+        fig.savefig(REPORT_FIG_DIR / "sparsity_vs_cost.png", dpi=220)
+        plt.close(fig)
+
+    # Instance-level action heatmap for an interpretable reference configuration.
+    if not action_instance_stats.empty:
+        hm = action_instance_stats[
+            (action_instance_stats["model"] == "lin")
+            & (action_instance_stats["trainer"] == "ERM")
+            & (np.isclose(action_instance_stats["epsilon"], 0.1))
+            & (action_instance_stats["seed"] == 0)
+        ].sort_values("instance_id")
+        if not hm.empty:
+            mat = hm[
+                ["action_age", "action_insulin", "action_blood_glucose", "action_blood_pressure"]
+            ].to_numpy()
+            row_labels = [f"id{int(i)}{'*' if v else ''}" for i, v in zip(hm["instance_id"], hm["valid"])]
+            col_labels = FEATURE_NAMES
+
+            fig, ax = plt.subplots(figsize=(8.2, 4.7))
+            sns.heatmap(
+                mat,
+                cmap="coolwarm",
+                center=0.0,
+                xticklabels=col_labels,
+                yticklabels=row_labels,
+                ax=ax,
+                cbar_kws={"label": "Action magnitude (signed)"},
+            )
+            ax.set_title("Action Heatmap (LIN-ERM, epsilon=0.1, seed=0; * = valid)")
+            ax.set_xlabel("Feature")
+            ax.set_ylabel("Explained instance")
+            fig.tight_layout()
+            fig.savefig(REPORT_FIG_DIR / "action_heatmap_lin_erm.png", dpi=220)
+            plt.close(fig)
+
 
 def main():
     df, agg, X_train, Y_train, X_test, _, constraints = collect_metrics()
@@ -470,12 +741,29 @@ def main():
     nearest_vs_causal = nearest_vs_causal_lin(X_train, Y_train, X_test, constraints)
     instance_costs = collect_instance_costs(df)
     action_profiles = collect_action_profiles(df, X_train, Y_train, X_test, constraints, epsilon=0.1, seed=0)
-    make_figures(df, agg, nearest_vs_causal, instance_costs, action_profiles)
+    action_instance_stats = collect_action_instance_stats(
+        df, X_train, Y_train, X_test, constraints, epsilon=0.1, seed=0
+    )
+    sparsity_summary = summarize_sparsity(action_instance_stats)
+    bootstrap_summary = collect_bootstrap_summary(instance_costs)
+    make_figures(
+        df,
+        agg,
+        nearest_vs_causal,
+        instance_costs,
+        action_profiles,
+        action_instance_stats,
+        sparsity_summary,
+        bootstrap_summary,
+    )
     print("Saved:", RESULTS_DIR / "health_report_summary.csv")
     print("Saved:", RESULTS_DIR / "health_report_aggregate.csv")
     print("Saved:", RESULTS_DIR / "nearest_vs_causal_lin_seed0.csv")
     print("Saved:", RESULTS_DIR / "health_instance_costs.csv")
     print("Saved:", RESULTS_DIR / "health_action_profiles.csv")
+    print("Saved:", RESULTS_DIR / "health_action_instance_stats.csv")
+    print("Saved:", RESULTS_DIR / "health_sparsity_summary.csv")
+    print("Saved:", RESULTS_DIR / "health_bootstrap_summary.csv")
     print("Saved report figures in:", REPORT_FIG_DIR)
     print(agg.to_string(index=False))
     print(nearest_vs_causal.to_string(index=False))

@@ -112,6 +112,29 @@ The reporting code aggregates all saved runs into publication-ready artifacts. \
 \subsection{Implementation Correctness Summary}
 From a software engineering perspective, the code now forms a coherent layered system: preprocessing enforces intervention semantics, model training exports decision functions in solver-compatible form, SCM methods provide causally faithful counterfactual mapping, recourse solvers optimize under explicit feasibility sets, and report scripts reproducibly transform experiment outputs into submission artifacts. This integration is what makes the project ``fully complete'' beyond isolated script execution.
 
+\section{Coverage of Original-Paper Requirements}
+To ensure theoretical and methodological completeness, this report explicitly covers the core components required by the original recourse literature used in this homework context, including actionable recourse \cite{ustun2019actionable}, causal/interventional recourse \cite{karimi2021algorithmic,pearl2009causality}, and differentiable counterfactual-style optimization \cite{mothilal2020explaining}. Table~\ref{tab:coverage} maps each required component to implementation and report evidence.
+
+\begin{table*}[!t]
+\centering
+\caption{Coverage matrix linking original-paper components to implementation and report evidence}
+\label{tab:coverage}
+\begin{tabular}{p{0.24\textwidth}p{0.24\textwidth}p{0.24\textwidth}p{0.24\textwidth}}
+\toprule
+Original-paper component & Theoretical object in this report & Implementation evidence in code & Evidence in generated report \\
+\midrule
+Binary thresholded classifier for decision flip & $h(x)=\mathbb{I}[\sigma(g_\theta(x))\ge\tau]$ and MCC-based threshold calibration & \texttt{trainers.Classifier}, \texttt{set\_max\_mcc\_threshold}, \texttt{predict} & Sec. II-A, classifier table/plot in Sec. V-A \\
+Actionability-constrained interventions & Feasible action set with actionable indices, monotonic direction constraints, and per-feature bounds & \texttt{data\_utils.process\_health\_data}, \texttt{recourse.build\_feasibility\_sets} & Sec. III-A, diagnostics in Sec. V-E \\
+Minimum-cost recourse optimization & Weighted L1 objective with validity constraints (linear LP) and differentiable objective (nonlinear) & \texttt{recourse.LinearRecourse.solve\_lp}, \texttt{DifferentiableRecourse.find\_recourse} & Sec. II, Sec. V-B/C, Appendix A/B/D \\
+Robust recourse under uncertainty radius $\epsilon$ & Margin-shifted robust condition and validity-cost frontier analysis & \texttt{evaluate\_recourse.find\_recourse\_lin/mlp}, robust args in causal recourse call & Sec. II-B, Sec. V-B/E, Appendix A \\
+Causal abduction-action-prediction mechanism & Counterfactual mapping $X\rightarrow U\rightarrow X^{cf}$ and Jacobian-based propagation & \texttt{scm.SCM.counterfactual}, \texttt{Health\_SCM}, \texttt{get\_Jacobian\_interv} & Sec. III-C, Sec. V-D, Appendix C \\
+Intervention-set selection principle & Search over actionable intervention subsets; retain minimum-cost valid action & \texttt{recourse.causal\_recourse} powerset loop and best-cost update & Sec. IV/Evaluation + Sec. V explanations \\
+Baseline comparison requirement & Nearest counterfactual (SCM off) versus causal recourse (SCM on) under matched setup & \texttt{generate\_report\_artifacts.nearest\_vs\_causal\_lin} & Fig. 5 and full paragraph in Sec. V-D \\
+Reproducibility and artifact completeness & Run commands, aggregate/per-run/instance/action CSV traces, and fixed report figure pipeline & \texttt{generate\_report\_artifacts.py}, saved CSV/PNG artifacts & Sec. IV-C, appendices with listings and commands \\
+\bottomrule
+\end{tabular}
+\end{table*}
+
 \section{Experimental Protocol}
 \subsection{Environment and Reproducibility}
 All runs use:
@@ -326,6 +349,66 @@ The causal advantage observed here assumes the SCM is approximately correct in s
 This report completes HW3 Question~5 end-to-end in IEEE format with explicit theoretical and empirical analysis. The software pipeline is fully runnable, missing SCM components are completed, robust evaluations are produced, and each plot is interpreted in a dedicated theory-grounded paragraph. Empirically, linear recourse is highly stable on this dataset, AF reduces intervention cost, and causal recourse outperforms nearest counterfactual in matched cost comparison while maintaining full validity.
 
 \appendices
+\section{Robust Linear Derivation (Complete)}
+This appendix provides the full derivation behind the robust linear margin shift used in the implementation. Let the linear decision function be $g(x)=w^\top x-b$ with positive prediction when $g(x)\ge 0$. Under intervention $a$ with causal propagation $x^{cf}=x+Ja$, robust feasibility against perturbation $\delta$ with $\|\delta\|_2\le\epsilon$ requires
+\begin{equation}
+\min_{\|\delta\|_2\le\epsilon} w^\top(x+Ja+\delta)-b \ge 0.
+\end{equation}
+Using support-function duality of the Euclidean ball,
+\begin{equation}
+\min_{\|\delta\|_2\le\epsilon} w^\top \delta = -\epsilon\|w\|_2
+\end{equation}
+in the IMF case, and
+\begin{equation}
+\min_{\|\delta\|_2\le\epsilon} w^\top J\delta = -\epsilon\|J^\top w\|_2
+\end{equation}
+in the causal-coordinate uncertainty view. Therefore robust recourse must satisfy
+\begin{equation}
+w^\top(x+Ja)-b \ge \epsilon\|J^\top w\|_2,
+\end{equation}
+which is exactly implemented by shifting the effective bias term by $\epsilon\|J^\top w\|_2$ before solving the linear recourse program. This result establishes monotone cost growth with $\epsilon$ whenever feasible-set geometry is fixed.
+
+\section{Weighted L1 Recourse Primal-Dual View}
+For each instance, linear recourse solves
+\begin{equation}
+\min_a \|C a\|_1 \quad \text{s.t.}\quad w^\top J a \ge \gamma,\;\; l\le a\le u,\;\; a_{\bar{\mathcal{A}}}=0,
+\end{equation}
+where $C=\text{diag}(c_1,\dots,c_D)$, $\gamma=b-w^\top x+\epsilon\|J^\top w\|_2$, and $\mathcal{A}$ is the actionable set. Introducing sign-split variables $a=a^+-a^-$ with $a^\pm\ge 0$, the objective becomes linear and the problem is an LP. Dual multipliers associated with the margin constraint quantify ``cost per unit margin'' and induce an economically interpretable shadow price: higher multiplier means margin is expensive under current actionability limits. This explains why AF can lower cost even at similar predictive quality: classifier sensitivity aligns with lower shadow-price actionable coordinates.
+
+\section{Causal Counterfactual Algebra for Health SCM}
+The completed Health SCM uses
+\begin{align}
+X_1 &= U_1,\\
+X_2 &= w_{21}X_1+U_2,\\
+X_3 &= w_{31}X_1+w_{32}X_2+U_3,\\
+X_4 &= w_{42}X_2+w_{43}X_3+U_4.
+\end{align}
+For a factual point $x$, abduction computes exogenous variables:
+\begin{align}
+u_1 &= x_1,\;\;
+u_2 = x_2-w_{21}x_1,\;\;
+u_3 = x_3-w_{31}x_1-w_{32}x_2,\\
+u_4 &= x_4-w_{42}x_2-w_{43}x_3.
+\end{align}
+Action sets intervened variables (hard intervention in this report) and prediction propagates downstream through remaining equations. The Jacobian matrix used by robust linear recourse is
+\begin{equation}
+J=
+\begin{bmatrix}
+1 & 0 & 0 & 0\\
+w_{21} & 1 & 0 & 0\\
+w_{31} & w_{32} & 1 & 0\\
+0 & w_{42} & w_{43} & 1
+\end{bmatrix},
+\end{equation}
+with row-wise upstream zeroing for hard-intervened coordinates in \texttt{get\_Jacobian\_interv}. This guarantees consistency between optimization geometry and causal semantics.
+
+\section{Nonlinear Recourse Objective and Theoretical Guarantees}
+For differentiable recourse, the optimized objective per instance is
+\begin{equation}
+\mathcal{L}(\delta)=\ell(g_\theta(x^{cf}(\delta)),1)+\lambda\|\delta\|_1,
+\end{equation}
+and under robust mode the loss is evaluated on adversarially perturbed counterfactuals within an $\epsilon$-ball approximation. Because $x^{cf}(\delta)$ passes through nonlinear classifier and possibly SCM transformations, $\mathcal{L}$ is generally non-convex and non-smooth (L1 term). Consequently, first-order optimization guarantees stationarity of local points rather than global optimality. This theoretical fact explains empirical behavior where validity can improve while mean cost worsens: optimization may reach feasible but non-minimal local basins. Practical mitigation includes multi-start optimization, adaptive step-size schedules, and reporting dispersion statistics (already included via distribution plots and appendix CSV traces).
+
 \section{Reproducibility Commands}
 \begin{lstlisting}[caption={Exact commands used for the final report build}]
 cd /Users/tahamajs/Documents/uni/truthlyAI/HomeWorks/HW3/code/q5_codes
