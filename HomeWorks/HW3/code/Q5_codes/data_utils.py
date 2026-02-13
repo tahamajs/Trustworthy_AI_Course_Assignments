@@ -13,9 +13,105 @@ from sklearn.preprocessing import StandardScaler
 
 BASE_DIR = os.path.dirname(__file__)
 DATA_DIR = os.path.join(BASE_DIR, 'data')
+PROJECT_ROOT = os.path.abspath(os.path.join(BASE_DIR, '..', '..'))
+HW3_DATASET_DIR = os.path.join(PROJECT_ROOT, 'dataset')
 
 def get_data_file(data_name):
     return os.path.join(DATA_DIR, '%s.csv' % data_name)
+
+
+def get_health_source_path():
+    """
+    Resolve the health-data source path for Q4/Q5.
+
+    Priority:
+    1) $HW3_HEALTH_DATA (explicit override)
+    2) HomeWorks/HW3/dataset/diabetes.csv (assignment dataset)
+    3) legacy q5_codes/data/health.csv fallback
+    """
+    override = os.getenv("HW3_HEALTH_DATA")
+    candidates = []
+    if override:
+        candidates.append(override)
+    candidates.extend(
+        [
+            os.path.join(HW3_DATASET_DIR, "diabetes.csv"),
+            get_data_file("health"),
+        ]
+    )
+    for path in candidates:
+        if path and os.path.isfile(path):
+            return path
+    raise FileNotFoundError(
+        "Health dataset not found. Checked HW3_HEALTH_DATA, "
+        "HomeWorks/HW3/dataset/diabetes.csv, and q5_codes/data/health.csv."
+    )
+
+
+def get_health_source_tag():
+    path = get_health_source_path()
+    name = os.path.basename(path).lower()
+    if name == "diabetes.csv":
+        return "pima_diabetes"
+    if name == "health.csv":
+        return "health_legacy"
+    return os.path.splitext(name)[0].replace(" ", "_")
+
+
+def load_health_dataframe():
+    """
+    Load health data and return canonical columns:
+        ['age', 'insulin', 'blood_glucose', 'blood_pressure', 'category']
+
+    Supported input schemas:
+    - Existing homework schema:
+        age, insulin, blood_glucose, blood_pressure, category
+    - Pima diabetes schema:
+        Pregnancies, Glucose, BloodPressure, SkinThickness,
+        Insulin, BMI, DiabetesPedigreeFunction, Age, Outcome
+      where Outcome=1 means diabetic (treated here as unhealthy),
+      so category (healthy=1, unhealthy=0) = 1 - Outcome.
+    """
+    source_path = get_health_source_path()
+    df_raw = pd.read_csv(source_path)
+    lower_map = {c.lower(): c for c in df_raw.columns}
+
+    canonical_req = ["age", "insulin", "blood_glucose", "blood_pressure", "category"]
+    pima_req = ["age", "insulin", "glucose", "bloodpressure", "outcome"]
+
+    if all(c in lower_map for c in canonical_req):
+        df = pd.DataFrame(
+            {
+                "age": pd.to_numeric(df_raw[lower_map["age"]], errors="coerce"),
+                "insulin": pd.to_numeric(df_raw[lower_map["insulin"]], errors="coerce"),
+                "blood_glucose": pd.to_numeric(df_raw[lower_map["blood_glucose"]], errors="coerce"),
+                "blood_pressure": pd.to_numeric(df_raw[lower_map["blood_pressure"]], errors="coerce"),
+                "category": pd.to_numeric(df_raw[lower_map["category"]], errors="coerce"),
+            }
+        )
+    elif all(c in lower_map for c in pima_req):
+        # Outcome: 1=diabetic (unhealthy), 0=non-diabetic (healthy).
+        # Assignment convention for health.csv category: 1=healthy, 0=unhealthy.
+        outcome = pd.to_numeric(df_raw[lower_map["outcome"]], errors="coerce")
+        df = pd.DataFrame(
+            {
+                "age": pd.to_numeric(df_raw[lower_map["age"]], errors="coerce"),
+                "insulin": pd.to_numeric(df_raw[lower_map["insulin"]], errors="coerce"),
+                "blood_glucose": pd.to_numeric(df_raw[lower_map["glucose"]], errors="coerce"),
+                "blood_pressure": pd.to_numeric(df_raw[lower_map["bloodpressure"]], errors="coerce"),
+                "category": 1.0 - outcome,
+            }
+        )
+    else:
+        raise ValueError(
+            f"Unsupported health-data schema in {source_path}. "
+            "Expected canonical health columns or diabetes.csv columns."
+        )
+
+    df = df.dropna().reset_index(drop=True)
+    df["category"] = df["category"].round().astype(int).clip(0, 1)
+    df.attrs["source_path"] = source_path
+    return df
 
 def process_data(data):
     if data == "compas":
@@ -210,7 +306,7 @@ def process_german_data():
 
 
 def process_health_data():
-    df = pd.read_csv(get_data_file('health'))
+    df = load_health_dataframe()
 
     X_health = df[['age', 'insulin', 'blood_glucose', 'blood_pressure']].values
     Y_health = df['category'].values
@@ -254,6 +350,5 @@ def process_health_data():
                    'decreasing': decreasing, 'limits': feature_limits}
     
     return X_health, Y_health, constraints
-
 
 

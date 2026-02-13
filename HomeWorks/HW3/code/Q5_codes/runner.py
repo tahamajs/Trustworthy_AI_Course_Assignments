@@ -2,6 +2,7 @@
 import os
 import numpy as np
 import torch
+import json
 
 import scm
 import utils
@@ -9,6 +10,42 @@ import data_utils
 import train_classifiers
 import evaluate_recourse
 import plot_report_figures
+
+
+def _model_meta_path(save_dir):
+    return save_dir + ".meta.json"
+
+
+def _health_meta_payload():
+    return {
+        "health_source_tag": data_utils.get_health_source_tag(),
+        "health_source_path": data_utils.get_health_source_path(),
+    }
+
+
+def _model_cache_is_valid(dataset, save_dir):
+    model_path = save_dir + ".pth"
+    if not os.path.isfile(model_path):
+        return False
+    if dataset != "health":
+        return True
+    meta_path = _model_meta_path(save_dir)
+    if not os.path.isfile(meta_path):
+        return False
+    try:
+        with open(meta_path, "r", encoding="utf-8") as f:
+            meta = json.load(f)
+        return meta.get("health_source_tag") == data_utils.get_health_source_tag()
+    except Exception:
+        return False
+
+
+def _save_model_meta(dataset, save_dir):
+    payload = {"dataset": dataset}
+    if dataset == "health":
+        payload.update(_health_meta_payload())
+    with open(_model_meta_path(save_dir), "w", encoding="utf-8") as f:
+        json.dump(payload, f, indent=2, sort_keys=True)
 
 
 def run_benchmark(models, datasets, seed, N_explain):
@@ -49,17 +86,21 @@ def run_benchmark(models, datasets, seed, N_explain):
                     save_dir = utils.get_model_save_dir(dataset, trainer, model_type, seed, lambd)
 
                     # Train the model if it has not been already trained
-                    if not os.path.isfile(save_dir+'.pth'):
+                    # (or if health source changed and cache is stale).
+                    if not _model_cache_is_valid(dataset, save_dir):
                         print('Training... %s %s %s' % (model_type, trainer, dataset))
                         train_epochs = utils.get_train_epochs(dataset, model_type, trainer)
                         accuracy, mcc = train_classifiers.train(dataset, trainer, model_type, train_epochs, lambd, seed,
                                                                 verbose=True, save_dir=save_dir)
+                        _save_model_meta(dataset, save_dir)
 
                         # Save the performance metrics of the classifier
                         save_name = utils.get_metrics_save_dir(dataset, trainer, lambd, model_type, 0, seed)
                         np.save(save_name + '_accs.npy', np.array([accuracy]))
                         np.save(save_name + '_mccs.npy', np.array([mcc]))
                         print(save_name + '_mccs.npy')
+                    else:
+                        print('Using cached model... %s %s %s' % (model_type, trainer, dataset))
     #
     # # ------------------------------------------------------------------------------------------------------------------
     # # EVALUATE RECOURSE FOR THE TRAINED CLASSIFIERS
@@ -80,5 +121,4 @@ def run_benchmark(models, datasets, seed, N_explain):
     for model_type in models:
         for dataset in datasets:
             run_evaluation(dataset, model_type, trainer, seed, N_explain, epsilon, False)
-
 
