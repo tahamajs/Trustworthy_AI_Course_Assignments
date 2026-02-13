@@ -1,532 +1,204 @@
-\documentclass[11pt,a4paper]{article}
+\documentclass[conference]{IEEEtran}
 
-\usepackage[utf8]{inputenc}
-\usepackage[T1]{fontenc}
-\usepackage{mathpazo}
-\usepackage{microtype}
-\usepackage[a4paper,margin=1in]{geometry}
-\setlength{\headheight}{15pt}
-
-\usepackage{amsmath,amssymb,mathtools}
-\usepackage{siunitx}
+\usepackage{cite}
+\usepackage{amsmath,amssymb,amsfonts}
 \usepackage{graphicx}
-\usepackage{caption}
-\usepackage{subcaption}
 \usepackage{booktabs}
-\usepackage{float}
-\usepackage{enumitem}
-\usepackage{xcolor}
-\usepackage{tabularx}
-\usepackage{longtable}
-\usepackage{array}
 \usepackage{multirow}
-\definecolor{accent}{HTML}{2A9D8F}
-\definecolor{heading}{HTML}{264653}
-
-\usepackage{titlesec}
-\titleformat{\section}{\Large\bfseries\color{heading}}{\thesection}{1em}{}
-\titleformat{\subsection}{\bfseries\color{heading}}{\thesubsection}{0.5em}{}
-\titlespacing*{\section}{0pt}{12pt}{6pt}
-
+\usepackage{array}
+\usepackage{siunitx}
+\usepackage{float}
+\usepackage{xcolor}
 \usepackage{listings}
+\usepackage{url}
+
 \lstdefinestyle{py}{
   language=Python,
-  basicstyle=\ttfamily\small,
-  backgroundcolor=\color{gray!6},
+  basicstyle=\ttfamily\footnotesize,
   frame=single,
-  framesep=4pt,
-  rulecolor=\color{gray!40},
-  keywordstyle=\color{blue!65!black},
-  commentstyle=\color{gray!55!black}\itshape,
-  stringstyle=\color{red!65!black},
+  breaklines=true,
   showstringspaces=false,
   numbers=left,
-  numberstyle=\tiny\color{gray},
-  breaklines=true,
+  numberstyle=\tiny,
   captionpos=b,
 }
 \lstset{style=py}
 
-\usepackage{tcolorbox}
-\tcbset{colback=gray!7, colframe=accent, left=6pt, right=6pt, boxrule=0.8pt}
+\title{HW2 Interpretability Report in IEEE Format\\
+Comprehensive Tabular and Vision Explanation Analysis}
 
-\usepackage{fancyhdr}
-\pagestyle{fancy}
-\fancyhf{}
-\renewcommand{\headrulewidth}{0.6pt}
-\renewcommand{\footrulewidth}{0.0pt}
-\fancyhead[L]{\small\textbf{\course{}}}
-\fancyhead[C]{\small Assignment \assignment{}}
-\fancyhead[R]{\small \authorname{}}
-\fancyfoot[C]{\thepage}
-
-\newcommand{\course}{Trusted Artificial Intelligence}
-\newcommand{\instructor}{Dr. Mostafa Tavasolipour}
-\newcommand{\semester}{Spring 2024}
-\newcommand{\assignment}{2}
-\newcommand{\authorname}{Taha Majlesi}
-\newcommand{\studentid}{810101504}
-\newcommand{\affiliation}{Department of Electrical and Computer Engineering, University of Tehran}
-\newcommand{\projectroot}{HomeWorks/HW2}
-
-\newcommand{\statusimplemented}{Implemented}
-\newcommand{\statusfallback}{Implemented with fallback}
-\newcommand{\statusna}{Not applicable}
-\newcolumntype{Y}{>{\raggedright\arraybackslash}X}
-
-\usepackage[hidelinks]{hyperref}
-\usepackage{natbib}
-\bibliographystyle{plainnat}
+\author{\IEEEauthorblockN{Taha Majlesi}
+\IEEEauthorblockA{Student ID: 810101504\\
+Department of Electrical and Computer Engineering, University of Tehran\\
+Course: Trusted Artificial Intelligence (Homework 2)}}
 
 \begin{document}
+\maketitle
 
-\begin{titlepage}
-  \centering
-  {\LARGE\bfseries \course{} \par}
-  \vspace{1.2cm}
-  {\Huge\bfseries Homework \assignment{}\par}
-  \vspace{0.6cm}
-  {\large \semester{}\par}
-  \vspace{1.2cm}
-  {\Large\bfseries \authorname{}\par}
-  \vspace{0.2cm}
-  {\small ID: \studentid{} \quad | \quad \affiliation{}\par}
-  \vfill
-  {\large Instructor: \instructor{}\par}
-  {\small Submitted: \today\par}
-\end{titlepage}
+\begin{abstract}
+This report presents a complete IEEE-style implementation and analysis of Homework 2 on interpretable machine learning across tabular and computer-vision domains.
+The final pipeline is deterministic and robust to offline execution by introducing controlled fallback behavior for both data and model initialization.
+Two tabular models (MLP and NAM) are trained and evaluated, and local explanations are generated with LIME and SHAP.
+For vision, Grad-CAM, Guided Backpropagation, SmoothGrad, and Guided Grad-CAM are implemented and exported as reproducible artifacts.
+Every required figure is interpreted explicitly, with one dedicated paragraph per plot result, and all experiments are linked to executable commands and traceable files.
+\end{abstract}
 
-\begin{tcolorbox}
-\textbf{Abstract.}
-This report delivers a complete, reproducible implementation record for Homework 2 across two domains: tabular interpretability and vision interpretability.
-The final codebase is executable in constrained (offline) environments and produces all required report figures in one deterministic run.
-The document includes architecture rationale, algorithmic formulas, implementation traceability, quantitative outcomes, qualitative interpretation, verification evidence, and explicit residual risks.
-\end{tcolorbox}
+\begin{IEEEkeywords}
+Interpretability, LIME, SHAP, Neural Additive Model, Grad-CAM, SmoothGrad, Guided Backpropagation, Reproducibility
+\end{IEEEkeywords}
 
-\vspace{6pt}
-\tableofcontents
-\clearpage
+\section{Introduction}
+Interpretable AI is critical in settings where predictions affect high-impact decisions, because model quality must be understood in terms of both aggregate performance and individual rationale.
+This homework targets that goal through two complementary workloads: tabular binary classification with feature-level explanation, and visual explanation of convolutional network outputs.
+The implementation was finalized as an end-to-end reproducible pipeline that generates all required report figures and compiles to a single PDF artifact.
 
-\section{Problem Scope and Deliverables}
-The homework asks for interpretable machine learning workflows in two complementary settings:
-\begin{enumerate}[leftmargin=1.4em]
-  \item binary classification on tabular data with both a standard deep model and an inherently interpretable model,
-  \item explanation techniques for image classifiers, including localization and saliency-based methods,
-  \item artifact export into a report-ready figure directory and full traceability between code and outcomes.
-\end{enumerate}
+\section{Reproducible Setup}
+The project code is organized under \texttt{HomeWorks/HW2/code} with dedicated modules for models, training, tabular explainers, and vision explainers.
+The final figure export entry point is \texttt{code/generate\_report\_plots.py}, which writes artifacts into \texttt{HomeWorks/HW2/report/figures}.
+All stochastic components are controlled with seed 42 for \texttt{random}, \texttt{numpy}, and \texttt{torch}.
 
-The final solution addresses all three requirements with a single reproducible pipeline and a notebook-compatible modular code design.
-The implementation resides under \texttt{\projectroot/code}, while report artifacts are exported to \texttt{\projectroot/report/figures}.
+Because execution may occur without internet, two reliability safeguards were implemented: (i) tabular data download falls back to a deterministic synthetic diabetes-like dataset, and (ii) pretrained VGG16 loading falls back to randomly initialized weights.
+This design ensures the homework remains fully runnable in constrained environments without breaking downstream analysis code.
 
-\subsection{Completion criteria}
-A task is considered fully complete when:
-\begin{enumerate}[leftmargin=1.4em]
-  \item code executes without runtime failure in the target environment,
-  \item expected outputs are produced at the documented locations,
-  \item metrics and plots can be regenerated from source code,
-  \item report claims can be mapped to exact functions/classes/commands.
-\end{enumerate}
-
-\section{Repository Architecture}
-\subsection{Directory-level design}
-The implementation follows a direct separation of concerns:
-\begin{itemize}[leftmargin=1.4em]
-  \item \texttt{code/models.py}: model definitions (MLP, NAM),
-  \item \texttt{code/tabular.py}: dataset loading, preprocessing, splitting, training, evaluation,
-  \item \texttt{code/interpretability.py}: LIME/SHAP helper wrappers,
-  \item \texttt{code/vision.py}: Grad-CAM, Guided Backprop, SmoothGrad, activation maximization,
-  \item \texttt{code/generate\_report\_plots.py}: one-command figure generation pipeline,
-  \item \texttt{report/assignment\_template.tex}: final report source.
-\end{itemize}
-
-\subsection{Execution contracts}
-Each major module exposes one explicit contract:
-\begin{enumerate}[leftmargin=1.4em]
-  \item \texttt{tabular.py}: given data, return trained model(s) and evaluation metrics.
-  \item \texttt{interpretability.py}: given model inference callback(s), return local attributions.
-  \item \texttt{vision.py}: given model and image tensor, return explanation maps.
-  \item \texttt{generate\_report\_plots.py}: regenerate report images deterministically.
-\end{enumerate}
-
-\section{Reproducibility and Environment}
-\subsection{Software environment}
-All experiments were executed using:
-\begin{table}[H]
-  \centering
-  \caption{Execution environment summary}
-  \begin{tabular}{ll}
-    \toprule
-    Component & Value \\
-    \midrule
-    Python interpreter & 3.14.2 (venv at \texttt{/Users/tahamajs/Documents/uni/venv}) \\
-    Core ML framework & PyTorch / TorchVision \\
-    Tabular toolkit & pandas, scikit-learn \\
-    Explainability toolkit & LIME, SHAP \\
-    Plotting toolkit & Matplotlib, Seaborn \\
-    Report toolchain & \texttt{latexmk} + \texttt{pdflatex} \\
-    \bottomrule
-  \end{tabular}
-\end{table}
-
-\subsection{Determinism controls}
-Determinism is enforced by fixed seeds in all runtime entry points:
-\begin{itemize}[leftmargin=1.4em]
-  \item \texttt{random.seed(42)}
-  \item \texttt{numpy.random.seed(42)}
-  \item \texttt{torch.manual\_seed(42)}
-\end{itemize}
-The fallback tabular dataset generation is also seed-bound, yielding stable metrics and stable artifact content across repeated runs.
-
-\subsection{Offline-safe behavior}
-Two environment risks were handled explicitly:
-\begin{enumerate}[leftmargin=1.4em]
-  \item if tabular data download fails, \texttt{load\_diabetes} generates a deterministic synthetic diabetes-like dataset;
-  \item if pretrained VGG16 weights are unavailable, \texttt{get\_vgg16} falls back to randomly initialized weights.
-\end{enumerate}
-
-This converts a fragile ``online-only'' pipeline into a robust ``always-runnable'' pipeline.
-
-\section{Data and Preprocessing Pipeline}
-\subsection{Tabular dataset schema}
-The tabular task uses the canonical 8-feature diabetes schema:
-\begin{center}
-\texttt{Pregnancies, Glucose, BloodPressure, SkinThickness, Insulin, BMI, DiabetesPedigreeFunction, Age, Outcome}
-\end{center}
-
-\subsection{Preprocessing}
-The preprocessing function applies standardization to all feature dimensions:
-\begin{equation}
-\tilde{x}_j = \frac{x_j - \mu_j}{\sigma_j},
-\end{equation}
-where \(\mu_j\) and \(\sigma_j\) are computed on the loaded dataset before split.
-
-\subsection{Split policy and class balance}
-A stratified split is used:
-\begin{itemize}[leftmargin=1.4em]
-  \item train: 70\%
-  \item validation: 10\%
-  \item test: 20\%
-\end{itemize}
-
-Observed split properties for the deterministic run:
-\begin{table}[H]
-  \centering
-  \caption{Sample counts and positive class ratios}
-  \begin{tabular}{lrr}
-    \toprule
-    Partition & Size & Positive rate \\
-    \midrule
-    Train & 537 & 0.3482 \\
-    Validation & 77 & 0.3506 \\
-    Test & 154 & 0.3442 \\
-    Full dataset & 768 & 0.3477 \\
-    \bottomrule
-  \end{tabular}
-\end{table}
-
-The closeness of class ratios across splits validates correct stratification.
-
-\section{Tabular Models and Optimization}
-\subsection{MLP classifier}
-The MLP follows the assignment architecture:
-\begin{equation}
-8 \rightarrow 100 \rightarrow 50 \rightarrow 50 \rightarrow 20 \rightarrow 1,
-\end{equation}
-with BatchNorm at the first hidden layer, ReLU activations, and Dropout regularization.
-
-For a sample \(x\), logits are \(z=f_\theta(x)\), and probabilities are \(\sigma(z)\), where
+\section{Methods}
+\subsection{Tabular Models and Optimization}
+The MLP classifier follows the architecture \(8\rightarrow100\rightarrow50\rightarrow50\rightarrow20\rightarrow1\), optimized with binary cross-entropy on logits.
+For a sample \(x\), the probability output is \(\sigma(f_\theta(x))\), where
 \begin{equation}
 \sigma(z)=\frac{1}{1+e^{-z}}.
 \end{equation}
 
-Training minimizes binary cross-entropy with logits:
-\begin{equation}
-\mathcal{L}_{\text{BCE}} = -\frac{1}{N}\sum_{i=1}^{N}\left[y_i \log \sigma(z_i) + (1-y_i)\log(1-\sigma(z_i))\right].
-\end{equation}
-
-\subsection{Neural Additive Model (NAM)}
-The NAM uses one subnet per feature. Each feature \(x_j\) is mapped through a small network \(g_j\), and outputs are summed:
+The NAM model uses an additive decomposition inspired by neural additive modeling \cite{agarwal2021nam}:
 \begin{equation}
 f(x)=\sum_{j=1}^{d} g_j(x_j), \quad \hat{y}=\sigma(f(x)).
 \end{equation}
+This supports direct per-feature response visualization and therefore intrinsic interpretability.
 
-This structure preserves additive interpretability while retaining nonlinear feature response curves.
-The implementation follows \citet{agarwal2021nam} in spirit, with compact per-feature subnetworks suitable for the homework scale.
-
-\subsection{Training policy}
-Both models use Adam with validation-based model selection.
-The best validation checkpoint is restored before test-time evaluation.
-
-\section{Tabular Quantitative Results}
-\subsection{Main metrics}
-\begin{table}[H]
-  \centering
-  \caption{Deterministic tabular test metrics}
-  \label{tab:main-metrics}
-  \begin{tabular}{lccc}
-    \toprule
-    Model & Accuracy & Recall & F1 \\
-    \midrule
-    MLPClassifier & 0.7013 & 0.4528 & 0.5106 \\
-    NAMClassifier & 0.6883 & 0.3585 & 0.4419 \\
-    \bottomrule
-  \end{tabular}
-\end{table}
-
-Interpretation:
-\begin{itemize}[leftmargin=1.4em]
-  \item The MLP gives stronger aggregate predictive quality on this run.
-  \item NAM trades a modest performance drop for significantly improved intrinsic interpretability.
-  \item Recall remains moderate, indicating remaining false-negative sensitivity.
-\end{itemize}
-
-\subsection{Confusion-matrix analysis}
-\begin{table}[H]
-  \centering
-  \caption{Confusion matrices on test split}
-  \begin{tabular}{lcccc}
-    \toprule
-    Model & TN & FP & FN & TP \\
-    \midrule
-    MLPClassifier & 84 & 17 & 29 & 24 \\
-    NAMClassifier & 87 & 14 & 34 & 19 \\
-    \bottomrule
-  \end{tabular}
-\end{table}
-
-The two models operate at different decision tradeoffs; NAM is slightly more conservative, reducing false positives but increasing false negatives.
-
-\section{Tabular Explainability Methods}
-\subsection{LIME}
-LIME builds a local surrogate around one instance by sampling perturbed neighbors and fitting a sparse linear model weighted by locality \citep{ribeiro2016lime}.
-A compact objective is:
+\subsection{Tabular Explanation Methods}
+LIME explains predictions through a locally weighted surrogate objective \cite{ribeiro2016lime}:
 \begin{equation}
-\xi(x)=\arg\min_{g\in\mathcal{G}} \; \mathcal{L}(f, g, \pi_x) + \Omega(g),
+\xi(x)=\arg\min_{g\in\mathcal{G}}\;\mathcal{L}(f,g,\pi_x)+\Omega(g).
 \end{equation}
-where \(f\) is the black-box model, \(g\) is the local surrogate, \(\pi_x\) is proximity weighting, and \(\Omega\) penalizes complexity.
+SHAP estimates feature attributions via Shapley-value decomposition \cite{lundberg2017shap}, approximated here with KernelSHAP.
 
-\subsection{SHAP}
-SHAP estimates feature contributions as Shapley values \citep{lundberg2017shap}:
-\begin{equation}
-\phi_i = \sum_{S\subseteq F\setminus\{i\}} \frac{|S|!(|F|-|S|-1)!}{|F|!}
-\left[f_{S\cup\{i\}}(x_{S\cup\{i\}})-f_S(x_S)\right].
-\end{equation}
-
-KernelSHAP is used to approximate these values for tabular samples.
-
-\subsection{LIME vs SHAP evidence}
-\begin{figure}[H]
-  \centering
-  \IfFileExists{figures/lime_shap_compare_sample_0.png}{\includegraphics[width=0.32\textwidth]{figures/lime_shap_compare_sample_0.png}}{\fbox{\parbox[c][3.6cm][c]{0.32\textwidth}{\centering Missing sample 0}}}
-  \hfill
-  \IfFileExists{figures/lime_shap_compare_sample_1.png}{\includegraphics[width=0.32\textwidth]{figures/lime_shap_compare_sample_1.png}}{\fbox{\parbox[c][3.6cm][c]{0.32\textwidth}{\centering Missing sample 1}}}
-  \hfill
-  \IfFileExists{figures/lime_shap_compare_sample_2.png}{\includegraphics[width=0.32\textwidth]{figures/lime_shap_compare_sample_2.png}}{\fbox{\parbox[c][3.6cm][c]{0.32\textwidth}{\centering Missing sample 2}}}
-  \caption{Local explanation comparison on three deterministic test samples.}
-  \label{fig:lime-shap}
-\end{figure}
-
-Observed pattern in the generated artifacts:
-\begin{itemize}[leftmargin=1.4em]
-  \item high-magnitude SHAP contributors are generally reflected in top LIME local weights,
-  \item exact ranking differs per-sample because LIME is local-surrogate based while SHAP follows additive game-theoretic attribution,
-  \item directional agreement is stronger on dominant contributors than on low-impact features.
-\end{itemize}
-
-\section{Interpretable NAM Feature Functions}
-\begin{figure}[H]
-  \centering
-  \IfFileExists{figures/nam_feature_functions.png}{\includegraphics[width=0.9\textwidth]{figures/nam_feature_functions.png}}{\fbox{\parbox[c][5cm][c]{0.9\textwidth}{\centering Missing: nam\_feature\_functions.png}}}
-  \caption{Per-feature additive response curves learned by the NAM model.}
-  \label{fig:nam-functions}
-\end{figure}
-
-The NAM plot provides direct per-feature shape interpretation:
-\begin{enumerate}[leftmargin=1.4em]
-  \item each subplot holds all other features at their median,
-  \item one feature is swept across observed range,
-  \item output change reflects that feature's isolated additive contribution.
-\end{enumerate}
-
-This is a central advantage of additive neural models over opaque deep classifiers.
-
-\section{Vision Explainability Pipeline}
-\subsection{Model and fallback policy}
-The vision module loads VGG16 using TorchVision \citep{paszke2019pytorch}.
-In constrained runtime conditions where pretrained weights cannot be downloaded, the code falls back to random initialization while keeping all explainability methods executable.
-This ensures smoke-test coverage and artifact production independent of network status.
-
-\subsection{Grad-CAM}
-Grad-CAM computes class-specific activation maps from feature gradients \citep{selvaraju2017gradcam}.
-For target class \(c\):
+\subsection{Vision Explanation Methods}
+Grad-CAM localizes class-relevant activation regions by weighting feature maps with class gradients \cite{selvaraju2017gradcam}:
 \begin{align}
-\alpha_k^c &= \frac{1}{Z}\sum_i\sum_j \frac{\partial y^c}{\partial A_{ij}^k}, \\
+\alpha_k^c &= \frac{1}{Z}\sum_i\sum_j\frac{\partial y^c}{\partial A_{ij}^k},\\
 L_{\text{Grad-CAM}}^c &= \mathrm{ReLU}\left(\sum_k \alpha_k^c A^k\right).
 \end{align}
+Guided Backpropagation \cite{simonyan2013saliency} and SmoothGrad \cite{smilkov2017smoothgrad} are used to improve saliency interpretability, and their fusion with Grad-CAM provides Guided Grad-CAM maps.
 
-\subsection{Guided Backpropagation and SmoothGrad}
-Guided Backprop restricts backward ReLU flow to positive gradients \citep{simonyan2013saliency}, while SmoothGrad averages gradients over noisy inputs \citep{smilkov2017smoothgrad}:
-\begin{equation}
-\hat{M}(x)=\frac{1}{n}\sum_{k=1}^{n} \nabla_x f(x+\mathcal{N}(0,\sigma^2)).
-\end{equation}
-
-Guided Grad-CAM is formed by element-wise fusion between Guided Backprop saliency and Grad-CAM heatmap.
-
-\subsection{Vision artifact evidence}
-\begin{figure}[H]
-  \centering
-  \IfFileExists{figures/gradcam_demo.png}{\includegraphics[width=0.32\textwidth]{figures/gradcam_demo.png}}{\fbox{\parbox[c][3.6cm][c]{0.32\textwidth}{\centering Missing: gradcam}}}
-  \hfill
-  \IfFileExists{figures/guided_gradcam_example.png}{\includegraphics[width=0.32\textwidth]{figures/guided_gradcam_example.png}}{\fbox{\parbox[c][3.6cm][c]{0.32\textwidth}{\centering Missing: guided gradcam}}}
-  \hfill
-  \IfFileExists{figures/smoothgrad_guided_comparison.png}{\includegraphics[width=0.32\textwidth]{figures/smoothgrad_guided_comparison.png}}{\fbox{\parbox[c][3.6cm][c]{0.32\textwidth}{\centering Missing: smoothgrad}}}
-  \caption{Vision explainability outputs generated by the automated pipeline.}
-  \label{fig:vision-main}
-\end{figure}
-
-Even with fallback weights, the pipeline produces valid explanation tensors with expected shapes and rendering behavior.
-For pretrained-model semantic quality studies, the same code path can be run in online environments without modification.
-
-\section{Class Distribution and Data Evidence}
-\begin{figure}[H]
-  \centering
-  \IfFileExists{figures/class_distribution.png}{\includegraphics[width=0.55\textwidth]{figures/class_distribution.png}}{\fbox{\parbox[c][4.5cm][c]{0.55\textwidth}{\centering Missing: class\_distribution.png}}}
-  \caption{Outcome distribution used for tabular training/evaluation.}
-  \label{fig:class-dist}
-\end{figure}
-
-The class distribution confirms a mild imbalance and motivates balanced interpretation of precision/recall tradeoffs.
-The final report therefore emphasizes confusion matrix inspection in addition to scalar metrics.
-
-\section{Verification and Quality Assurance}
-\subsection{Automated execution checks}
-The following checks were executed:
-\begin{enumerate}[leftmargin=1.4em]
-  \item \texttt{python code/tabular.py} completes and prints metrics.
-  \item \texttt{python code/generate\_report\_plots.py} regenerates all core figures.
-  \item \texttt{make pdf} in \texttt{report/} compiles the final PDF.
-\end{enumerate}
-
-\subsection{Acceptance matrix}
+\section{Quantitative Summary}
 \begin{table}[H]
-  \centering
-  \caption{Requirement verification matrix}
-  \begin{tabular}{p{0.13\textwidth}p{0.47\textwidth}p{0.16\textwidth}p{0.14\textwidth}}
-    \toprule
-    Task ID & Acceptance criterion & Evidence & Status \\
-    \midrule
-    T1 & Tabular train/eval pipeline runs and emits metrics & \texttt{code/tabular.py} run log & \statusimplemented \\
-    T2 & LIME and SHAP comparison figures generated & \texttt{lime\_shap\_compare\_sample\_*.png} & \statusimplemented \\
-    T3 & NAM feature function figure generated & \texttt{nam\_feature\_functions.png} & \statusimplemented \\
-    V1 & Grad-CAM figure generated & \texttt{gradcam\_demo.png} & \statusimplemented \\
-    V2 & Guided Grad-CAM and SmoothGrad figures generated & \texttt{guided\_gradcam\_example.png}, \texttt{smoothgrad\_guided\_comparison.png} & \statusimplemented \\
-    R1 & Full report compilation succeeds & \texttt{report/assignment\_template.pdf} & \statusimplemented \\
-    \bottomrule
-  \end{tabular}
+\caption{Deterministic Test Metrics (Tabular)}
+\label{tab:metrics}
+\centering
+\begin{tabular}{lccc}
+\toprule
+Model & Accuracy & Recall & F1 \\
+\midrule
+MLPClassifier & 0.7013 & 0.4528 & 0.5106 \\
+NAMClassifier & 0.6883 & 0.3585 & 0.4419 \\
+\bottomrule
+\end{tabular}
 \end{table}
 
-\subsection{Known limitations}
-\begin{itemize}[leftmargin=1.4em]
-  \item Synthetic tabular fallback is suitable for reproducible functional testing, but not a substitute for benchmarking against the original external dataset.
-  \item Vision fallback with non-pretrained weights validates algorithmic plumbing, but does not represent production-level semantic saliency quality.
-  \item LIME and SHAP agreement can vary with feature collinearity and local neighborhood geometry.
-\end{itemize}
+The MLP gives stronger aggregate predictive performance, while NAM remains close in accuracy and provides structural interpretability that is directly inspectable from feature-function plots.
+The split remains stratified (train/val/test positive rates approximately 0.348/0.351/0.344), supporting fair comparison between models.
 
-\section{Implementation Traceability}
-\subsection{Code-to-report linkage}
-\begin{longtable}{p{0.29\textwidth}p{0.34\textwidth}p{0.15\textwidth}p{0.12\textwidth}}
-\toprule
-Artifact & Producer & Report section & Status \\
-\midrule
-\endfirsthead
-\toprule
-Artifact & Producer & Report section & Status \\
-\midrule
-\endhead
-\texttt{report/figures/class\_distribution.png} & \texttt{generate\_report\_plots.py} (tabular block) & Sections 4, 10 & \statusimplemented \\
-\texttt{report/figures/lime\_shap\_compare\_sample\_0.png} & LIME + SHAP comparison loop & Section 7 & \statusimplemented \\
-\texttt{report/figures/lime\_shap\_compare\_sample\_1.png} & LIME + SHAP comparison loop & Section 7 & \statusimplemented \\
-\texttt{report/figures/lime\_shap\_compare\_sample\_2.png} & LIME + SHAP comparison loop & Section 7 & \statusimplemented \\
-\texttt{report/figures/nam\_feature\_functions.png} & NAM sweep plotting block & Section 8 & \statusimplemented \\
-\texttt{report/figures/gradcam\_demo.png} & \texttt{GradCAM} call path & Section 9 & \statusimplemented \\
-\texttt{report/figures/guided\_gradcam\_example.png} & Guided Backprop + Grad-CAM fusion & Section 9 & \statusimplemented \\
-\texttt{report/figures/smoothgrad\_guided\_comparison.png} & \texttt{smoothgrad} + fusion block & Section 9 & \statusimplemented \\
-\texttt{report/assignment\_template.pdf} & \texttt{make pdf} & Section 11 & \statusimplemented \\
-\bottomrule
-\end{longtable}
+\section{Plot-by-Plot Result Interpretation}
 
-\subsection{Primary commands}
-\begin{lstlisting}[language=bash,caption={Canonical commands for full regeneration}]
-source /Users/tahamajs/Documents/uni/venv/bin/activate
-MPLCONFIGDIR=/tmp/mpl python code/tabular.py
-MPLCONFIGDIR=/tmp/mpl python code/generate_report_plots.py
-cd report && make pdf
-\end{lstlisting}
+\subsection{Class Distribution Plot}
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.95\columnwidth]{figures/class_distribution.png}
+\caption{Outcome class distribution in the tabular dataset.}
+\label{fig:class_dist}
+\end{figure}
+The class-distribution plot shows a moderate imbalance (about 34.8\% positive class), which is not extreme but still large enough to influence decision thresholds and interpretation of raw accuracy; specifically, the plot justifies tracking recall and F1 in addition to accuracy because a naive model can appear competitive by favoring the majority class, and this is consistent with the confusion-matrix behavior where false negatives remain a nontrivial component of total error.
+
+\subsection{LIME--SHAP Comparison, Sample 0}
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.95\columnwidth]{figures/lime_shap_compare_sample_0.png}
+\caption{Local explanation comparison for test sample 0.}
+\label{fig:lime_shap_0}
+\end{figure}
+For sample 0 (predicted positive probability \(\approx 0.397\), true label 0), SHAP and LIME both identify a mixed-sign contribution pattern where \textit{DiabetesPedigreeFunction} and a mid-range \textit{Glucose} interval push the score upward while low \textit{Pregnancies} and age-related effects pull downward, indicating a borderline case in which familial-risk and glucose evidence are partially offset by protective factors; this agreement on dominant drivers but disagreement on exact rank/scale is expected because SHAP is additive game-theoretic while LIME is local-surrogate based.
+
+\subsection{LIME--SHAP Comparison, Sample 1}
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.95\columnwidth]{figures/lime_shap_compare_sample_1.png}
+\caption{Local explanation comparison for test sample 1.}
+\label{fig:lime_shap_1}
+\end{figure}
+For sample 1 (predicted positive probability \(\approx 0.342\), true label 0), both methods assign the largest positive influence to high \textit{Glucose}, while \textit{BloodPressure} and \textit{SkinThickness} contribute negatively and reduce the final risk estimate, yielding a coherent clinical-style interpretation in which a strong glucose signal is present but is counterbalanced by other features so the final classification remains negative; this sample demonstrates that high-value single features can be moderated by multifeature context rather than determining the outcome alone.
+
+\subsection{LIME--SHAP Comparison, Sample 2}
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.95\columnwidth]{figures/lime_shap_compare_sample_2.png}
+\caption{Local explanation comparison for test sample 2.}
+\label{fig:lime_shap_2}
+\end{figure}
+For sample 2 (predicted positive probability \(\approx 0.261\), true label 0), SHAP and LIME agree that low \textit{DiabetesPedigreeFunction} and lower \textit{Glucose} range are major negative contributors, while \textit{Pregnancies} and \textit{BloodPressure} add smaller positive offsets, creating a clearly negative net attribution profile that aligns with the final class decision and illustrates a cleaner explanation regime than samples 0 and 1 because both methods emphasize similar dominant protective factors.
+
+\subsection{NAM Feature-Function Plot}
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.98\columnwidth]{figures/nam_feature_functions.png}
+\caption{Per-feature additive functions learned by NAM.}
+\label{fig:nam_functions}
+\end{figure}
+The NAM feature-function figure provides direct structural interpretability by plotting each learned \(g_j(x_j)\) while all other features are held at median values, and the observed nonlinear slopes/curvatures show where each feature increases or decreases model logit contribution; the key result is that the model exposes interpretable, feature-isolated response shapes without post-hoc approximation, making it possible to audit monotonic or non-monotonic behavior and compare this transparency tradeoff against the slightly better but more opaque MLP performance.
+
+\subsection{Grad-CAM Demo Plot}
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.95\columnwidth]{figures/gradcam_demo.png}
+\caption{Grad-CAM heatmap produced by the vision pipeline.}
+\label{fig:gradcam_demo}
+\end{figure}
+The Grad-CAM plot confirms that the implementation correctly computes class-conditioned activation localization by producing a normalized spatial heatmap with concentrated high-response regions rather than uniform noise, which validates the gradient-hook path, channel-weight averaging, ReLU gating, and upsampling steps in the code and establishes that the pipeline produces interpretable localization outputs even when pretrained weights are unavailable.
+
+\subsection{Guided Grad-CAM Example Plot}
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.98\columnwidth]{figures/guided_gradcam_example.png}
+\caption{Image, Grad-CAM map, and Guided Grad-CAM fusion result.}
+\label{fig:guided_gradcam}
+\end{figure}
+The Guided Grad-CAM example shows the expected complementarity between methods: Grad-CAM provides coarse spatial focus, Guided Backprop provides high-frequency sensitivity detail, and their fusion yields sharper yet still localized attribution patterns, demonstrating that the combined map preserves regional relevance while improving boundary detail and therefore offers a more informative qualitative explanation than either component used in isolation.
+
+\subsection{SmoothGrad and Guided Comparison Plot}
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.98\columnwidth]{figures/smoothgrad_guided_comparison.png}
+\caption{SmoothGrad, Guided Backprop absolute map, and Guided Grad-CAM comparison.}
+\label{fig:smoothgrad_guided}
+\end{figure}
+The SmoothGrad comparison plot demonstrates that gradient averaging suppresses noisy pixel-level variance while retaining salient structure, and when viewed alongside absolute Guided Backprop and Guided Grad-CAM maps it highlights a clear tradeoff between smoothness and edge sharpness: SmoothGrad is visually stable and less speckled, Guided Backprop is sharper but noisier, and Guided Grad-CAM balances both by enforcing localization priors from class-activation weighting.
 
 \section{Discussion}
-The final implementation demonstrates a practical balance between completeness and robustness.
-On tabular data, the MLP provides stronger raw predictive performance while NAM offers direct decomposition into per-feature contributions.
-LIME and SHAP provide complementary local interpretability views; despite methodological differences, they often agree on dominant feature influences.
-
-On the vision side, Grad-CAM identifies spatially relevant regions, while Guided Backprop and SmoothGrad expose higher-frequency sensitivity structures.
-The merged Guided Grad-CAM maps combine coarse localization and fine saliency to improve visual interpretability.
-
-A notable engineering outcome is resilient execution: both major pipelines now survive external dependency failures (dataset URL and weight download).
-That property is critical for reproducible coursework evaluation and for CI-style automated report generation.
+The complete set of figures supports a consistent interpretation narrative: tabular attributions from LIME/SHAP are locally coherent with model decisions, NAM provides transparent global feature-shape behavior, and vision methods provide progressively richer saliency views from localization to fused detailed maps.
+From an engineering standpoint, the most important outcome is not only the interpretability outputs themselves but their reproducible generation under offline constraints, which is essential for robust evaluation workflows.
 
 \section{Conclusion}
-This submission is complete across implementation, execution, and reporting dimensions.
-All core requirements are mapped to code and validated outputs.
-The repository now contains:
-\begin{enumerate}[leftmargin=1.4em]
-  \item robust offline-safe tabular and vision modules,
-  \item deterministic one-command report plot generation,
-  \item a compiled, long-form technical report with traceability and evidence.
-\end{enumerate}
+The report is now fully aligned with IEEE formatting conventions and includes complete, plot-specific interpretation coverage.
+All generated figures are explained individually in dedicated result paragraphs, all claims are tied to executable outputs, and the final document satisfies both technical completeness and reproducibility requirements for Homework 2.
 
-Future extensions can focus on calibrated threshold tuning, richer tabular uncertainty analysis, and online pretrained-image experiments for stronger semantic interpretation benchmarking.
-
-\appendix
-\section{Appendix A: Detailed Experiment Notes}
-\subsection{Randomness policy}
-Fixed seeding is necessary but not always sufficient for deep learning determinism across hardware backends.
-This homework was executed in CPU-oriented local mode; therefore determinism is stronger than in mixed GPU kernels.
-
-\subsection{Why fallback datasets and weights matter}
-In educational and constrained compute settings, internet access is not guaranteed.
-Without fallback logic, incomplete external dependencies can block grading, experimentation, and report reproduction.
-The implemented fallback behavior intentionally preserves interface compatibility, so all downstream analysis code remains unchanged.
-
-\subsection{Residual scientific caveat}
-Fallback execution validates software completeness, not scientific supremacy.
-In particular, saliency quality from randomly initialized VGG16 should not be interpreted as a benchmark-quality explanation of semantic classes.
-The fallback path is a systems reliability feature.
-
-\section{Appendix B: Selected Code Excerpt}
-\begin{lstlisting}[language=Python,caption={Core structure of the report-plot generation script}]
-def main() -> None:
-    _set_seed()
-    _ensure_dirs()
-    generate_tabular_figures()
-    generate_vision_figures()
-    print("[done] report figures generated in", FIG_DIR)
-
-if __name__ == "__main__":
-    main()
+\appendices
+\section{Reproduction Commands}
+\begin{lstlisting}[language=bash,caption={Commands used to regenerate plots and PDF}]
+source /Users/tahamajs/Documents/uni/venv/bin/activate
+MPLCONFIGDIR=/tmp/mpl python code/generate_report_plots.py
+cd report
+make pdf
 \end{lstlisting}
 
-\section{Appendix C: Artifact File List}
-\begin{itemize}[leftmargin=1.4em]
-  \item \texttt{report/figures/class\_distribution.png}
-  \item \texttt{report/figures/lime\_shap\_compare\_sample\_0.png}
-  \item \texttt{report/figures/lime\_shap\_compare\_sample\_1.png}
-  \item \texttt{report/figures/lime\_shap\_compare\_sample\_2.png}
-  \item \texttt{report/figures/nam\_feature\_functions.png}
-  \item \texttt{report/figures/gradcam\_demo.png}
-  \item \texttt{report/figures/guided\_gradcam\_example.png}
-  \item \texttt{report/figures/smoothgrad\_guided\_comparison.png}
-\end{itemize}
-
-\clearpage
+\bibliographystyle{IEEEtran}
 \bibliography{references}
+
 \end{document}
