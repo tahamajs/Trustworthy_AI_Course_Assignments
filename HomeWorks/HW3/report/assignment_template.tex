@@ -168,6 +168,9 @@ The script \texttt{generate\_report\_artifacts.py} produces:
   \item \texttt{results/nearest\_vs\_causal\_lin\_seed0.csv}
   \item \texttt{results/health\_instance\_costs.csv}
   \item \texttt{results/health\_action\_profiles.csv}
+  \item \texttt{results/health\_action\_instance\_stats.csv}
+  \item \texttt{results/health\_sparsity\_summary.csv}
+  \item \texttt{results/health\_bootstrap\_summary.csv}
   \item Plot files under \texttt{report/figures/}
 \end{itemize}
 
@@ -307,6 +310,36 @@ This diagnostic quantifies where intervention budget is actually spent. Since on
 \textit{Complete interpretation of Fig.~\ref{fig:featnz}:}
 Activation rate measures how frequently each feature is used in successful interventions. A high nonzero rate for actionable variables and near-zero rate for non-actionable variables is the expected signature of a policy-consistent recourse system. This frequency view complements magnitude view in Fig.~\ref{fig:featabs}: a feature can have moderate average magnitude but very high activation frequency, indicating it is a reliable ``first-step'' recourse coordinate. Theoretical value comes from separating sparse-but-large actions from frequent-small actions, which correspond to different behavioral recourse strategies.
 
+\begin{figure*}[!t]
+\centering
+\includegraphics[width=0.92\textwidth]{figures/bootstrap_ci_curves.png}
+\caption{Bootstrap confidence intervals (95\%) for validity and valid-cost trends across robustness radius.}
+\label{fig:bootci}
+\end{figure*}
+
+\textit{Complete interpretation of Fig.~\ref{fig:bootci}:}
+This diagnostic adds uncertainty quantification around the mean curves and shows that linear settings are not only high-performing in point estimates but also statistically stable under resampling, with narrow confidence bands for both validity and intervention cost; by contrast, nonlinear settings display wider cost intervals, which indicates sensitivity to sample composition and local optimization outcomes. Theoretically, this is the right reliability lens for deployment because recourse is a stochastic pipeline (instance sampling, initialization effects, solver dynamics), so reporting only means can overstate certainty. Confidence bands operationalize robustness claims by distinguishing true structural trends (persisting under bootstrap resampling) from fragile observations that may shift under slight data perturbations.
+
+\begin{figure}[!t]
+\centering
+\includegraphics[width=0.95\columnwidth]{figures/sparsity_vs_cost.png}
+\caption{Sparsity-cost operating points based on valid recourse actions.}
+\label{fig:sparsitycost}
+\end{figure}
+
+\textit{Complete interpretation of Fig.~\ref{fig:sparsitycost}:}
+This plot characterizes how many coordinates are actively changed (L0 sparsity) versus how much total action mass is spent (L1 cost), making explicit that sparse interventions are not automatically cheap and dense interventions are not automatically expensive. In linear robust settings, points move with $\epsilon$ in a relatively smooth way, reflecting predictable margin-induced scaling; when points shift right and upward together, the solver is using both more features and larger amplitudes to maintain validity. Theoretically, this view connects optimization geometry to human burden: L0 approximates behavioral complexity (number of recommendations), while L1 approximates total effort. A trustworthy recourse system should therefore monitor both axes, because similar validity can mask very different user-facing intervention profiles.
+
+\begin{figure}[!t]
+\centering
+\includegraphics[width=0.95\columnwidth]{figures/action_heatmap_lin_erm.png}
+\caption{Instance-level signed action heatmap for reference configuration (LIN-ERM, $\epsilon=0.1$, seed 0).}
+\label{fig:heatmap}
+\end{figure}
+
+\textit{Complete interpretation of Fig.~\ref{fig:heatmap}:}
+The heatmap reveals per-instance intervention structure rather than only aggregated averages: rows show individuals and columns show feature-wise signed actions, so one can directly see concentration patterns, sign consistency, and heterogeneity of local solutions. The dominant mass appears on actionable coordinates, while non-actionable coordinates remain near zero, confirming policy-consistent implementation at the individual level, not merely in global statistics. Theoretically, this figure is important because recourse validity is a boundary-crossing event that can be achieved through multiple local paths; visualizing signed action patterns helps detect whether the solver finds coherent directional strategies or unstable oscillatory behavior, and supports qualitative auditing of intervention realism in conjunction with quantitative cost metrics.
+
 \section{Discussion and Theoretical Implications}
 First, robust recourse is not a free lunch: increasing uncertainty tolerance raises intervention cost, especially in linear models where this effect is analytically transparent. Second, classifier architecture alone does not determine recourse practicality. The MLP results show that near-ceiling predictive metrics can coexist with high or unstable recourse costs. Third, actionability-aware training (AF) can reduce practical intervention burden in linear settings without sacrificing classifier quality, but this benefit is not guaranteed in nonlinear optimization regimes, where curvature and initialization effects can dominate.
 
@@ -432,6 +465,15 @@ make pdf
 
 \section{Auto-Generated Action Profile CSV}
 \lstinputlisting[caption={Feature-wise action diagnostics CSV}]{../code/q5_codes/results/health_action_profiles.csv}
+
+\section{Auto-Generated Action Instance Stats CSV}
+\lstinputlisting[caption={Per-instance action vectors and norms CSV}]{../code/q5_codes/results/health_action_instance_stats.csv}
+
+\section{Auto-Generated Sparsity Summary CSV}
+\lstinputlisting[caption={Valid recourse sparsity/cost summary CSV}]{../code/q5_codes/results/health_sparsity_summary.csv}
+
+\section{Auto-Generated Bootstrap Summary CSV}
+\lstinputlisting[caption={Bootstrap confidence interval summary CSV}]{../code/q5_codes/results/health_bootstrap_summary.csv}
 
 \section*{Acknowledgment}
 This submission was prepared for Trusted Artificial Intelligence coursework under Dr. Mostafa Tavasolipour.

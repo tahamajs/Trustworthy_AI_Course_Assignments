@@ -181,6 +181,7 @@ def collect_action_profiles(
     constraints: dict,
     epsilon: float = 0.1,
     seed: int = 0,
+    allowed_model_types: tuple[str, ...] = ("lin", "mlp"),
 ) -> pd.DataFrame:
     """
     Compute per-feature action diagnostics for a representative setup.
@@ -195,6 +196,8 @@ def collect_action_profiles(
         .itertuples(index=False)
     )
     for model_type, trainer_name in configs:
+        if model_type not in allowed_model_types:
+            continue
         lambd = utils.get_lambdas("health", model_type, trainer_name)
         save_base = Path(utils.get_metrics_save_dir("health", trainer_name, lambd, model_type, epsilon, seed))
         id_path = Path(str(save_base) + "_ids.npy")
@@ -269,6 +272,7 @@ def collect_action_instance_stats(
     constraints: dict,
     epsilon: float = 0.1,
     seed: int = 0,
+    allowed_model_types: tuple[str, ...] = ("lin", "mlp"),
 ) -> pd.DataFrame:
     """
     Collect per-instance action vectors and sparsity statistics for detailed diagnostics.
@@ -281,6 +285,8 @@ def collect_action_instance_stats(
         .itertuples(index=False)
     )
     for model_type, trainer_name in configs:
+        if model_type not in allowed_model_types:
+            continue
         lambd = utils.get_lambdas("health", model_type, trainer_name)
         save_base = Path(utils.get_metrics_save_dir("health", trainer_name, lambd, model_type, epsilon, seed))
         id_path = Path(str(save_base) + "_ids.npy")
@@ -738,12 +744,42 @@ def main():
     df, agg, X_train, Y_train, X_test, _, constraints = collect_metrics()
     if df.empty:
         raise RuntimeError("No result files found to build report artifacts.")
+
+    full_diag = os.getenv("HW3_FULL_DIAGNOSTICS", "0") == "1"
+    diag_models = ("lin", "mlp") if full_diag else ("lin",)
+
     nearest_vs_causal = nearest_vs_causal_lin(X_train, Y_train, X_test, constraints)
     instance_costs = collect_instance_costs(df)
-    action_profiles = collect_action_profiles(df, X_train, Y_train, X_test, constraints, epsilon=0.1, seed=0)
-    action_instance_stats = collect_action_instance_stats(
-        df, X_train, Y_train, X_test, constraints, epsilon=0.1, seed=0
-    )
+
+    action_profiles_path = RESULTS_DIR / "health_action_profiles.csv"
+    if action_profiles_path.exists():
+        action_profiles = pd.read_csv(action_profiles_path)
+    else:
+        action_profiles = collect_action_profiles(
+            df,
+            X_train,
+            Y_train,
+            X_test,
+            constraints,
+            epsilon=0.1,
+            seed=0,
+            allowed_model_types=diag_models,
+        )
+
+    action_stats_path = RESULTS_DIR / "health_action_instance_stats.csv"
+    if action_stats_path.exists():
+        action_instance_stats = pd.read_csv(action_stats_path)
+    else:
+        action_instance_stats = collect_action_instance_stats(
+            df,
+            X_train,
+            Y_train,
+            X_test,
+            constraints,
+            epsilon=0.1,
+            seed=0,
+            allowed_model_types=diag_models,
+        )
     sparsity_summary = summarize_sparsity(action_instance_stats)
     bootstrap_summary = collect_bootstrap_summary(instance_costs)
     make_figures(
@@ -764,6 +800,7 @@ def main():
     print("Saved:", RESULTS_DIR / "health_action_instance_stats.csv")
     print("Saved:", RESULTS_DIR / "health_sparsity_summary.csv")
     print("Saved:", RESULTS_DIR / "health_bootstrap_summary.csv")
+    print("Diagnostic model scope:", ",".join(diag_models), "(set HW3_FULL_DIAGNOSTICS=1 for lin+mlp)")
     print("Saved report figures in:", REPORT_FIG_DIR)
     print(agg.to_string(index=False))
     print(nearest_vs_causal.to_string(index=False))
