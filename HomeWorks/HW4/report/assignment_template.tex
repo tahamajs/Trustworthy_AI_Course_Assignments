@@ -45,6 +45,12 @@
     \newcommand{\QThreeGroupThrZemel}{-1}
     \newcommand{\QThreeGroupThrZero}{-1}
     \newcommand{\QThreeGroupThrOne}{-1}
+    \newcommand{\QOneBestFrac}{-1}
+    \newcommand{\QOneBestFracASR}{-1}
+    \newcommand{\QOneBestFracAcc}{-1}
+    \newcommand{\QThreeBestSwapK}{-1}
+    \newcommand{\QThreeBestSwapAcc}{-1}
+    \newcommand{\QThreeBestSwapDiGap}{-1}
 }
 
 \begin{document}
@@ -131,6 +137,9 @@ to debias empirical risk under imbalanced group-label combinations. Group-thresh
     \item All figures/tables come from \texttt{code/generate\_report\_figs.py}; no manual metric editing is used.
 \end{itemize}
 
+\subsection{Theory Robustness Guardrails}
+To keep theoretical quality stable across reruns, the report uses three guardrails: (i) equation-level definitions are encoded in this template and not injected dynamically, (ii) all numeric claims are populated only through generated macros from executable code, and (iii) the code/test pipeline enforces deterministic settings (fixed seeds, locked assumptions, and explicit scenario constants). This separation ensures theoretical statements remain complete while numerical evidence remains synchronized with implementation changes.
+
 \section{Complete Code Walkthrough}
 \subsection{Security Pipeline (\texttt{code/neural\_cleanse.py})}
 The security module is structured as a robust production-style pipeline. \texttt{AttackedMNISTCNN} matches the exact checkpoint architecture, allowing strict state-dict verification in \texttt{load\_model}. Archive extraction and checkpoint resolution are automated by \texttt{extract\_poisoned\_models\_if\_needed} and \texttt{resolve\_checkpoint\_path}, preventing manual mismatch errors. \texttt{load\_mnist\_test} handles deterministic subsampling and explicit offline failure messages. \texttt{reconstruct\_trigger} optimizes mask and pattern logits, maps them to valid ranges via sigmoid, and minimizes class-induction plus regularization terms. \texttt{reconstruct\_all\_labels} executes this optimization for labels 0--9 and returns structured results. \texttt{detect\_outlier\_scales} applies lower-tail MAD to identify the attacked label. \texttt{evaluate\_clean\_accuracy} and \texttt{evaluate\_asr} separate clean and triggered behaviors. Finally, \texttt{unlearn\_by\_retraining} performs assignment-constrained cleansing with controlled trigger exposure.
@@ -185,6 +194,15 @@ Figures~\ref{fig:trigger_all_labels} and~\ref{fig:security_scale_profile} jointl
 \end{figure}
 Figure~\ref{fig:security_before_after} shows a strong post-unlearning ASR reduction from \QOneAsrBefore{} to \QOneAsrAfter{} while clean accuracy improves from \QOneCleanAccBefore{} to \QOneCleanAccAfter{}, indicating that the poisoned model was initially dominated by trigger-induced behavior and that retraining with correct labels successfully restored generalization. Figure~\ref{fig:security_confusion} complements this by showing class-wise behavior on clean inputs: diagonal strengthening after unlearning means the mitigation did not merely suppress one attack pathway, but improved overall decision calibration. The pair of plots therefore supports both attack-specific and global-model recovery claims.
 
+\subsection{Security Ablation: Unlearning Fraction Sweep}
+\begin{figure}[H]
+    \centering
+    \IfFileExists{figures/security_unlearning_sweep.png}{\includegraphics[width=0.86\linewidth]{figures/security_unlearning_sweep.png}}{\fbox{\parbox[c][3.0cm][c]{0.86\linewidth}{\centering Missing: security\_unlearning\_sweep.png}}}
+    \caption{Clean accuracy and ASR versus unlearning fraction.}
+    \label{fig:security_unlearning_sweep}
+\end{figure}
+Figure~\ref{fig:security_unlearning_sweep} quantifies sensitivity of mitigation strength to the retraining exposure ratio. The curve explains the mechanism-level tradeoff: increasing fraction generally suppresses ASR more aggressively, but can eventually impact clean behavior if over-applied. In this run, the best ASR point occurs around fraction \QOneBestFrac{} with ASR \QOneBestFracASR{} and clean accuracy \QOneBestFracAcc{}, providing an interpretable operating point rather than a single hard-coded choice.
+
 \subsection{Privacy Scales, Point Probabilities, and Tail Curves}
 \begin{figure}[H]
     \centering
@@ -199,6 +217,15 @@ Figure~\ref{fig:security_before_after} shows a strong post-unlearning ASR reduct
     \label{fig:privacy_tail}
 \end{figure}
 Figure~\ref{fig:privacy_scenarios} summarizes the assignment query at $t=505$: scale grows from \QTwoBBase{} (base) to \QTwoBSequential{} (sequential) and \QTwoBUnbounded{} (unbounded), with corresponding probabilities \QTwoProbBase{}, \QTwoProbSequential{}, and \QTwoProbUnbounded{}. Figure~\ref{fig:privacy_tail} generalizes this point analysis by showing entire tail functions over thresholds, making the utility-loss mechanism explicit: larger scales flatten the response curve and keep probabilities closer to 0.5 over wider threshold bands. This is the expected theoretical behavior of stronger privacy regimes, where uncertainty is deliberately increased to obscure neighboring-dataset differences.
+
+\subsection{Privacy Budget Sweep (Epsilon Analysis)}
+\begin{figure}[H]
+    \centering
+    \IfFileExists{figures/privacy_epsilon_sweep.png}{\includegraphics[width=0.88\linewidth]{figures/privacy_epsilon_sweep.png}}{\fbox{\parbox[c][3.0cm][c]{0.88\linewidth}{\centering Missing: privacy\_epsilon\_sweep.png}}}
+    \caption{Scale and threshold probability as functions of epsilon.}
+    \label{fig:privacy_epsilon_sweep}
+\end{figure}
+Figure~\ref{fig:privacy_epsilon_sweep} provides a direct parametric interpretation of privacy budget: as epsilon increases, scale $b$ decays hyperbolically and the noisy-threshold probability moves away from the high-uncertainty regime toward sharper query behavior. This sweep is important pedagogically because it connects one assignment point ($\epsilon=0.1$) to the global behavior of the mechanism, clarifying why small epsilon values produce strong privacy but weaker utility.
 
 \subsection{Fairness: Aggregate Metrics, Group Decomposition, and Tradeoff Geometry}
 \begin{figure}[H]
@@ -220,6 +247,15 @@ Figure~\ref{fig:privacy_scenarios} summarizes the assignment query at $t=505$: s
     \label{fig:fairness_tradeoff}
 \end{figure}
 Figure~\ref{fig:fairness_comparison} provides aggregate comparison, but Figures~\ref{fig:fairness_group_rates} and~\ref{fig:fairness_tradeoff} explain why these aggregates change: group-rate decomposition shows whether DI movement is caused by increasing protected-group positives, decreasing privileged-group positives, or both; the tradeoff map then visualizes each model's position in fairness-utility space. Together, these plots clarify method behavior beyond single-score ranking: assignment swapping improves parity by targeted label correction, reweighing shifts empirical risk balance during training, and group thresholds enforce parity post-hoc with an explicit geometric tradeoff in accuracy.
+
+\subsection{Fairness Ablation: Swap-Budget Sweep}
+\begin{figure}[H]
+    \centering
+    \IfFileExists{figures/fairness_swapk_sweep.png}{\includegraphics[width=0.86\linewidth]{figures/fairness_swapk_sweep.png}}{\fbox{\parbox[c][3.0cm][c]{0.86\linewidth}{\centering Missing: fairness\_swapk\_sweep.png}}}
+    \caption{Accuracy and fairness-gap trends versus promotion/demotion swap budget $k$.}
+    \label{fig:fairness_swapk_sweep}
+\end{figure}
+Figure~\ref{fig:fairness_swapk_sweep} shows how the assignment mitigation behaves as $k$ changes from no swapping to aggressive relabeling. The curve demonstrates that fairness gains (lower $|1-\mathrm{DI}|$) are not monotonic in practical utility terms unless accuracy is co-monitored, so selecting $k$ is an optimization problem, not a fixed rule. Using a tolerance of at most 3\% absolute accuracy loss from baseline, the best operating point in this run is $k=\\QThreeBestSwapK$ with accuracy \QThreeBestSwapAcc{} and fairness gap \QThreeBestSwapDiGap{}.
 
 \section{Consolidated Metric Tables}
 \begin{table}[H]

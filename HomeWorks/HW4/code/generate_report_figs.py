@@ -11,7 +11,7 @@ import matplotlib
 import numpy as np
 import torch
 from sklearn.model_selection import train_test_split
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, Subset
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
@@ -294,6 +294,51 @@ def run_security(
     plt.savefig(conf_path, dpi=180)
     plt.close(fig_cm)
 
+    sweep_fractions = [0.0, 0.1, 0.2, 0.3, 0.4]
+    sweep_size = min(len(loader.dataset), 3000)
+    sweep_rng = np.random.RandomState(args.seed)
+    sweep_indices = sweep_rng.choice(len(loader.dataset), size=sweep_size, replace=False).tolist()
+    sweep_dataset = Subset(loader.dataset, sweep_indices)
+    sweep_eval = DataLoader(sweep_dataset, batch_size=int(conf["batch_size"]), shuffle=False, num_workers=0)
+
+    sweep_clean = []
+    sweep_asr = []
+    for frac in sweep_fractions:
+        model_sweep = copy.deepcopy(model)
+        if frac > 0:
+            unlearn_by_retraining(
+                model=model_sweep,
+                dataset=sweep_dataset,
+                trigger_fn=trigger_fn,
+                fraction=frac,
+                epochs=1,
+                lr=1e-3,
+                batch_size=int(conf["batch_size"]),
+                device="cpu",
+                seed=args.seed,
+            )
+        sweep_clean.append(evaluate_clean_accuracy(model_sweep, sweep_eval, device="cpu"))
+        sweep_asr.append(evaluate_asr(model_sweep, sweep_eval, trigger_fn, attacked_label, device="cpu"))
+
+    sweep_path = paths["figures_dir"] / "security_unlearning_sweep.png"
+    fig_sw, ax_sw = plt.subplots(figsize=(7.6, 3.7))
+    ax_sw.plot(sweep_fractions, sweep_clean, marker="o", linewidth=2, label="Clean accuracy")
+    ax_sw.plot(sweep_fractions, sweep_asr, marker="s", linewidth=2, label="ASR")
+    ax_sw.set_xlabel("Unlearning fraction")
+    ax_sw.set_ylabel("Metric value")
+    ax_sw.set_ylim(0.0, 1.0)
+    ax_sw.set_title("Security ablation: effect of unlearning fraction")
+    ax_sw.grid(alpha=0.3)
+    ax_sw.legend(fontsize=8)
+    plt.tight_layout()
+    plt.savefig(sweep_path, dpi=180)
+    plt.close(fig_sw)
+
+    best_idx = int(np.argmin(sweep_asr))
+    best_frac = float(sweep_fractions[best_idx])
+    best_asr = float(sweep_asr[best_idx])
+    best_clean = float(sweep_clean[best_idx])
+
     summary = {
         "checkpoint_path": checkpoint_path,
         "expected_attacked_label": expected_label if expected_label is not None else -1,
@@ -305,6 +350,14 @@ def run_security(
         "reconstructed_scales": [float(s) for s in scales],
         "smallest_scale": float(min(scales)),
         "largest_scale": float(max(scales)),
+        "fraction_sweep": {
+            "fractions": [float(v) for v in sweep_fractions],
+            "clean_accuracy": [float(v) for v in sweep_clean],
+            "asr": [float(v) for v in sweep_asr],
+            "best_fraction_by_asr": best_frac,
+            "best_fraction_clean_accuracy": best_clean,
+            "best_fraction_asr": best_asr,
+        },
     }
     figure_paths = {
         "trigger_reconstructed": str(trigger_mask_path),
@@ -312,6 +365,7 @@ def run_security(
         "security_scale_profile": str(scale_profile_path),
         "security_before_after": str(security_bar_path),
         "security_confusion_before_after": str(conf_path),
+        "security_unlearning_sweep": str(sweep_path),
     }
     return summary, figure_paths
 
@@ -383,12 +437,39 @@ def run_privacy(args: argparse.Namespace, paths: Dict[str, Path]) -> Tuple[Dict[
     plt.savefig(tail_curve_path, dpi=180)
     plt.close(fig_tail)
 
+    eps_sweep = np.linspace(0.02, 1.0, 50)
+    b_sweep = [1.0 / eps for eps in eps_sweep]
+    p_sweep = [laplace_cdf_threshold(505.0, 500.0, 1.0, float(eps)) for eps in eps_sweep]
+    eps_path = paths["figures_dir"] / "privacy_epsilon_sweep.png"
+    fig_eps, axes_eps = plt.subplots(1, 2, figsize=(9.0, 3.6))
+    axes_eps[0].plot(eps_sweep, b_sweep, linewidth=2)
+    axes_eps[0].set_xlabel("Epsilon")
+    axes_eps[0].set_ylabel("Scale b")
+    axes_eps[0].set_title("Scale vs privacy budget")
+    axes_eps[0].grid(alpha=0.3)
+
+    axes_eps[1].plot(eps_sweep, p_sweep, linewidth=2)
+    axes_eps[1].set_xlabel("Epsilon")
+    axes_eps[1].set_ylabel("P(noisy > 505)")
+    axes_eps[1].set_title("Threshold probability vs epsilon")
+    axes_eps[1].set_ylim(0.0, 1.0)
+    axes_eps[1].grid(alpha=0.3)
+    plt.tight_layout()
+    plt.savefig(eps_path, dpi=180)
+    plt.close(fig_eps)
+
     return {
         "income": income,
         "counting": counting,
+        "epsilon_sweep": {
+            "epsilon": [float(v) for v in eps_sweep],
+            "b": [float(v) for v in b_sweep],
+            "prob_gt_505": [float(v) for v in p_sweep],
+        },
     }, {
         "privacy_scenarios": str(privacy_plot),
         "privacy_tail_curves": str(tail_curve_path),
+        "privacy_epsilon_sweep": str(eps_path),
     }
 
 
@@ -533,10 +614,69 @@ def run_fairness(args: argparse.Namespace, paths: Dict[str, Path]) -> Tuple[Dict
     plt.savefig(tradeoff_path, dpi=180)
     plt.close(fig_tr)
 
+    k_grid = [0, 5, 10, 20, 50, 100, 200, 500, 1000]
+    k_grid = [k for k in k_grid if k <= len(y_train)]
+    k_acc = []
+    k_di_gap = []
+    for k in k_grid:
+        if k == 0:
+            k_acc.append(float(fairness_metrics["baseline"]["accuracy"]))
+            k_di_gap.append(float(abs(1.0 - fairness_metrics["baseline"]["disparate_impact"])))
+            continue
+        swap_mask_k = apply_promotion_demotion(
+            y_proba=proba_train_base,
+            y_pred=pred_train_base,
+            sensitive=sens_train,
+            k=k,
+        )
+        clf_k = retrain_with_swapped_labels(X_train, y_train, swap_mask_k)
+        pred_k = (clf_k.predict_proba(clf_k._scaler.transform(X_test))[:, 1] >= 0.5).astype(int)
+        m_k = compute_fairness_metrics(clf_k._scaler.transform(X_test), y_test, pred_k, sens_test)
+        k_acc.append(float(m_k["accuracy"]))
+        k_di_gap.append(float(abs(1.0 - m_k["disparate_impact"])))
+
+    fairness_k_path = paths["figures_dir"] / "fairness_swapk_sweep.png"
+    fig_k, ax_k = plt.subplots(figsize=(7.8, 3.9))
+    ax_k.plot(k_grid, k_acc, marker="o", linewidth=2, label="Accuracy")
+    ax_k.plot(k_grid, k_di_gap, marker="s", linewidth=2, label="|1 - DI|")
+    ax_k.set_xlabel("Swap budget k")
+    ax_k.set_ylabel("Metric value")
+    ax_k.set_ylim(0.0, 1.0)
+    ax_k.set_title("Fairness ablation: swap budget effects")
+    ax_k.grid(alpha=0.3)
+    ax_k.legend(fontsize=8)
+    plt.tight_layout()
+    plt.savefig(fairness_k_path, dpi=180)
+    plt.close(fig_k)
+
+    baseline_acc = float(fairness_metrics["baseline"]["accuracy"])
+    candidate = [
+        (i, dg, acc)
+        for i, (dg, acc) in enumerate(zip(k_di_gap, k_acc))
+        if acc >= baseline_acc - 0.03
+    ]
+    if candidate:
+        best_i, best_dg, best_acc = min(candidate, key=lambda x: x[1])
+    else:
+        best_i = int(np.argmin(k_di_gap))
+        best_dg = float(k_di_gap[best_i])
+        best_acc = float(k_acc[best_i])
+    best_k = int(k_grid[best_i])
+
+    fairness_metrics["swap_k_sweep"] = {
+        "k": [int(v) for v in k_grid],
+        "accuracy": [float(v) for v in k_acc],
+        "di_gap_to_one": [float(v) for v in k_di_gap],
+        "best_k_within_3pct_acc_drop": best_k,
+        "best_k_accuracy": float(best_acc),
+        "best_k_di_gap": float(best_dg),
+    }
+
     return fairness_metrics, {
         "fairness_comparison": str(plot_path),
         "fairness_group_rates": str(group_rate_path),
         "fairness_tradeoff": str(tradeoff_path),
+        "fairness_swapk_sweep": str(fairness_k_path),
     }
 
 
@@ -584,6 +724,12 @@ def write_results(paths: Dict[str, Path], payload: Dict) -> Tuple[str, str]:
         "\\newcommand{\\QThreeGroupThrZemel}{" + f"{metric('group_thresholds', 'zemel_proxy'):.4f}" + "}",
         "\\newcommand{\\QThreeGroupThrZero}{" + f"{metric('group_thresholds', 'threshold_group_0'):.4f}" + "}",
         "\\newcommand{\\QThreeGroupThrOne}{" + f"{metric('group_thresholds', 'threshold_group_1'):.4f}" + "}",
+        "\\newcommand{\\QOneBestFrac}{" + f"{float(sec.get('fraction_sweep', {}).get('best_fraction_by_asr', -1.0)):.2f}" + "}",
+        "\\newcommand{\\QOneBestFracASR}{" + f"{float(sec.get('fraction_sweep', {}).get('best_fraction_asr', -1.0)):.4f}" + "}",
+        "\\newcommand{\\QOneBestFracAcc}{" + f"{float(sec.get('fraction_sweep', {}).get('best_fraction_clean_accuracy', -1.0)):.4f}" + "}",
+        "\\newcommand{\\QThreeBestSwapK}{" + str(int(metric('swap_k_sweep', 'best_k_within_3pct_acc_drop', -1))) + "}",
+        "\\newcommand{\\QThreeBestSwapAcc}{" + f"{metric('swap_k_sweep', 'best_k_accuracy'):.4f}" + "}",
+        "\\newcommand{\\QThreeBestSwapDiGap}{" + f"{metric('swap_k_sweep', 'best_k_di_gap'):.4f}" + "}",
     ]
     with macros_path.open("w", encoding="utf-8") as f:
         f.write("\n".join(lines) + "\n")
