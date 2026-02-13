@@ -3,10 +3,14 @@ This files implements the proposed methods to generate robust recourse for linea
 """
 
 import numpy as np
-import cvxpy as cp
 import torch
 
 from tqdm import tqdm
+
+try:
+    import cvxpy as cp
+except ImportError:  # optional dependency: fallback solver is used when unavailable
+    cp = None
 
 def build_feasibility_sets(X, actionable, constraints):
     """
@@ -64,33 +68,110 @@ class LinearRecourse:
         Outputs:    a: np.array (D, ), recourse action found
                     cost: float, cost of the suggested recourse action
         """
-        a = cp.Variable(x.shape[0])  # recourse action
-        obj = cp.norm1(cp.multiply(self.c, a))  # loss is the 1 norm
+        if cp is not None:
+            a = cp.Variable(x.shape[0])  # recourse action
+            obj = cp.norm1(cp.multiply(self.c, a))  # loss is the 1 norm
 
-        # Feasibility constraint
-        b = self.b - self.w.T @ x                     # <w, x + a> >= b --> <w, a> >= b + <w, x>
-        constraints = [self.w.T @ J @ a >= b + 1e-6]  # add 1e-6 to ensure that constrain is met even with numerical errors
+            # Feasibility constraint
+            b = self.b - self.w.T @ x                     # <w, x + a> >= b --> <w, a> >= b + <w, x>
+            constraints = [self.w.T @ J @ a >= b + 1e-6]  # add 1e-6 to ensure that constrain is met even with numerical errors
 
-        # Actionability constrains
-        constraints += [cp.multiply(unactionable, a) == 0]
+            # Actionability constrains
+            constraints += [cp.multiply(unactionable, a) == 0]
 
-        # Feasibility contrains (ensure feature within bounds, may only increase or decrease...)
-        mask_lower = np.array([1. if bounds[i, 0] > -1e5 else 0. for i in range(bounds.shape[0])])
-        mask_upper = np.array([1. if bounds[i, 1] < 1e5 else 0. for i in range(bounds.shape[0])])
-        constraints += [cp.multiply(mask_lower, a) >= cp.multiply(mask_lower, bounds[:, 0])]
-        constraints += [cp.multiply(mask_upper, a) <= cp.multiply(mask_upper, bounds[:, 1])]
+            # Feasibility constrains (ensure feature within bounds, may only increase or decrease...)
+            mask_lower = np.array([1. if bounds[i, 0] > -1e5 else 0. for i in range(bounds.shape[0])])
+            mask_upper = np.array([1. if bounds[i, 1] < 1e5 else 0. for i in range(bounds.shape[0])])
+            constraints += [cp.multiply(mask_lower, a) >= cp.multiply(mask_lower, bounds[:, 0])]
+            constraints += [cp.multiply(mask_upper, a) <= cp.multiply(mask_upper, bounds[:, 1])]
 
-        # Solve the linear problem and return the solution
-        optim_problem = cp.Problem(cp.Minimize(obj), constraints)
-        try:
-            optim_problem.solve()
-        except cp.error.SolverError:
-            return np.zeros(x.shape), False, np.inf, np.zeros(x.shape)
+            # Solve the linear problem and return the solution
+            optim_problem = cp.Problem(cp.Minimize(obj), constraints)
+            try:
+                optim_problem.solve()
+            except cp.error.SolverError:
+                return np.zeros(x.shape), False, np.inf, np.zeros(x.shape)
 
-        found_result = a.value is not None
-        cf = x + J @ a.value if found_result else None
-        found_result = found_result and self.w.T @ cf >= self.b
-        return a.value, found_result, optim_problem.value, cf
+            found_result = a.value is not None
+            cf = x + J @ a.value if found_result else None
+            found_result = found_result and self.w.T @ cf >= self.b
+            return a.value, found_result, optim_problem.value, cf
+
+        # Fallback solver (no cvxpy): optimal greedy for weighted L1 with one linear inequality and box bounds.
+        return self.solve_lp_fallback(x, J, unactionable, bounds)
+
+    def solve_lp_fallback(self, x, J, unactionable, bounds):
+        """
+        Fallback when cvxpy is unavailable.
+        Solves:
+            min sum_i c_i |a_i|
+            s.t. q^T a >= t
+                 l_i <= a_i <= u_i
+                 a_i = 0 for unactionable i
+        where q = w^T J and t = b - w^T x + 1e-6.
+        Because there is a single inequality and separable objective, the optimal solution is a greedy
+        fractional allocation over per-feature gain/cost ratios.
+        """
+        D = x.shape[0]
+        q = (self.w.T @ J).reshape(-1)
+        t = float((self.b - self.w.T @ x) + 1e-6)
+
+        a = np.zeros(D, dtype=float)
+        if t <= 0:
+            cf = x + J @ a
+            return a, bool(self.w.T @ cf >= self.b), 0.0, cf
+
+        # Build candidate moves z_i >= 0 in the beneficial direction for each feature.
+        candidates = []
+        for i in range(D):
+            if unactionable[i] == 1:
+                continue
+
+            qi = float(q[i])
+            if abs(qi) < 1e-12:
+                continue
+
+            lo, hi = float(bounds[i, 0]), float(bounds[i, 1])
+            if qi > 0:
+                direction = 1.0
+                cap = max(0.0, hi)  # positive movement only helps
+            else:
+                direction = -1.0
+                cap = max(0.0, -lo)  # negative movement only helps
+
+            if cap <= 0:
+                continue
+
+            gain_per_unit = abs(qi)
+            cost_per_unit = float(self.c[i])
+            ratio = 0.0 if gain_per_unit == 0 else cost_per_unit / gain_per_unit
+            candidates.append((ratio, i, direction, cap, gain_per_unit, cost_per_unit))
+
+        if not candidates:
+            return np.zeros_like(a), False, np.inf, np.zeros_like(a)
+
+        # Greedy fill by best cost/gain ratio.
+        candidates.sort(key=lambda item: item[0])
+        remaining = t
+        total_cost = 0.0
+
+        for _, i, direction, cap, gain_u, cost_u in candidates:
+            if remaining <= 0:
+                break
+            needed = remaining / gain_u
+            take = min(cap, needed)
+            a[i] = direction * take
+            remaining -= gain_u * take
+            total_cost += cost_u * take
+
+        if remaining > 1e-8:
+            return np.zeros_like(a), False, np.inf, np.zeros_like(a)
+
+        cf = x + J @ a
+        found_result = bool(self.w.T @ cf >= self.b)
+        if not found_result:
+            return np.zeros_like(a), False, np.inf, np.zeros_like(a)
+        return a, True, float(total_cost), cf
 
     def find_recourse(self, x, interv_set, bounds, scm=None, verbose=False):
         """
@@ -115,7 +196,7 @@ class LinearRecourse:
         for i in iter_range:
             action[i], finished[i], cost[i], cfs[i] = self.solve_lp(x[i], J, unactionable, bounds[i])
 
-        return action, finished.astype(np.bool), cost, cfs
+        return action, finished.astype(bool), cost, cfs
 
 class DifferentiableRecourse:
     """
