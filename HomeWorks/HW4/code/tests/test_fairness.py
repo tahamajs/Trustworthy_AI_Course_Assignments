@@ -1,5 +1,13 @@
 import numpy as np
-from fairness import accuracy, disparate_impact, zemel_proxy_fairness, apply_promotion_demotion
+from fairness import (
+    accuracy,
+    apply_group_thresholds,
+    apply_promotion_demotion,
+    disparate_impact,
+    optimize_group_thresholds,
+    train_reweighed_model,
+    zemel_proxy_fairness,
+)
 
 
 def test_accuracy():
@@ -24,12 +32,34 @@ def test_zemel_proxy_simple():
 
 
 def test_apply_promotion_demotion():
-    rng = np.random.RandomState(0)
-    X = rng.randn(20, 3)
-    y_proba = rng.rand(20)
-    y_true = np.array([0]*10 + [1]*10)
-    sensitive = np.array([1]*10 + [0]*10)
-    mask = apply_promotion_demotion(X, y_proba, y_true, sensitive, k=3)
+    y_proba = np.array([0.1, 0.4, 0.9, 0.8, 0.6, 0.2])
+    y_pred = np.array([0, 0, 1, 1, 1, 0])
+    sensitive = np.array([1, 1, 1, 0, 0, 0])
+    mask = apply_promotion_demotion(y_proba, y_pred, sensitive, k=1)
     assert mask.dtype == bool
-    # at most 6 swapped (3 promo + 3 demo)
-    assert mask.sum() <= 6
+    # promotion candidate index 0, demotion candidate index 3
+    assert mask.sum() == 2
+    assert mask[0]
+    assert mask[3]
+
+
+def test_train_reweighed_model():
+    rng = np.random.RandomState(0)
+    X = rng.randn(40, 4)
+    y = (rng.rand(40) > 0.6).astype(int)
+    sensitive = rng.randint(0, 2, size=40)
+    model = train_reweighed_model(X, y, sensitive)
+    assert hasattr(model, "_scaler")
+    preds = model.predict(model._scaler.transform(X))
+    assert preds.shape == (40,)
+
+
+def test_group_thresholds_bounds():
+    y_true = np.array([0, 1, 0, 1, 0, 1])
+    y_proba = np.array([0.2, 0.7, 0.4, 0.8, 0.6, 0.9])
+    sensitive = np.array([0, 0, 1, 1, 0, 1])
+    thresholds = optimize_group_thresholds(y_true, y_proba, sensitive)
+    assert 0.0 <= thresholds[0] <= 1.0
+    assert 0.0 <= thresholds[1] <= 1.0
+    pred = apply_group_thresholds(y_proba, sensitive, thresholds)
+    assert pred.shape == y_true.shape
