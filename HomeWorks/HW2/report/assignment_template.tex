@@ -119,12 +119,22 @@ where \(u=\mathrm{FPR}\), while average precision summarizes precision-recall be
 \mathrm{BS}=\frac{1}{N}\sum_{i=1}^{N}(p_i-y_i)^2,
 \end{equation}
 which is a proper scoring rule, so lower values correspond to better probabilistic forecasts.
+Threshold sensitivity is analyzed by selecting an operating point
+\begin{equation}
+t^\star=\arg\max_{t\in[0,1]} \mathrm{F1}(t),
+\end{equation}
+which explicitly models the precision-recall tradeoff induced by the decision threshold.
+Global feature reliance is measured with permutation importance
+\begin{equation}
+I_j=\mathbb{E}\!\left[\mathcal{M}(f,X,y)-\mathcal{M}(f,\pi_j(X),y)\right],
+\end{equation}
+where \(\pi_j\) denotes feature-\(j\) shuffling and \(\mathcal{M}\) is test accuracy.
 For local explanation agreement, the report uses Spearman rank correlation between SHAP and LIME feature vectors plus top-3 overlap, distinguishing directional rank-consistency from exact magnitude matching.
 For vision stability, SmoothGrad maps at different sample counts \(K\) are compared with cosine similarity
 \begin{equation}
 \cos(a,b)=\frac{a^\top b}{\|a\|_2\|b\|_2},
 \end{equation}
-which operationalizes convergence of saliency structure as Monte Carlo averaging strength increases.
+which operationalizes convergence of saliency structure as Monte Carlo averaging strength increases; complementary smoothness diagnostics use normalized entropy and total variation, where decreasing total variation with increasing \(K\) indicates suppression of high-frequency attribution noise.
 
 \section{Code-Level Implementation Walkthrough}
 \subsection{Execution Entry Point}
@@ -143,7 +153,7 @@ Interpretability helpers isolate LIME and SHAP wrappers from model-training code
 The vision module implements all required saliency methods with explicit fallback and hook management logic. \texttt{get\_vgg16()} supports both newer and older torchvision APIs and gracefully falls back to randomly initialized weights if pretrained loading fails, which preserves pipeline executability in offline environments. \texttt{GradCAM} registers a forward hook on a target feature layer to cache activations and a gradient hook to cache backpropagated class gradients; in \texttt{\_\_call\_\_()}, class score backpropagation computes channel weights by global average pooling of gradients, forms a weighted activation sum, applies ReLU, upsamples to input resolution, and normalizes to \([0,1]\). \texttt{GuidedBackprop} modifies ReLU backward behavior by forcing positive gradient flow and disabling in-place ReLUs, ensuring correct gradient capture for guided saliency. \texttt{smoothgrad()} estimates denoised saliency by averaging gradients from multiple Gaussian-perturbed inputs, directly implementing a Monte Carlo variance-reduction estimator over input-space derivatives.
 
 \subsection{Figure Production Logic and Artifact Contracts}
-The plotting logic is explicitly tied to report requirements through fixed filenames and deterministic ordering. In tabular generation, the expanded pipeline exports class distribution, model learning curves, confusion-matrix comparison, ROC/PR comparison, calibration curves, LIME-SHAP agreement diagnostics, three local explanation figures for stable test indices \([0,1,2]\), and NAM feature-response functions; this progression intentionally moves from global data/optimization behavior to local explanation behavior. In vision generation, synthetic \(224\times224\) RGB inputs are used to guarantee fully local execution with no external assets, and the expanded outputs include Grad-CAM heatmaps, Grad-CAM overlays, Guided Grad-CAM composition, SmoothGrad-vs-guided comparison, and SmoothGrad sample-count sweep diagnostics. All metrics and stability statistics are serialized to \texttt{report/figures/metrics\_summary.json}, creating a machine-readable traceability layer between generated artifacts and manuscript claims.
+The plotting logic is explicitly tied to report requirements through fixed filenames and deterministic ordering. In tabular generation, the expanded pipeline exports class distribution, model learning curves, confusion-matrix comparison, ROC/PR comparison, calibration curves, threshold-sensitivity curves, permutation-importance comparison, LIME-SHAP agreement diagnostics, three local explanation figures for stable test indices \([0,1,2]\), and NAM feature-response functions; this progression intentionally moves from global data/optimization behavior to local explanation behavior. In vision generation, synthetic \(224\times224\) RGB inputs are used to guarantee fully local execution with no external assets, and the expanded outputs include Grad-CAM heatmaps, Grad-CAM overlays, Guided Grad-CAM composition, SmoothGrad-vs-guided comparison, SmoothGrad sample-count sweep diagnostics, and SmoothGrad convergence-metric plots. All metrics and stability statistics are serialized to \texttt{report/figures/metrics\_summary.json}, creating a machine-readable traceability layer between generated artifacts and manuscript claims.
 
 \subsection{Reproducibility and Engineering Safeguards}
 At engineering level, reproducibility is enforced by seed control, deterministic sample-index selection, stable directory contracts, and explicit offline fallbacks at both data and model-loading boundaries. The combination of modular wrappers (training, explainers, saliency), shape-normalization guards for SHAP outputs, checkpoint restoration in training, and hook lifecycle handling (\texttt{close()} in Grad-CAM) reduces common failure modes such as API drift, memory leaks, and inconsistent figure outputs across machines. Consequently, the codebase is not only functionally complete for Homework 2 but also operationally robust: the same commands regenerate the same extended diagnostics, figures, and compatible IEEE PDF structure even when network-dependent resources are unavailable.
@@ -185,14 +195,44 @@ NAMClassifier & 0.6957 & 0.5702 & 0.2021 \\
 \toprule
 Pair & Cosine Similarity \\
 \midrule
-\(K=5\) vs \(K=20\) & 0.9407 \\
-\(K=20\) vs \(K=50\) & 0.9753 \\
+\(K=5\) vs \(K=20\) & 0.9414 \\
+\(K=20\) vs \(K=50\) & 0.9758 \\
 \(K=5\) vs \(K=50\) & 0.9507 \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-The expanded quantitative view shows that MLP remains stronger than NAM across thresholded and threshold-free discrimination metrics while NAM stays competitively close with higher structural interpretability, and the lower MLP Brier score indicates modestly better probability calibration quality; additionally, high SmoothGrad cosine similarities across sample counts indicate stable saliency structure under increased Monte Carlo averaging, which supports using larger \(K\) for smoother yet semantically consistent visual explanations.
+\begin{table}[H]
+\caption{Best F1 Operating Thresholds}
+\label{tab:best_thresholds}
+\centering
+\begin{tabular}{lcc}
+\toprule
+Model & \(t^\star\) & Best F1 \\
+\midrule
+MLPClassifier & 0.20 & 0.5912 \\
+NAMClassifier & 0.20 & 0.5806 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[H]
+\caption{SmoothGrad Convergence Profile}
+\label{tab:smoothgrad_profile}
+\centering
+\begin{tabular}{ccc}
+\toprule
+\(K\) & Entropy & Total Variation \\
+\midrule
+5 & 0.9925 & 0.2381 \\
+10 & 0.9939 & 0.2314 \\
+20 & 0.9952 & 0.2134 \\
+50 & 0.9961 & 0.1673 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The expanded quantitative view shows that MLP remains stronger than NAM across thresholded and threshold-free discrimination metrics while NAM stays competitively close with higher structural interpretability, and the lower MLP Brier score indicates modestly better probability calibration quality; threshold-optimization results further show that both models benefit from a lower operating threshold (\(t^\star=0.20\)) compared with the default 0.50 under class imbalance, and SmoothGrad profile trends (increasing entropy with decreasing total variation) confirm that larger \(K\) yields smoother yet structurally consistent saliency fields.
 
 \section{Plot-by-Plot Result Interpretation}
 
@@ -240,6 +280,24 @@ The ROC/PR plot confirms that MLP consistently dominates NAM across threshold sw
 \label{fig:calibration}
 \end{figure}
 The calibration plot shows both models are reasonably close to the diagonal reliability line with MLP exhibiting a slightly lower Brier score, implying modestly better probability calibration and not just better ranking; in probabilistic terms, calibration evaluates whether predicted probabilities approximate empirical frequencies, so this figure complements ROC/PR by validating that confidence values are meaningful for risk-aware decisions rather than merely useful for ranking.
+
+\subsection{Threshold-Sensitivity Plot}
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.98\columnwidth]{figures/threshold_sensitivity.png}
+\caption{Precision, recall, and F1 as a function of decision threshold.}
+\label{fig:threshold_sensitivity}
+\end{figure}
+The threshold-sensitivity plot shows that both models achieve substantially higher F1 near \(t\approx0.20\) than at the default \(t=0.50\), with MLP maintaining a modest advantage over NAM across the operating range; theoretically, this confirms that threshold choice is part of the decision rule rather than model fitting itself, and in imbalanced binary tasks lower thresholds can improve minority-class utility by trading some precision for large recall gains, thereby better aligning classification with risk-sensitive objectives.
+
+\subsection{Permutation-Importance Comparison}
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.95\columnwidth]{figures/permutation_importance_comparison.png}
+\caption{Feature-importance comparison via accuracy drop under shuffling.}
+\label{fig:perm_importance}
+\end{figure}
+The permutation-importance plot indicates that \textit{Glucose} is the dominant feature for both models by a wide margin, while most other features have small or near-zero mean accuracy-drop effects under independent shuffling, which implies weaker global reliance in the learned decision rules; in estimator terms, permutation importance approximates marginal performance sensitivity to feature-destruction, so larger positive drops identify features that carry unique predictive signal not fully recoverable from remaining covariates.
 
 \subsection{LIME-SHAP Agreement Plot}
 \begin{figure}[H]
@@ -326,13 +384,22 @@ The SmoothGrad comparison plot shows that averaging gradients over noisy perturb
 \begin{figure}[H]
 \centering
 \includegraphics[width=0.98\columnwidth]{figures/smoothgrad_sample_sweep.png}
-\caption{SmoothGrad maps for \(K=5\), \(K=20\), and \(K=50\).}
+\caption{SmoothGrad maps for \(K=5\), \(K=10\), \(K=20\), and \(K=50\).}
 \label{fig:smoothgrad_sweep}
 \end{figure}
-The SmoothGrad sweep plot demonstrates convergence behavior as sample count \(K\) increases: the \(K=5\) map retains more stochastic texture, while \(K=20\) and \(K=50\) progressively stabilize major relevance regions with reduced speckle, and this qualitative trend is quantitatively supported by high cosine similarities (notably stronger between \(K=20\) and \(K=50\) than between \(K=5\) and \(K=20\)); theoretically this matches Monte Carlo estimator convergence, where variance decays with additional perturbation samples and saliency structure approaches a stable expectation under the noise model.
+The SmoothGrad sweep plot demonstrates convergence behavior as sample count \(K\) increases: the \(K=5\) map retains more stochastic texture, the intermediate \(K=10\) and \(K=20\) maps progressively suppress speckle, and \(K=50\) yields the most stable large-scale relevance pattern; this is consistent with the observed cosine-similarity trend where high agreement is preserved and is strongest between larger-\(K\) maps, matching the Monte Carlo convergence expectation that attribution variance shrinks with additional perturbation averaging.
+
+\subsection{SmoothGrad Convergence-Metrics Plot}
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.98\columnwidth]{figures/smoothgrad_convergence_metrics.png}
+\caption{Entropy and total variation trends versus SmoothGrad sample count \(K\).}
+\label{fig:smoothgrad_convergence_metrics}
+\end{figure}
+The SmoothGrad convergence-metrics plot complements visual inspection by showing a monotonic decrease in total variation as \(K\) grows, which quantitatively confirms attenuation of high-frequency gradient noise, while entropy increases slightly as saliency mass becomes more diffusely distributed over stable regions; theoretically this pair of trends formalizes the smoothing mechanism of Monte Carlo gradient averaging, demonstrating that larger \(K\) moves explanations toward low-variance, spatially coherent attribution fields.
 
 \section{Discussion}
-The complete expanded figure set supports a consistent interpretation narrative with stronger theoretical grounding: tabular diagnostics now cover optimization dynamics, thresholded and threshold-free discrimination, calibration quality, and local attribution agreement, while vision diagnostics progress from localization to overlay validation, guided fusion, and Monte Carlo stability analysis.
+The complete expanded figure set supports a consistent interpretation narrative with stronger theoretical grounding: tabular diagnostics now cover optimization dynamics, thresholded and threshold-free discrimination, calibration quality, threshold-operating behavior, global permutation sensitivity, and local attribution agreement, while vision diagnostics progress from localization to overlay validation, guided fusion, and multi-metric Monte Carlo stability analysis.
 From an engineering standpoint, the key outcome is not only richer interpretability content but also traceable reproducibility, because all claims are linked to deterministic artifacts and serialized summary metrics generated by the same offline-robust pipeline.
 
 \section{Conclusion}
