@@ -84,11 +84,24 @@ def _make_synthetic_diabetes(n_samples: int = 768, seed: int = 42) -> pd.DataFra
 
 
 def load_diabetes(local_path: str = "diabetes.csv", seed: int = 42) -> pd.DataFrame:
+    def _normalize_target(df_in: pd.DataFrame) -> pd.DataFrame:
+        df_out = df_in.copy()
+        lower_to_orig = {c.lower(): c for c in df_out.columns}
+        if "outcome" in lower_to_orig:
+            src = lower_to_orig["outcome"]
+            if src != "Outcome":
+                df_out = df_out.rename(columns={src: "Outcome"})
+        elif "diabetes" in lower_to_orig:
+            df_out = df_out.rename(columns={lower_to_orig["diabetes"]: "Outcome"})
+        elif "class" in lower_to_orig:
+            df_out = df_out.rename(columns={lower_to_orig["class"]: "Outcome"})
+        return df_out
+
     if os.path.exists(local_path):
-        df = pd.read_csv(local_path)
+        df = _normalize_target(pd.read_csv(local_path))
     else:
         try:
-            df = pd.read_csv(DATA_URL)
+            df = _normalize_target(pd.read_csv(DATA_URL))
             df.to_csv(local_path, index=False)
         except Exception as exc:  # pragma: no cover - offline branch
             print(
@@ -97,18 +110,16 @@ def load_diabetes(local_path: str = "diabetes.csv", seed: int = 42) -> pd.DataFr
             )
             df = _make_synthetic_diabetes(seed=seed)
 
-    # standardize column names to match assignment (8 features + Outcome)
-    if "Outcome" not in df.columns:
-        # this remote file uses 'diabetes' as column name for target
-        if "diabetes" in df.columns:
-            df = df.rename(columns={"diabetes": "Outcome"})
-    if "Outcome" not in df.columns:
-        raise ValueError("Dataset must include an Outcome target column.")
-
-    # Keep a stable column order for downstream plotting/reporting.
-    reordered = [c for c in DEFAULT_COLUMNS if c in df.columns]
-    extras = [c for c in df.columns if c not in reordered]
-    df = df[reordered + extras]
+    # Enforce assignment schema (8 tabular features + Outcome).
+    # If local/remote file is incompatible, fallback to deterministic synthetic data.
+    required = DEFAULT_COLUMNS
+    if not set(required).issubset(set(df.columns)):
+        print(
+            "[tabular] Found incompatible local dataset schema. "
+            "Falling back to deterministic synthetic diabetes-like data."
+        )
+        df = _make_synthetic_diabetes(seed=seed)
+    df = df[required]
     return df
 
 

@@ -638,14 +638,14 @@ def generate_vision_figures() -> dict[str, float]:
     plt.close(fig)
     print(f"[vision] saved {out}")
 
-    smoothgrad_counts = [5, 20, 50]
+    smoothgrad_counts = [5, 10, 20, 50]
     sweep_maps = []
     for n_samples in smoothgrad_counts:
         sg_map = smoothgrad(model, inp_sg, n_samples=n_samples, stdev=0.12)
         sg_map = _normalize_map(np.abs(sg_map).max(axis=0))
         sweep_maps.append(sg_map)
 
-    fig, axes = plt.subplots(1, len(sweep_maps), figsize=(12, 3.6))
+    fig, axes = plt.subplots(1, len(sweep_maps), figsize=(14, 3.6))
     for ax, n_samples, sg_map in zip(axes, smoothgrad_counts, sweep_maps):
         ax.imshow(sg_map, cmap="inferno")
         ax.set_title(f"SmoothGrad K={n_samples}")
@@ -656,17 +656,30 @@ def generate_vision_figures() -> dict[str, float]:
     plt.close(fig)
     print(f"[vision] saved {out}")
 
-    # Similarity increases as K grows if estimator stabilizes.
-    flat5 = sweep_maps[0].ravel()
-    flat20 = sweep_maps[1].ravel()
-    flat50 = sweep_maps[2].ravel()
-    cos_5_20 = float(np.dot(flat5, flat20) / (np.linalg.norm(flat5) * np.linalg.norm(flat20) + 1e-8))
-    cos_20_50 = float(np.dot(flat20, flat50) / (np.linalg.norm(flat20) * np.linalg.norm(flat50) + 1e-8))
-    cos_5_50 = float(np.dot(flat5, flat50) / (np.linalg.norm(flat5) * np.linalg.norm(flat50) + 1e-8))
+    # Similarity and smoothness trends as K grows.
+    flat_maps = [m.ravel() for m in sweep_maps]
+    cos_5_20 = float(
+        np.dot(flat_maps[0], flat_maps[2])
+        / (np.linalg.norm(flat_maps[0]) * np.linalg.norm(flat_maps[2]) + 1e-8)
+    )
+    cos_20_50 = float(
+        np.dot(flat_maps[2], flat_maps[3])
+        / (np.linalg.norm(flat_maps[2]) * np.linalg.norm(flat_maps[3]) + 1e-8)
+    )
+    cos_5_50 = float(
+        np.dot(flat_maps[0], flat_maps[3])
+        / (np.linalg.norm(flat_maps[0]) * np.linalg.norm(flat_maps[3]) + 1e-8)
+    )
+    entropies = [_saliency_entropy(m) for m in sweep_maps]
+    tvs = [_saliency_total_variation(m) for m in sweep_maps]
+    _plot_smoothgrad_convergence(smoothgrad_counts, entropies, tvs)
     return {
         "smoothgrad_cosine_5_20": cos_5_20,
         "smoothgrad_cosine_20_50": cos_20_50,
         "smoothgrad_cosine_5_50": cos_5_50,
+        "smoothgrad_ks": smoothgrad_counts,
+        "smoothgrad_entropy": entropies,
+        "smoothgrad_total_variation": tvs,
     }
 
 

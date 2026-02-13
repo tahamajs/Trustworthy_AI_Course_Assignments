@@ -43,6 +43,11 @@ def parse_ratio_list(values):
     return [str_to_ratio(x) for x in items]
 
 
+def parse_int_list(values):
+    items = [x.strip() for x in values.split(',') if x.strip()]
+    return [int(x) for x in items]
+
+
 @torch.no_grad()
 def collect_predictions(model, loader, device, max_batches=None):
     model.eval()
@@ -205,6 +210,63 @@ def save_reliability_diagram(probs, labels, save_path, n_bins=10):
     return ece
 
 
+def _metric_at_coverage(coverage_curve, value_curve, target_coverage):
+    idx = int(np.searchsorted(coverage_curve, target_coverage, side='left'))
+    if idx >= len(coverage_curve):
+        idx = len(coverage_curve) - 1
+    return float(value_curve[idx])
+
+
+def save_confidence_coverage_plot(probs, labels, save_path, coverage_points=20):
+    confidences = np.max(probs, axis=1)
+    preds = np.argmax(probs, axis=1)
+    correct = (preds == labels).astype(np.float64)
+
+    n = len(correct)
+    if n == 0:
+        raise ValueError('No predictions available for confidence-coverage plotting.')
+
+    order = np.argsort(-confidences)
+    sorted_correct = correct[order]
+    cum_correct = np.cumsum(sorted_correct)
+    ks = np.arange(1, n + 1)
+    coverage_curve = ks / float(n)
+    selective_acc_curve = cum_correct / ks
+    risk_curve = 1.0 - selective_acc_curve
+    aurc = float(np.mean(risk_curve))
+
+    if coverage_points < 2:
+        coverage_points = 2
+    sample_idx = np.linspace(0, n - 1, coverage_points).astype(int)
+    sample_cov = coverage_curve[sample_idx] * 100.0
+    sample_acc = selective_acc_curve[sample_idx] * 100.0
+    sample_risk = risk_curve[sample_idx] * 100.0
+
+    fig = plt.figure(figsize=(8, 5))
+    ax = fig.add_subplot(1, 1, 1)
+    ax.plot(sample_cov, sample_acc, marker='o', linewidth=2, color='#264653', label='Selective Accuracy')
+    ax.plot(sample_cov, sample_risk, marker='s', linewidth=2, color='#E76F51', label='Selective Risk')
+    ax.set_xlabel('Coverage (%)')
+    ax.set_ylabel('Percentage (%)')
+    ax.set_xlim(0, 100)
+    ax.set_ylim(0, 100)
+    ax.set_title(f'Confidence-Coverage Curve (AURC={aurc:.4f})')
+    ax.grid(alpha=0.3, linestyle='--')
+    ax.legend(loc='best')
+    plt.tight_layout()
+    os.makedirs(os.path.dirname(save_path) or '.', exist_ok=True)
+    fig.savefig(save_path, dpi=220)
+    plt.close(fig)
+
+    acc_80 = _metric_at_coverage(coverage_curve, selective_acc_curve, 0.80) * 100.0
+    acc_90 = _metric_at_coverage(coverage_curve, selective_acc_curve, 0.90) * 100.0
+    return {
+        'aurc': aurc,
+        'acc_at_80_coverage': float(acc_80),
+        'acc_at_90_coverage': float(acc_90),
+    }
+
+
 def _stats_for_dataset(dataset_name):
     if dataset_name.lower() == 'svhn':
         return (0.4377, 0.4438, 0.4728), (0.1980, 0.2010, 0.1970)
@@ -335,6 +397,58 @@ def save_attack_sweep_plot(model, loader, device, save_path, epsilons, alpha, sw
     }
 
 
+def save_pgd_iter_sweep_plot(model, loader, device, save_path, epsilon, alpha, iters_list, max_batches=None):
+    clean_acc = evaluate_accuracy_under_attack(
+        model, loader, device, attack='clean', epsilon=0.0, alpha=alpha, iters=1, max_batches=max_batches
+    )
+    fgsm_acc = evaluate_accuracy_under_attack(
+        model, loader, device, attack='fgsm', epsilon=epsilon, alpha=alpha, iters=1, max_batches=max_batches
+    )
+    noise_acc = evaluate_accuracy_under_attack(
+        model, loader, device, attack='noise', epsilon=epsilon, alpha=alpha, iters=1, max_batches=max_batches
+    )
+
+    pgd_acc = []
+    for pgd_iter in iters_list:
+        pgd_acc.append(
+            evaluate_accuracy_under_attack(
+                model,
+                loader,
+                device,
+                attack='pgd',
+                epsilon=epsilon,
+                alpha=alpha,
+                iters=int(pgd_iter),
+                max_batches=max_batches,
+            )
+        )
+
+    fig = plt.figure(figsize=(8, 5))
+    ax = fig.add_subplot(1, 1, 1)
+    ax.plot(iters_list, pgd_acc, marker='o', linewidth=2, color='#2A9D8F', label='PGD')
+    ax.axhline(clean_acc, color='black', linestyle='--', linewidth=1.2, label=f'Clean ({clean_acc:.2f}%)')
+    ax.axhline(fgsm_acc, color='#E76F51', linestyle='-.', linewidth=1.2, label=f'FGSM ({fgsm_acc:.2f}%)')
+    ax.axhline(noise_acc, color='#264653', linestyle=':', linewidth=1.5, label=f'Noise ({noise_acc:.2f}%)')
+    ax.set_xlabel('PGD Iterations')
+    ax.set_ylabel('Accuracy (%)')
+    ax.set_title(f'PGD Strength Sweep at epsilon={epsilon * 255.0:.1f}/255')
+    ax.grid(alpha=0.3, linestyle='--')
+    ax.legend(loc='best', fontsize=8)
+    plt.tight_layout()
+    os.makedirs(os.path.dirname(save_path) or '.', exist_ok=True)
+    fig.savefig(save_path, dpi=220)
+    plt.close(fig)
+
+    return {
+        'epsilon': float(epsilon * 255.0),
+        'iters': [int(x) for x in iters_list],
+        'pgd_acc': [float(x) for x in pgd_acc],
+        'clean_acc': float(clean_acc),
+        'fgsm_acc': float(fgsm_acc),
+        'noise_acc': float(noise_acc),
+    }
+
+
 def parse_args():
     p = argparse.ArgumentParser()
     p.add_argument('--dataset', default='svhn')
@@ -354,11 +468,18 @@ def parse_args():
     p.add_argument('--per-class-path', type=str, default=None)
     p.add_argument('--save-calibration', action='store_true')
     p.add_argument('--calibration-path', type=str, default=None)
+    p.add_argument('--save-confidence-coverage', action='store_true')
+    p.add_argument('--confidence-coverage-path', type=str, default=None)
+    p.add_argument('--coverage-points', type=int, default=20)
     p.add_argument('--save-attack-sweep', action='store_true')
     p.add_argument('--attack-sweep-path', type=str, default=None)
     p.add_argument('--sweep-epsilons', type=str, default='0/255,2/255,4/255,8/255,12/255')
     p.add_argument('--sweep-iters', type=int, default=3)
     p.add_argument('--sweep-max-batches', type=int, default=4)
+    p.add_argument('--save-pgd-iter-sweep', action='store_true')
+    p.add_argument('--pgd-iter-sweep-path', type=str, default=None)
+    p.add_argument('--pgd-iters-list', type=str, default='1,2,4,7,10')
+    p.add_argument('--iter-sweep-max-batches', type=int, default=4)
     p.add_argument('--metrics-path', type=str, default=None)
     p.add_argument('--demo', action='store_true')
     p.add_argument('--batch-size', type=int, default=256)
@@ -399,7 +520,7 @@ def main():
         )
         print(f'Saved sample grid to: {grid_path}')
 
-    needs_predictions = args.save_confusion or args.save_per_class or args.save_calibration
+    needs_predictions = args.save_confusion or args.save_per_class or args.save_calibration or args.save_confidence_coverage
     if needs_predictions:
         probs, preds, labels = collect_predictions(model, test_loader, device)
         num_classes = probs.shape[1]
@@ -422,6 +543,18 @@ def main():
             metrics['ece'] = float(ece)
             print(f'Saved reliability diagram to: {calibration_path}')
 
+        if args.save_confidence_coverage:
+            coverage_path = args.confidence_coverage_path or (args.checkpoint + '.confidence_coverage.png')
+            coverage_metrics = save_confidence_coverage_plot(
+                probs,
+                labels,
+                save_path=coverage_path,
+                coverage_points=args.coverage_points,
+            )
+            metrics['confidence_coverage'] = coverage_metrics
+            metrics['aurc'] = float(coverage_metrics['aurc'])
+            print(f'Saved confidence-coverage plot to: {coverage_path}')
+
     if args.save_attack_sweep:
         sweep_path = args.attack_sweep_path or (args.checkpoint + '.robustness_sweep.png')
         epsilons = parse_ratio_list(args.sweep_epsilons)
@@ -437,6 +570,22 @@ def main():
         )
         metrics['robustness_sweep'] = sweep
         print(f'Saved robustness sweep plot to: {sweep_path}')
+
+    if args.save_pgd_iter_sweep:
+        iter_sweep_path = args.pgd_iter_sweep_path or (args.checkpoint + '.pgd_iter_sweep.png')
+        iters_list = parse_int_list(args.pgd_iters_list)
+        iter_sweep = save_pgd_iter_sweep_plot(
+            model=model,
+            loader=test_loader,
+            device=device,
+            save_path=iter_sweep_path,
+            epsilon=epsilon,
+            alpha=alpha,
+            iters_list=iters_list,
+            max_batches=args.iter_sweep_max_batches,
+        )
+        metrics['pgd_iter_sweep'] = iter_sweep
+        print(f'Saved PGD-iteration sweep plot to: {iter_sweep_path}')
 
     if args.metrics_path is not None:
         os.makedirs(os.path.dirname(args.metrics_path) or '.', exist_ok=True)

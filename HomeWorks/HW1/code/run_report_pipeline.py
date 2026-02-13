@@ -35,6 +35,9 @@ def parse_args():
     p.add_argument('--sweep-epsilons', default='0/255,2/255,4/255,8/255,12/255')
     p.add_argument('--sweep-iters', type=int, default=3)
     p.add_argument('--sweep-max-batches', type=int, default=4)
+    p.add_argument('--coverage-points', type=int, default=20)
+    p.add_argument('--pgd-iters-list', default='1,2,4,7,10')
+    p.add_argument('--iter-sweep-max-batches', type=int, default=4)
     p.add_argument('--full-run', action='store_true', help='Disable demo mode and run on full dataset.')
     return p.parse_args()
 
@@ -70,7 +73,9 @@ def main():
     confusion_path = save_dir / 'best.pth.confusion.png'
     per_class_path = save_dir / 'best.pth.per_class.png'
     calibration_path = save_dir / 'best.pth.calibration.png'
+    confidence_coverage_path = save_dir / 'best.pth.confidence_coverage.png'
     sweep_path = save_dir / 'best.pth.robustness_sweep.png'
+    pgd_iter_sweep_path = save_dir / 'best.pth.pgd_iter_sweep.png'
     metrics_path = save_dir / 'best.pth.metrics.json'
 
     eval_cmd = [
@@ -105,6 +110,11 @@ def main():
         '--save-calibration',
         '--calibration-path',
         str(calibration_path),
+        '--save-confidence-coverage',
+        '--confidence-coverage-path',
+        str(confidence_coverage_path),
+        '--coverage-points',
+        str(args.coverage_points),
         '--save-attack-sweep',
         '--attack-sweep-path',
         str(sweep_path),
@@ -114,6 +124,13 @@ def main():
         str(args.sweep_iters),
         '--sweep-max-batches',
         str(args.sweep_max_batches),
+        '--save-pgd-iter-sweep',
+        '--pgd-iter-sweep-path',
+        str(pgd_iter_sweep_path),
+        '--pgd-iters-list',
+        args.pgd_iters_list,
+        '--iter-sweep-max-batches',
+        str(args.iter_sweep_max_batches),
         '--metrics-path',
         str(metrics_path),
     ]
@@ -127,7 +144,9 @@ def main():
     copy_if_exists(confusion_path, report_fig_dir / 'confusion_matrix.png')
     copy_if_exists(per_class_path, report_fig_dir / 'per_class_accuracy.png')
     copy_if_exists(calibration_path, report_fig_dir / 'reliability_diagram.png')
+    copy_if_exists(confidence_coverage_path, report_fig_dir / 'confidence_coverage.png')
     copy_if_exists(sweep_path, report_fig_dir / 'robustness_sweep.png')
+    copy_if_exists(pgd_iter_sweep_path, report_fig_dir / 'pgd_iter_sweep.png')
     copy_if_exists(metrics_path, report_fig_dir / 'metrics_summary.json')
 
     print('[DONE] Report artifacts updated in:', report_fig_dir)
