@@ -255,7 +255,7 @@ Figure~\ref{fig:fairness_comparison} provides aggregate comparison, but Figures~
     \caption{Accuracy and fairness-gap trends versus promotion/demotion swap budget $k$.}
     \label{fig:fairness_swapk_sweep}
 \end{figure}
-Figure~\ref{fig:fairness_swapk_sweep} shows how the assignment mitigation behaves as $k$ changes from no swapping to aggressive relabeling. The curve demonstrates that fairness gains (lower $|1-\mathrm{DI}|$) are not monotonic in practical utility terms unless accuracy is co-monitored, so selecting $k$ is an optimization problem, not a fixed rule. Using a tolerance of at most 3\% absolute accuracy loss from baseline, the best operating point in this run is $k=\\QThreeBestSwapK$ with accuracy \QThreeBestSwapAcc{} and fairness gap \QThreeBestSwapDiGap{}.
+Figure~\ref{fig:fairness_swapk_sweep} shows how the assignment mitigation behaves as $k$ changes from no swapping to aggressive relabeling. The curve demonstrates that fairness gains (lower $|1-\mathrm{DI}|$) are not monotonic in practical utility terms unless accuracy is co-monitored, so selecting $k$ is an optimization problem, not a fixed rule. Using a tolerance of at most 3\% absolute accuracy loss from baseline, the best operating point in this run is $k=\QThreeBestSwapK$ with accuracy \QThreeBestSwapAcc{} and fairness gap \QThreeBestSwapDiGap{}.
 
 \section{Consolidated Metric Tables}
 \begin{table}[H]
@@ -293,8 +293,104 @@ $P(\tilde{q} > 505)$ (base / sequential / unbounded) & \QTwoProbBase{} / \QTwoPr
 \end{tabular}
 \end{table}
 
+\section{Requirement Coverage Checklist}
+This report is organized to fully cover both assignment deliverables and standard scientific-paper structure.
+\begin{itemize}
+    \item Problem statement and motivation are provided in the abstract and introduction.
+    \item Formal theoretical definitions and equations for all three tracks are provided in Section II.
+    \item Full implementation details are documented in Section IV at module and function level.
+    \item Security requirements are covered by attacked-label detection, per-label reconstruction evidence, before/after mitigation metrics, and ablation analysis (Figures~1--6, Table~II).
+    \item Privacy requirements are covered by base/sequential/unbounded scenarios, threshold-tail interpretation, and epsilon sensitivity analysis (Figures~7--9, Table~II).
+    \item Fairness requirements are covered by baseline, assignment-required mitigation, sensitive-feature removal, and two bonus methods with decomposition and tradeoff visualization (Figures~10--13, Table~I).
+    \item Reproducibility requirements are covered by deterministic seeds, fixed assumptions, generated macros, and machine-readable metrics outputs (Section III and Section IV).
+    \item Verification requirements are covered by automated tests for security/privacy/fairness computations and theory-presence guard tests for this report template.
+\end{itemize}
+
 \section{Conclusion}
-The report now contains a complete theoretical chain from formal definitions to executable outcomes for all three tracks. Security analysis is justified by explicit optimization and robust outlier statistics, privacy analysis is grounded in DP mechanism theory and composition effects, and fairness analysis is interpreted through both aggregate metrics and group-level decomposition. Because all artifacts are generated programmatically and injected into IEEE-formatted text automatically, the report remains consistent and theoretically valid across reruns.
+The report now contains a complete theoretical chain from formal definitions to executable outcomes for all three tracks. Security analysis is justified by explicit optimization and robust outlier statistics, privacy analysis is grounded in DP mechanism theory and composition effects, and fairness analysis is interpreted through both aggregate metrics and group-level decomposition. Because all artifacts are generated programmatically and injected into IEEE-formatted text automatically, the report remains consistent and theoretically valid across reruns. Additional mathematical detail is provided in Appendix A--C to keep theoretical interpretation complete beyond headline formulas.
+
+\appendices
+\section{Extended Security Derivation and Detection Rule}
+For target label $y$, the Neural Cleanse optimization objective can be written as
+\begin{equation}
+\mathcal{L}_y(m,p)=\mathbb{E}_{x\sim\mathcal{D}}\left[\ell\left(f_\theta(\mathcal{T}(x;m,p)),y\right)\right]+\lambda_1\|m\|_1+\lambda_2\|p\|_1.
+\end{equation}
+Using $\mathcal{T}(x;m,p)=(1-m)\odot x + m\odot p$, the local sensitivities of the trigger injection are
+\begin{equation}
+\frac{\partial \mathcal{T}}{\partial m}=p-x,\qquad
+\frac{\partial \mathcal{T}}{\partial p}=m.
+\end{equation}
+These relations explain why sparse masks emerge: under $\ell_1$ regularization, updates prefer coordinates with high class-induction gain per perturbation cost. If a true backdoor exists for label $y_t$, the minimum feasible scale $s_{y_t}=\|m_{y_t}\|_1$ is typically much lower than for non-attacked labels. The detector therefore uses lower-tail robust outlier scoring:
+\begin{equation}
+\hat{y}_t=\arg\min_y z_y,\qquad
+z_y=0.6745\frac{s_y-\mathrm{median}(s)}{\mathrm{MAD}(s)}.
+\end{equation}
+With threshold multiplier $\kappa=3.5$, the decision policy is
+\begin{equation}
+\hat{y}_t=
+\begin{cases}
+\arg\min_y z_y, & \min_y z_y\le -\kappa,\\
+\arg\min_y s_y, & \text{otherwise},
+\end{cases}
+\end{equation}
+which matches the implementation fallback when outlier evidence is weak or MAD degenerates.
+
+\section{Extended Differential Privacy Derivation}
+For $\eta\sim\mathrm{Lap}(0,b)$, the CDF is
+\begin{equation}
+F_{\mathrm{Lap}}(x;0,b)=
+\begin{cases}
+\frac{1}{2}e^{x/b}, & x<0,\\
+1-\frac{1}{2}e^{-x/b}, & x\ge 0.
+\end{cases}
+\end{equation}
+Hence, with $\tilde{q}=q+\eta$, threshold-tail probability is
+\begin{equation}
+\Pr(\tilde{q}>t)=
+\begin{cases}
+\frac{1}{2}\exp\!\left(-\frac{t-q}{b}\right), & t\ge q,\\
+1-\frac{1}{2}\exp\!\left(\frac{t-q}{b}\right), & t<q.
+\end{cases}
+\end{equation}
+Sequential composition with fixed total budget uses $\epsilon_i=\epsilon/k$ and $\delta_i=\delta/k$, so
+\begin{equation}
+b_{\mathrm{seq}}=\frac{\Delta f}{\epsilon_i}=k\frac{\Delta f}{\epsilon}.
+\end{equation}
+Under unbounded adjacency with change fraction $p$ over population $n$, effective sensitivity is
+\begin{equation}
+\Delta f_{\mathrm{unbounded}}=\max(1,\lceil pn\rceil)\Delta f,\quad
+b_{\mathrm{unbounded}}=\frac{\Delta f_{\mathrm{unbounded}}}{\epsilon_i}.
+\end{equation}
+With assignment constants $(\epsilon,\Delta f,k,p,n)=(0.1,1,92,0.01,500)$, these evaluate to $b_{\mathrm{base}}=10$, $b_{\mathrm{seq}}=920$, and $b_{\mathrm{unbounded}}=4600$, which directly explains the observed flattening of tail probabilities.
+
+\section{Extended Fairness Derivation and Optimization View}
+Let $p_i=\Pr(\hat{y}=1\mid x_i)$ and $\hat{y}_i=\mathbf{1}[p_i\ge 0.5]$. The assignment promotion/demotion candidate sets are
+\begin{equation}
+\mathcal{C}_P=\{i: s_i=1,\hat{y}_i=0\},\qquad
+\mathcal{C}_D=\{i: s_i=0,\hat{y}_i=1\},
+\end{equation}
+where promotion selects the $k$ smallest $p_i$ in $\mathcal{C}_P$ and demotion selects the $k$ largest $p_i$ in $\mathcal{C}_D$. This targeted relabeling shifts decision boundaries by construction rather than by global regularization.
+
+For reweighing, empirical risk becomes
+\begin{equation}
+\hat{R}_w(\theta)=\frac{1}{n}\sum_{i=1}^{n} w(s_i,y_i)\,\ell(f_\theta(x_i),y_i),
+\end{equation}
+with $w(s,y)=\frac{P(s)P(y)}{P(s,y)}$. The reweighted joint term satisfies
+\begin{equation}
+w(s,y)P(s,y)=P(s)P(y),
+\end{equation}
+which removes first-order group-label imbalance in the objective.
+
+For group-threshold post-processing, define $r_g(\tau_g)=\Pr(\hat{y}=1\mid s=g;\tau_g)$ and
+\begin{equation}
+\mathrm{DI}(\tau_0,\tau_1)=\frac{r_0(\tau_0)}{r_1(\tau_1)}.
+\end{equation}
+Thresholds are chosen by constrained scalarization:
+\begin{equation}
+(\tau_0^\star,\tau_1^\star)=\arg\min_{\tau_0,\tau_1}
+\left|1-\mathrm{DI}(\tau_0,\tau_1)\right|+\lambda\left(1-\mathrm{Acc}(\tau_0,\tau_1)\right),
+\end{equation}
+making the fairness-utility tradeoff explicit and tunable.
 
 \begin{thebibliography}{1}
 \bibitem{wang2019neuralcleanse}

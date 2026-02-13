@@ -11,6 +11,11 @@ def test_report_theory_sections_and_equations_exist():
         r"\subsection{Privacy Theory: Differential Privacy and Laplace Mechanism}",
         r"\subsection{Fairness Theory: Metrics and Mitigation Principles}",
         r"\subsection{Theory Robustness Guardrails}",
+        r"\section{Requirement Coverage Checklist}",
+        r"\appendices",
+        r"\section{Extended Security Derivation and Detection Rule}",
+        r"\section{Extended Differential Privacy Derivation}",
+        r"\section{Extended Fairness Derivation and Optimization View}",
     ]
     for item in required_sections:
         assert item in text
@@ -24,6 +29,10 @@ def test_report_theory_sections_and_equations_exist():
         r"\Delta f_{\mathrm{unbounded}}",
         r"\mathrm{DI}",
         r"w(s,y)=",
+        r"\mathcal{L}_y(m,p)",
+        r"F_{\mathrm{Lap}}(x;0,b)",
+        r"\hat{R}_w(\theta)",
+        r"(\tau_0^\star,\tau_1^\star)",
     ]
     for token in required_equation_tokens:
         assert token in text
