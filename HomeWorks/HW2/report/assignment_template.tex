@@ -834,17 +834,19 @@ This distinction is critical: the report interprets explanations as model-behavi
 \caption{Interpretability Method Assumptions and Primary Failure Modes}
 \label{tab:assumption_matrix}
 \centering
-\begin{tabular}{p{0.22\columnwidth}p{0.33\columnwidth}p{0.35\columnwidth}}
+\footnotesize
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{>{\raggedright\arraybackslash}p{0.18\columnwidth}>{\raggedright\arraybackslash}p{0.29\columnwidth}>{\raggedright\arraybackslash}p{0.45\columnwidth}}
 \toprule
 Method & Core Assumption & Typical Failure Mode \\
 \midrule
-LIME & Local linearity under sampled neighborhood & Coefficients unstable under high curvature or poor sampling \\
-SHAP & Additive credit under coalition model & Sensitivity to background distribution and masking choice \\
+LIME & Local linearity under sampled neighborhood & Coefficients unstable under high curvature\newline or poor sampling \\
+SHAP & Additive credit under\newline coalition model & Sensitive to background distribution and masking choice \\
 NAM & Additive structure captures true effects & Underfits genuine feature interactions \\
-Grad-CAM & Gradient-weighted maps reflect class evidence & Layer choice may blur or mislocalize evidence \\
-Guided BP & Positive-gradient flow reflects saliency & Noisy, edge-heavy maps without localization prior \\
+Grad-CAM & Gradient-weighted maps reflect class evidence & Layer choice may blur\newline or mislocalize evidence \\
+Guided BP & Positive-gradient flow reflects saliency & Noisy, edge-heavy maps\newline without localization prior \\
 SmoothGrad & Noise-averaged gradients stabilize saliency & Over-smoothing can hide fine details \\
-FGSM test & First-order linearization approximates worst-case & Underestimates robustness under nonlinearity \\
+FGSM test & First-order linearization approximates worst-case & Underestimates robustness\newline under nonlinearity \\
 \bottomrule
 \end{tabular}
 \end{table}
