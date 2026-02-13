@@ -30,7 +30,7 @@ def find_recourse_lin(model, trainer, scmm, X_explain, constraints, epsilon):
     explain = recourse.LinearRecourse(w, b)
     interv, recourse_valid, cost_recourse, _, interv_set = recourse.causal_recourse(X_explain, explain,
                                                                                        constraints, scm=scmm)
-    return interv, interv_set, recourse_valid.astype(np.bool), cost_recourse
+    return interv, interv_set, recourse_valid.astype(bool), cost_recourse
 
 
 def find_recourse_mlp(model, trainer, scmm, X_explain, constraints, epsilon):
@@ -39,7 +39,7 @@ def find_recourse_mlp(model, trainer, scmm, X_explain, constraints, epsilon):
     interv, recourse_valid, cost_recourse, _, interv_set = recourse.causal_recourse(X_explain, explain,
                                                                                     constraints, scm=scmm,
                                                                                     epsilon=epsilon, robust=epsilon>0)
-    return interv, interv_set, recourse_valid.astype(np.bool), cost_recourse
+    return interv, interv_set, recourse_valid.astype(bool), cost_recourse
 
 
 def eval_recourse(dataset, model_type, trainer, random_seed, N_explain, epsilon, lambd, save_dir, save_adv=False):
@@ -74,8 +74,10 @@ def eval_recourse(dataset, model_type, trainer, random_seed, N_explain, epsilon,
     find_recourse = find_recourse_lin if model_type == 'lin' else find_recourse_mlp
     interv, valid_interv_sets, recourse_valid, cost_recourse = find_recourse(model, trainer, scmm, X_explain,
                                                                              constraints, epsilon)
-    print("Valid recourse: %.3f" % (recourse_valid.sum()/recourse_valid.shape[0]))
-    print("Cost recourse: %.3f" % (cost_recourse[recourse_valid].mean()))
+    valid_rate = recourse_valid.sum() / recourse_valid.shape[0] if recourse_valid.shape[0] > 0 else 0.0
+    valid_cost = cost_recourse[recourse_valid].mean() if recourse_valid.any() else float('nan')
+    print("Valid recourse: %.3f" % valid_rate)
+    print("Cost recourse: %.3f" % valid_cost)
 
     np.save(save_dir + '_ids.npy', id_neg_explain)
     np.save(save_dir + '_valid.npy', recourse_valid)
@@ -83,6 +85,16 @@ def eval_recourse(dataset, model_type, trainer, random_seed, N_explain, epsilon,
 
     # Evaluate how fragile is the recourse recommendation
     if save_adv:
+        try:
+            import attacks
+        except ImportError:
+            print("Skipping adversarial robustness evaluation: attacks module is unavailable.")
+            return
+
+        if not recourse_valid.any():
+            print("Skipping adversarial robustness evaluation: no valid recourse points found.")
+            return
+
         attacker = attacks.CW_Adversary(scmm=scmm)
         _, valid_adv, cost_adv = attacker(model, X_explain[recourse_valid], torch.Tensor(interv[recourse_valid]),
                                           interv_set=valid_interv_sets)

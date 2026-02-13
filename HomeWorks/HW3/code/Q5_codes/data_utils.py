@@ -11,7 +11,8 @@ import os
 import numpy as np
 from sklearn.preprocessing import StandardScaler
 
-DATA_DIR = 'data/'
+BASE_DIR = os.path.dirname(__file__)
+DATA_DIR = os.path.join(BASE_DIR, 'data')
 
 def get_data_file(data_name):
     return os.path.join(DATA_DIR, '%s.csv' % data_name)
@@ -170,7 +171,7 @@ def process_causal_adult():
 
 
 def process_german_data():
-    data_df = pd.read_csv('data/SouthGermanCredit.asc',sep=' ')
+    data_df = pd.read_csv(os.path.join(DATA_DIR, 'SouthGermanCredit.asc'), sep=' ')
     data_df = data_df.dropna()
 
     X = data_df.drop('kredit', axis=1)
@@ -209,7 +210,7 @@ def process_german_data():
 
 
 def process_health_data():
-    df = pd.read_csv('HomeWorks/HW3/code/q5_codes/data/health.csv')
+    df = pd.read_csv(get_data_file('health'))
 
     X_health = df[['age', 'insulin', 'blood_glucose', 'blood_pressure']].values
     Y_health = df['category'].values
@@ -253,7 +254,6 @@ def process_health_data():
                    'decreasing': decreasing, 'limits': feature_limits}
     
     return X_health, Y_health, constraints
-
 
 
 

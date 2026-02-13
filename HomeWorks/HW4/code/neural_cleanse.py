@@ -87,19 +87,21 @@ def reconstruct_trigger(model: nn.Module, dataloader: DataLoader, target_label: 
 
 
 def detect_outlier_scales(scales: List[float], threshold_mult: float = 3.5) -> int:
-    """MAD-based outlier detection. Returns index of outlier (attacked label).
-
-    Following Neural Cleanse, compute MAD and find label with smallest scale / outlier.
-    """
-    arr = np.array(scales)
+    """MAD-based outlier detection. Returns the index with the strongest anomaly score."""
+    arr = np.asarray(scales, dtype=float)
+    if arr.ndim != 1 or arr.size == 0:
+        raise ValueError("scales must be a non-empty 1D list/array")
     med = np.median(arr)
     mad = np.median(np.abs(arr - med))
     if mad == 0:
-        # fallback: return argmin
-        return int(np.argmin(arr))
+        # fallback: select strongest absolute deviation from median
+        return int(np.argmax(np.abs(arr - med)))
     modified_z = 0.6745 * (arr - med) / mad
-    # attacked label is the one with a large negative modified_z (very small scale)
-    return int(np.argmin(modified_z))
+    idx = int(np.argmax(np.abs(modified_z)))
+    # If no score crosses threshold, return the largest scale index as deterministic fallback.
+    if np.abs(modified_z[idx]) < threshold_mult:
+        return int(np.argmax(arr))
+    return idx
 
 
 def unlearn_by_retraining(model: nn.Module, dataset: TensorDataset, trigger_fn, fraction: float = 0.2, epochs: int = 1, lr: float = 1e-3, device: str = "cpu") -> nn.Module:
@@ -134,10 +136,6 @@ def unlearn_by_retraining(model: nn.Module, dataset: TensorDataset, trigger_fn, 
 
 if __name__ == "__main__":
     # demo: reconstruct a trigger for each label using random inputs
-    import os
-    import torchvision.transforms as T
-    from torchvision.datasets import MNIST
-
     device = "cpu"
     model = load_model(demo=True, device=device)
     # create a tiny fake MNIST loader from random noise for demo

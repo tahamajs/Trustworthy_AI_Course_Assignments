@@ -464,7 +464,7 @@ class Learned_Adult_SCM(SCM):
                     save: string, folder+name under which to save the structural equations
         """
         model_type = '_lin' if self.linear else '_mlp'
-        if os.path.isfile(save+model_type+'_f1.pth'):
+        if save is not None and os.path.isfile(save + model_type + '_f1.pth'):
             print('Fitted SCM already exists')
             return
 
@@ -479,7 +479,7 @@ class Learned_Adult_SCM(SCM):
         N_data = X.shape[0]
         N_train = int(N_data * 0.8)
         indices = np.random.choice(np.arange(N_data), size=N_data, replace=False)
-        id_train, id_test = indices[:N_train], indices[:N_train]
+        id_train, id_test = indices[:N_train], indices[N_train:]
 
         train_epochs = 10
         trainer = SCM_Trainer(verbose=False, print_freq=1, lr=0.005)
@@ -598,7 +598,7 @@ class Learned_COMPAS_SCM(SCM):
                     save: string, folder+name under which to save the structural equations
         """
         model_type = '_lin' if self.linear else '_mlp'
-        if os.path.isfile(save+model_type+'_f1.pth'):
+        if save is not None and os.path.isfile(save + model_type + '_f1.pth'):
             print('Fitted SCM already exists')
             return
 
@@ -611,7 +611,7 @@ class Learned_COMPAS_SCM(SCM):
         N_data = X.shape[0]
         N_train = int(N_data * 0.8)
         indices = np.random.choice(np.arange(N_data), size=N_data, replace=False)
-        id_train, id_test = indices[:N_train], indices[:N_train]
+        id_train, id_test = indices[:N_train], indices[N_train:]
 
         trainer = SCM_Trainer(verbose=False, print_freq=1, lr=0.005)
         trainer.train(f1, X[id_train][:, mask_1], X[id_train, 2].reshape(-1, 1),
@@ -681,7 +681,8 @@ class Health_SCM(SCM):
         self.soft_interv = [False, False, False, False]
 
         # Derive mean/std from the raw CSV so counterfactual scaling matches preprocessing
-        df = pd.read_csv(os.path.join('HomeWorks/HW3/code/q5_codes', 'data', 'health.csv'))
+        data_path = os.path.join(os.path.dirname(__file__), 'data', 'health.csv')
+        df = pd.read_csv(data_path)
         raw = df[['age', 'insulin', 'blood_glucose', 'blood_pressure']].values.astype(float)
         self.mean = torch.Tensor(raw.mean(axis=0))
         self.std = torch.Tensor(raw.std(axis=0))
@@ -748,7 +749,7 @@ def generate_SCM_data(id, N):
         myscm = Learned_Adult_SCM()
         myscm.load('scms/adult_scm')
     else:
-        raise NotImplemented
+        raise NotImplementedError
 
     if id == 'German': # synthetic, generate the data
         X, Y = myscm.generate(N)

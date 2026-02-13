@@ -26,10 +26,10 @@ zem_base = zemel_proxy_fairness(Xs_test, ypred, sens_test)
 # Apply simple promotion/demotion on test set (use same k heuristic)
 from fairness import apply_promotion_demotion, retrain_with_swapped_labels
 swap_mask = apply_promotion_demotion(Xs_test, yproba, ytest, sens_test, k=10)
-# retrain on swapped labels using the training set as demo (we'll simulate by flipping some training labels)
-# create swap mask for train (small fraction)
-swap_mask_train = np.zeros(Xtrain.shape[0], dtype=bool)
-swap_mask_train[: min(10, swap_mask_train.size)] = True
+# build swap mask on training set from model probabilities for consistent mitigation
+Xs_train = clf._scaler.transform(Xtrain)
+yproba_train = clf.predict_proba(Xs_train)[:, 1]
+swap_mask_train = apply_promotion_demotion(Xs_train, yproba_train, ytrain, sens_train, k=10)
 clf_fair = retrain_with_swapped_labels(Xtrain, ytrain, swap_mask_train)
 Xs_test2 = clf_fair._scaler.transform(Xtest)
 yproba2 = clf_fair.predict_proba(Xs_test2)[:,1]

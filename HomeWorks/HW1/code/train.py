@@ -62,6 +62,16 @@ def evaluate(model, loader, device, loss_fn):
 
 
 def parse_args():
+    def str_to_bool(v):
+        if isinstance(v, bool):
+            return v
+        val = str(v).strip().lower()
+        if val in {'1', 'true', 't', 'yes', 'y'}:
+            return True
+        if val in {'0', 'false', 'f', 'no', 'n'}:
+            return False
+        raise argparse.ArgumentTypeError(f"Invalid boolean value: {v}")
+
     parser = argparse.ArgumentParser()
     parser.add_argument('--dataset', default='svhn')
     parser.add_argument('--epochs', type=int, default=80)
@@ -71,7 +81,14 @@ def parse_args():
     parser.add_argument('--weight-decay', type=float, default=5e-4)
     parser.add_argument('--optimizer', choices=['sgd', 'adam'], default='sgd')
     parser.add_argument('--label-smoothing', type=float, default=0.0)
-    parser.add_argument('--use-bn', action='store_true', default=True)
+    parser.add_argument(
+        '--use-bn',
+        type=str_to_bool,
+        nargs='?',
+        const=True,
+        default=True,
+        help='Enable/disable BatchNorm (supports --use-bn, --use-bn true, --use-bn false)',
+    )
     parser.add_argument('--adv-train', action='store_true')
     parser.add_argument('--attack', choices=['fgsm', 'pgd'], default='fgsm')
     parser.add_argument('--epsilon', type=str, default='8/255')

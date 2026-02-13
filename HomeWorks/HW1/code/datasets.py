@@ -1,6 +1,7 @@
 import torchvision.transforms as transforms
 from torchvision import datasets
 from torch.utils.data import DataLoader
+from torch.utils.data import Subset
 
 
 def get_transforms(dataset_name, train=True, image_size=32, augment=False, to_rgb3=True):
@@ -70,7 +71,13 @@ def get_dataloaders(dataset_name, batch_size=128, image_size=32, augment=False, 
         raise ValueError('Unknown dataset: ' + dataset_name)
 
     if demo:
-        # shrink sizes for quick debugging
+        # shrink dataset sizes for quick debugging / smoke checks
+        train_n = min(1024, len(train_set))
+        test_n = min(256, len(test_set))
+        train_set = Subset(train_set, list(range(train_n)))
+        test_set = Subset(test_set, list(range(test_n)))
+        train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=True, num_workers=0)
+        test_loader = DataLoader(test_set, batch_size=batch_size, shuffle=False, num_workers=0)
         return train_loader, test_loader, num_classes, in_channels
 
     return train_loader, test_loader, num_classes, in_channels

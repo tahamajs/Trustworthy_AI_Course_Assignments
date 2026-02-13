@@ -24,7 +24,7 @@ import os
 
 
 def train(dataset, trainer, model, train_epochs, lambd, random_seed, learning_rate=0.01, verbose=True, tb_folder=None,
-          save_model=False, save_freq=10000):
+          save_model=False, save_freq=10000, save_dir=None):
     # For the TensorBoard logs
     if tb_folder is not None:
         tb_folder += utils.get_tensorboard_name(dataset, trainer, lambd, model, train_epochs, learning_rate, random_seed)
@@ -33,10 +33,11 @@ def train(dataset, trainer, model, train_epochs, lambd, random_seed, learning_ra
     np.random.seed(random_seed)
     torch.manual_seed(random_seed)
 
-    save_dir = None
-    if save_model:
-        save_dir = f'models/{dataset}_{trainer}_{model}_s{random_seed}'
-        os.makedirs('models', exist_ok=True)
+    model_type = model
+    if save_dir is None and save_model:
+        save_dir = f'models/{dataset}_{trainer}_{model_type}_s{random_seed}'
+    if save_dir is not None:
+        os.makedirs(os.path.dirname(save_dir) or '.', exist_ok=True)
 
     # Load the relevant dataset
     X, Y, constraints = data_utils.process_data(dataset)
@@ -44,11 +45,11 @@ def train(dataset, trainer, model, train_epochs, lambd, random_seed, learning_ra
 
     actionable = constraints['actionable']
     # Load the relevant model
-    if model == 'lin':
-        model = trainers.LogisticRegression(X_train.shape[-1], allr_reg=trainer == 'ALLR',
-                                            actionable_features=actionable, actionable_mask=trainer == 'AF')
+    if model_type == 'lin':
+        model_obj = trainers.LogisticRegression(X_train.shape[-1], allr_reg=trainer == 'ALLR',
+                                                actionable_features=actionable, actionable_mask=trainer == 'AF')
     else:
-        model = trainers.MLP(X_train.shape[-1], actionable_mask=trainer == 'AF', actionable_features=actionable)
+        model_obj = trainers.MLP(X_train.shape[-1], actionable_mask=trainer == 'AF', actionable_features=actionable)
 
     if trainer == 'ROSS':
         actionable_mask = np.zeros(X.shape[1])
@@ -56,7 +57,7 @@ def train(dataset, trainer, model, train_epochs, lambd, random_seed, learning_ra
         trainer = trainers.Ross_Trainer(0.75, lambd, actionable_mask, lr=learning_rate, lambda_reg=lambd,
                                         verbose=verbose, tb_folder=tb_folder, save_dir=save_dir, save_freq=save_freq)
     elif trainer[:4] == 'ALLR':
-        if model == 'lin':
+        if model_type == 'lin':
             trainer = trainers.ERM_Trainer(lr=learning_rate, verbose=verbose, tb_folder=tb_folder, lambda_reg=lambd,
                                            save_dir=save_dir, save_freq=save_freq)
         else:
@@ -74,7 +75,7 @@ def train(dataset, trainer, model, train_epochs, lambd, random_seed, learning_ra
                                            save_freq=save_freq)
 
     # Train!
-    return trainer.train(model, X_train, Y_train, X_test, Y_test, train_epochs)
+    return trainer.train(model_obj, X_train, Y_train, X_test, Y_test, train_epochs)
 
 
 if __name__ == "__main__":
