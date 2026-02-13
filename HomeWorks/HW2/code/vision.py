@@ -151,8 +151,11 @@ def activation_maximization(
     device="cpu",
     use_random_shifts=True,
     shift_max=8,
+    image_size=224,
 ):
-    x = torch.nn.Parameter(torch.randn(1, 3, 224, 224, device=device) * 0.1)
+    x = torch.nn.Parameter(
+        torch.randn(1, 3, image_size, image_size, device=device) * 0.1
+    )
     opt = torch.optim.Adam([x], lr=lr)
 
     def tv_loss(img):

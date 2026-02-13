@@ -877,11 +877,12 @@ def _plot_feature_visualization_hen(model: torch.nn.Module, categories: list[str
     img_raw = activation_maximization(
         model,
         hen_idx,
-        steps=120,
-        lr=0.8,
+        steps=24,
+        lr=0.7,
         tv_weight=0.0,
         device="cpu",
         use_random_shifts=False,
+        image_size=128,
     )
     regs = []
     for i in range(5):
@@ -890,12 +891,13 @@ def _plot_feature_visualization_hen(model: torch.nn.Module, categories: list[str
             activation_maximization(
                 model,
                 hen_idx,
-                steps=160,
-                lr=0.8,
+                steps=32,
+                lr=0.7,
                 tv_weight=2e-5,
                 device="cpu",
                 use_random_shifts=True,
                 shift_max=12,
+                image_size=128,
             )
         )
 
