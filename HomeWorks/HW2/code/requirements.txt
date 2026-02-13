@@ -5,6 +5,7 @@ pandas
 scikit-learn
 matplotlib
 seaborn
+Pillow
 lime
 shap
 tqdm

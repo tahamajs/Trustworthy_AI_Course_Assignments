@@ -43,6 +43,7 @@ python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 python tabular.py
+python generate_report_plots.py
 ```
 
 Notebook workflow:
@@ -52,4 +53,5 @@ Notebook workflow:
 ## Notes
 
 - If internet is unavailable, `tabular.py` uses a synthetic fallback dataset.
+- If internet is unavailable, `vision.py` falls back to non-pretrained VGG16 weights.
 - Vision utilities are modular and can be imported independently into the notebook.

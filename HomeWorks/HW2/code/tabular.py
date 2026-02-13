@@ -1,6 +1,8 @@
 """Tabular pipeline for HW2 (data download, preprocessing, training + eval).
 
-- Auto-downloads Pima Indians Diabetes CSV if not present
+- Loads local Pima Indians Diabetes CSV when available
+- Attempts remote download when local data is missing
+- Falls back to deterministic synthetic tabular data when offline
 - Trains MLPClassifier (from models.py) and NAMClassifier
 - Evaluates accuracy, recall, f1, confusion matrix
 """
@@ -24,18 +26,88 @@ DATA_URL = (
     "https://raw.githubusercontent.com/selva86/datasets/master/PimaIndiansDiabetes.csv"
 )
 
+DEFAULT_COLUMNS = [
+    "Pregnancies",
+    "Glucose",
+    "BloodPressure",
+    "SkinThickness",
+    "Insulin",
+    "BMI",
+    "DiabetesPedigreeFunction",
+    "Age",
+    "Outcome",
+]
 
-def load_diabetes(local_path: str = "diabetes.csv") -> pd.DataFrame:
+
+def _make_synthetic_diabetes(n_samples: int = 768, seed: int = 42) -> pd.DataFrame:
+    """Build a deterministic diabetes-like tabular dataset for offline runs."""
+    rng = np.random.default_rng(seed)
+    preg = rng.poisson(3.5, size=n_samples).clip(0, 17)
+    glucose = rng.normal(120, 30, size=n_samples).clip(50, 220)
+    bp = rng.normal(72, 12, size=n_samples).clip(40, 130)
+    skin = rng.normal(29, 10, size=n_samples).clip(7, 99)
+    insulin = rng.lognormal(mean=4.8, sigma=0.5, size=n_samples).clip(10, 600)
+    bmi = rng.normal(32, 7, size=n_samples).clip(15, 60)
+    dpf = rng.gamma(shape=2.0, scale=0.22, size=n_samples).clip(0.05, 2.5)
+    age = rng.normal(34, 11, size=n_samples).clip(21, 81)
+
+    # Construct a plausible decision boundary plus noise.
+    linear = (
+        -6.0
+        + 0.035 * glucose
+        + 0.020 * bmi
+        + 0.016 * age
+        + 0.40 * dpf
+        + 0.0018 * insulin
+        + 0.050 * preg
+        - 0.010 * bp
+        - 0.004 * skin
+        + rng.normal(0, 0.6, size=n_samples)
+    )
+    p = 1.0 / (1.0 + np.exp(-linear))
+    outcome = rng.binomial(1, p).astype(int)
+
+    return pd.DataFrame(
+        {
+            "Pregnancies": preg.astype(int),
+            "Glucose": glucose,
+            "BloodPressure": bp,
+            "SkinThickness": skin,
+            "Insulin": insulin,
+            "BMI": bmi,
+            "DiabetesPedigreeFunction": dpf,
+            "Age": age,
+            "Outcome": outcome,
+        }
+    )
+
+
+def load_diabetes(local_path: str = "diabetes.csv", seed: int = 42) -> pd.DataFrame:
     if os.path.exists(local_path):
         df = pd.read_csv(local_path)
     else:
-        df = pd.read_csv(DATA_URL)
-        df.to_csv(local_path, index=False)
+        try:
+            df = pd.read_csv(DATA_URL)
+            df.to_csv(local_path, index=False)
+        except Exception as exc:  # pragma: no cover - offline branch
+            print(
+                f"[tabular] Could not download dataset ({exc.__class__.__name__}). "
+                "Using deterministic synthetic fallback dataset."
+            )
+            df = _make_synthetic_diabetes(seed=seed)
+
     # standardize column names to match assignment (8 features + Outcome)
     if "Outcome" not in df.columns:
         # this remote file uses 'diabetes' as column name for target
         if "diabetes" in df.columns:
             df = df.rename(columns={"diabetes": "Outcome"})
+    if "Outcome" not in df.columns:
+        raise ValueError("Dataset must include an Outcome target column.")
+
+    # Keep a stable column order for downstream plotting/reporting.
+    reordered = [c for c in DEFAULT_COLUMNS if c in df.columns]
+    extras = [c for c in df.columns if c not in reordered]
+    df = df[reordered + extras]
     return df
 
 
@@ -69,6 +141,7 @@ def train_model(model, train_loader, val_loader=None, epochs=30, lr=1e-3, device
     model = model.to(device)
     opt = torch.optim.Adam(model.parameters(), lr=lr)
     best_val = 1e9
+    best_state = None
     for epoch in range(1, epochs + 1):
         model.train()
         for xb, yb in train_loader:
@@ -91,7 +164,7 @@ def train_model(model, train_loader, val_loader=None, epochs=30, lr=1e-3, device
             if mean_val < best_val:
                 best_val = mean_val
                 best_state = model.state_dict()
-    if val_loader is not None and "best_state" in locals():
+    if best_state is not None:
         model.load_state_dict(best_state)
     return model
 

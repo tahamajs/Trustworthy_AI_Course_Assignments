@@ -28,6 +28,7 @@ python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 python tabular.py
+python generate_report_plots.py
 ```
 
 For full step-by-step experiments, use:
