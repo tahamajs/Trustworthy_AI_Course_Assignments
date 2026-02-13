@@ -7,6 +7,9 @@ The main implementation lives in `q5_codes/`.
 ### 1) Data and constraints (`q5_codes/data_utils.py`)
 
 - Loads `adult`, `compas`, `german`, and `health` datasets.
+- For `health`, the loader defaults to `HomeWorks/HW3/dataset/diabetes.csv`
+  (can be overridden via `HW3_HEALTH_DATA`), then maps columns to the
+  required homework schema.
 - Standardizes continuous features.
 - Defines actionability constraints:
   - actionable feature indices

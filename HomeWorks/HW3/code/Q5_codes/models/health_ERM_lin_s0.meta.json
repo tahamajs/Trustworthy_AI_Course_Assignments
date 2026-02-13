@@ -1,0 +1,5 @@
+{
+  "dataset": "health",
+  "health_source_path": "/Users/tahamajs/Documents/uni/truthlyAI/HomeWorks/HW3/dataset/diabetes.csv",
+  "health_source_tag": "pima_diabetes"
+}

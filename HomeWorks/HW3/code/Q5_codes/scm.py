@@ -702,9 +702,9 @@ class Health_SCM(SCM):
         # Model interventions as hard interventions (we directly set the feature)
         self.soft_interv = [False, False, False, False]
 
-        # Derive mean/std from the raw CSV so counterfactual scaling matches preprocessing
-        data_path = os.path.join(os.path.dirname(__file__), 'data', 'health.csv')
-        df = pd.read_csv(data_path)
+        # Derive mean/std from the resolved health source so SCM scaling
+        # stays consistent with process_health_data().
+        df = data_utils.load_health_dataframe()
         raw = df[['age', 'insulin', 'blood_glucose', 'blood_pressure']].values.astype(float)
         self.mean = torch.Tensor(raw.mean(axis=0))
         self.std = torch.Tensor(raw.std(axis=0))

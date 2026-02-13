@@ -8,7 +8,7 @@ from runner import *
 
 models = ['lin']
 datasets = ['health']
-N_explain = 5 
+N_explain = 10
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--seed', type=int, default=0)

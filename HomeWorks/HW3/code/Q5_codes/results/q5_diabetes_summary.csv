@@ -1,0 +1,3 @@
+method,valid_rate,mean_valid_cost,n_explain
+nearest_counterfactual_scm_off,1.0,1.3185584112746784,10
+causal_recourse_scm_on,1.0,1.3486380438601193,10

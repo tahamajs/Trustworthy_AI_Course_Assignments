@@ -5,7 +5,8 @@ HW3 focuses on causal modeling and algorithmic recourse.
 ## Folders
 
 - `code/q5_codes`: full implementation for training and recourse evaluation.
-- `code/health.csv`: local dataset used in health-related questions.
+- `dataset/diabetes.csv`: primary dataset used for health-related questions (Q4/Q5),
+  mapped to `age/insulin/blood_glucose/blood_pressure/category` in code.
 - `dataset`: additional dataset archives.
 - `description`: assignment statement.
 - `report`: report template.
