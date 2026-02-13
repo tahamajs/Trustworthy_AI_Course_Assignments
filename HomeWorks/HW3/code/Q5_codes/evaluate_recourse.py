@@ -18,6 +18,7 @@ import recourse
 
 import numpy as np
 import torch
+import os
 from tqdm import tqdm
 
 def find_recourse_lin(model, trainer, scmm, X_explain, constraints, epsilon):
@@ -79,6 +80,7 @@ def eval_recourse(dataset, model_type, trainer, random_seed, N_explain, epsilon,
     print("Valid recourse: %.3f" % valid_rate)
     print("Cost recourse: %.3f" % valid_cost)
 
+    os.makedirs(os.path.dirname(save_dir) or ".", exist_ok=True)
     np.save(save_dir + '_ids.npy', id_neg_explain)
     np.save(save_dir + '_valid.npy', recourse_valid)
     np.save(save_dir + '_cost.npy', cost_recourse)

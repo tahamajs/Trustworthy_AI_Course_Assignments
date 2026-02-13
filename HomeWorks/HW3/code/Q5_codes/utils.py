@@ -70,7 +70,7 @@ def get_scm(model_type, dataset):
     if model_type == 'mlp' and dataset == 'loan':
         return scm.SCM_Loan()
     if dataset == 'health':
-        return scm.Health_SCM()
+        return scm.Health_SCM(linear=(model_type == 'lin'))
     scms = {'adult': scm.Learned_Adult_SCM, 'compas': scm.Learned_COMPAS_SCM}
     if dataset in scms.keys():
         scmm = scms[dataset](linear=model_type=='lin')

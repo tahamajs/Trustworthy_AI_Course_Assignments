@@ -672,6 +672,28 @@ class Health_SCM(SCM):
     """
     def __init__(self, linear=True):
         self.linear = linear
+        # Linear coefficients used by the structural equations.
+        self.w21 = 1 / 18
+        self.w31 = 2.0
+        self.w32 = 1.05
+        self.w42 = 0.4
+        self.w43 = 0.3
+
+        # X = [age, insulin, blood_glucose, blood_pressure]
+        # age is root; insulin and blood_glucose are actionable in Q5.
+        self.f = [
+            lambda U1: U1,
+            lambda X1, U2: self.w21 * X1 + U2,
+            lambda X1, X2, U3: self.w31 * X1 + self.w32 * X2 + U3,
+            lambda X1, X2, X3, U4: self.w42 * X2 + self.w43 * X3 + U4,
+        ]
+
+        self.inv_f = [
+            lambda X: X[:, [0]],
+            lambda X: X[:, [1]] - self.w21 * X[:, [0]],
+            lambda X: X[:, [2]] - self.w31 * X[:, [0]] - self.w32 * X[:, [1]],
+            lambda X: X[:, [3]] - self.w42 * X[:, [1]] - self.w43 * X[:, [2]],
+        ]
 
         ##### complete the first part ######
 
@@ -692,10 +714,6 @@ class Health_SCM(SCM):
     def get_Jacobian(self):
         assert self.linear, "Jacobian only used for linear SCM"
 
-        w21 = 1/18
-        w31, w32 = 2.0, 1.05
-        w42, w43 = 0.4, 0.3
-        
         ##### complete the second part ######
 
         # Feature ordering: [age, insulin, blood_glucose, blood_pressure]
@@ -706,9 +724,9 @@ class Health_SCM(SCM):
         #   X4 = w42 * X2 + w43 * X3 + U4
         Jacobi = np.array([
             [1.0,   0.0,   0.0,   0.0],
-            [w21,   1.0,   0.0,   0.0],
-            [w31,   w32,   1.0,   0.0],
-            [0.0,   w42,   w43,   1.0]
+            [self.w21,   1.0,   0.0,   0.0],
+            [self.w31,   self.w32,   1.0,   0.0],
+            [0.0,   self.w42,   self.w43,   1.0]
         ])
 
         ##### end of the second part  ######
@@ -725,6 +743,18 @@ class Health_SCM(SCM):
                 for j in range(i):
                     J[i][j] = 0.
         return J
+
+    def sample_U(self, N):
+        # Basic synthetic sampler for completeness; not used by HW3 Q5 pipeline.
+        age = np.random.normal(loc=float(self.mean[0]), scale=float(self.std[0]), size=(N, 1))
+        u2 = np.random.normal(0.0, float(self.std[1]), size=(N, 1))
+        u3 = np.random.normal(0.0, float(self.std[2]), size=(N, 1))
+        u4 = np.random.normal(0.0, float(self.std[3]), size=(N, 1))
+        return np.concatenate([age, u2, u3, u4], axis=1)
+
+    def label(self, X):
+        # Category proxy: high glucose / blood pressure indicates unhealthy.
+        return ((X[:, 2] < 0.5 * float(self.mean[2])) & (X[:, 3] < 0.75 * float(self.mean[3]))).astype(int)
 
 
 def generate_SCM_data(id, N):
