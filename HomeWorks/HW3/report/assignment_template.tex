@@ -84,6 +84,31 @@ P(Y=1\mid do(A=a))=\sum_s P(Y=1\mid A=a,S=s)P(S=s).
 \end{equation}
 Table~\ref{tab:q1} reports the numeric results.
 
+\subsubsection{Step-by-Step Numeric Derivation}
+Given $P(S=L)=0.49$, $P(S=R)=0.51$, $P(A=N\mid S=L)=0.77$, $P(A=N\mid S=R)=0.24$,
+and $P(Y=1\mid S,A)$ as in the assignment, first compute
+\begin{align}
+P(A=N) &= 0.77(0.49)+0.24(0.51)=0.4997,\\
+P(A=O) &= 1-0.4997=0.5003.
+\end{align}
+Bayes terms:
+\begin{align}
+P(S=L\mid A=N) &= \frac{0.77(0.49)}{0.4997}=0.7550,\\
+P(S=R\mid A=N) &= 1-0.7550=0.2450,\\
+P(S=L\mid A=O) &= \frac{0.23(0.49)}{0.5003}=0.2253,\\
+P(S=R\mid A=O) &= 1-0.2253=0.7747.
+\end{align}
+Observational probabilities:
+\begin{align}
+P(Y=1\mid A=N) &= 0.73(0.7550)+0.93(0.2450)=0.77899,\\
+P(Y=1\mid A=O) &= 0.69(0.2253)+0.87(0.7747)=0.82945.
+\end{align}
+Interventional probabilities:
+\begin{align}
+P(Y=1\mid do(A=N)) &= 0.73(0.49)+0.93(0.51)=0.83200,\\
+P(Y=1\mid do(A=O)) &= 0.69(0.49)+0.87(0.51)=0.78180.
+\end{align}
+
 \begin{table}[!t]
 \centering
 \caption{Q1 numerical results}
@@ -102,6 +127,24 @@ $P(Y=1\mid do(A=O))$ & 0.78180 \\
 
 \subsection{Q2: Analytic Recourse for Two Individuals}
 With $h(x)=\operatorname{sgn}(x_1+5x_2-225000)$ and nonnegative actions, L1-optimal recourse puts all mass on $x_2$ because it yields 5 units of margin per unit cost. L2-optimal recourse moves along the normal direction $w=(1,5)$. Table~\ref{tab:q2} reports the exact interventions and costs for both individuals.
+
+\subsubsection{Step-by-Step Numeric Derivation}
+Define the decision score $m(x)=x_1+5x_2-225000$. For a nonnegative action $a=(a_1,a_2)$, the constraint is
+\begin{equation}
+m(x+a)=m(x)+a_1+5a_2\ge 0.
+\end{equation}
+\textbf{Person A:} $x=(75000,25000)$ gives $m(x)=75000+5(25000)-225000=-25000$.
+Thus we need $a_1+5a_2\ge 25000$.
+L1-optimal: set $a_1=0$, $a_2=25000/5=5000$, cost $=5000$.
+L2-optimal: minimize $\|a\|_2$ s.t. $a\ge 0$, $w^\top a=25000$ with $w=(1,5)$.
+Projection gives $a=\frac{25000}{\|w\|_2^2}w=\frac{25000}{26}(1,5)=(961.54,4807.69)$,
+with $\|a\|_2=4902.90$.
+\newline
+\textbf{Person B:} $x=(70000,23800)$ gives $m(x)=70000+5(23800)-225000=-36000$.
+Thus $a_1+5a_2\ge 36000$.
+L1-optimal: $a_1=0$, $a_2=36000/5=7200$, cost $=7200$.
+L2-optimal: $a=\frac{36000}{26}(1,5)=(1384.62,6923.08)$,
+with $\|a\|_2=7060.18$.
 
 \begin{table}[!t]
 \centering
