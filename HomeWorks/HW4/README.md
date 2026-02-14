@@ -5,6 +5,7 @@ Implementation of three trustworthiness subtopics with runnable demos and unit t
 ---
 
 ## High-level contents
+
 - Security: trigger reconstruction, MAD outlier detector, unlearning demo (retraining on cleaned data).
 - Privacy: Laplace mechanism helpers, composition utilities, example calculations for assignment tasks.
 - Fairness: group metrics (disparate impact), proxy mitigation, promotion/demotion label swap technique + retraining.
@@ -12,6 +13,7 @@ Implementation of three trustworthiness subtopics with runnable demos and unit t
 ---
 
 ## Quick setup & test
+
 ```bash
 cd HomeWorks/HW4/code
 python -m venv .venv
@@ -23,6 +25,7 @@ pytest tests
 ---
 
 ## Where to look
+
 - `code/neural_cleanse.py` — trigger optimization & detection pipeline.
 - `code/privacy.py` — Laplace mechanism and composition helpers used in assignment questions.
 - `code/fairness.py` — metric implementations and mitigation utilities.
@@ -31,12 +34,14 @@ pytest tests
 ---
 
 ## Running the security demo
+
 - Use the demo model included in `model_weights/` or supply your own model path to `neural_cleanse` helpers (see `code/neural_cleanse.py`).
 - Example (from tests/demo): run `python generate_report_figs.py` to produce a Neural Cleanse trigger figure used in the report.
 
 ---
 
 ## Notes & caveats
+
 - The demo `neural_cleanse` implementation is pedagogical and for assignment evaluation; real backdoor analysis requires larger-scale evaluation and care about trigger transferability.
 - Privacy helpers are didactic calculators for Laplace noise; they are not a full DP training framework.
 
