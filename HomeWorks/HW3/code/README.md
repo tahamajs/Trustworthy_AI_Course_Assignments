@@ -1,98 +1,57 @@
-# HW3 Code Guide
+# HW3/code/q5_codes — Developer reference
 
-The main implementation lives in `q5_codes/`.
+Detailed usage for the causal recourse implementation (training, SCM fitting, recourse solvers, and evaluation).
 
-## Key modules and methods
+---
 
-### 1) Data and constraints (`q5_codes/data_utils.py`)
+## Primary scripts (what to run)
+- `train_classifiers.py` — train ERM / AF / regularized classifiers (saves to `models/`).
+- `evaluate_recourse.py` — evaluate recourse validity & cost over chosen dataset and model.
+- `runner.py` — experiment orchestration and batch evaluation across seeds/configs.
+- `main.py` — simple entry point that wraps training + basic evaluation for homework deliverables.
 
-- Loads `adult`, `compas`, `german`, and `health` datasets.
-- For `health`, the loader defaults to `HomeWorks/HW3/dataset/diabetes.csv`
-  (can be overridden via `HW3_HEALTH_DATA`), then maps columns to the
-  required homework schema.
-- Standardizes continuous features.
-- Defines actionability constraints:
-  - actionable feature indices
-  - monotonic constraints (`increasing` / `decreasing`)
-  - feasible feature limits
+---
 
-### 2) Classifiers and training (`q5_codes/trainers.py`)
+## Example workflows
+- Train and save a linear model (health dataset):
+  ```bash
+  python train_classifiers.py --dataset health --model lin --trainer ERM --seed 0 --save_model
+  ```
 
-- `LogisticRegression` and `MLP` classifiers.
-- Threshold selection with maximum MCC (`set_max_mcc_threshold`).
-- Trainer classes:
-  - `ERM_Trainer`: standard risk minimization.
-  - `Adversarial_Trainer`: FGSM/PGD-style adversarial updates.
-  - `TRADES_Trainer`: KL-based robustness regularization.
-  - `LLR_Trainer`: local linearity regularization (ALLR-style).
-  - `Ross_Trainer`: actionable recourse-oriented regularizer.
+- Compute recourse for N negative instances and report validity/cost:
+  ```bash
+  python evaluate_recourse.py --dataset health --model lin --trainer ERM --seed 0 --epsilon 0 --nexplain 10
+  ```
 
-### 3) Structural causal models (`q5_codes/scm.py`)
+- Run the default pipeline (quick demo):
+  ```bash
+  python main.py --seed 0
+  ```
 
-- Generic `SCM` class:
-  - abduction-action-prediction style counterfactual generation
-  - hard and soft interventions
-  - Jacobian handling for intervention effects
-- Implemented SCMs:
-  - `SCM_Loan`
-  - `Learned_Adult_SCM`
-  - `Learned_COMPAS_SCM`
-  - `Health_SCM`
-- Includes structural-equation fitting helpers (`SCM_Trainer`, `MLP1`) for learned SCM variants.
+---
 
-### 4) Recourse algorithms (`q5_codes/recourse.py`)
+## Important implementation notes
+- `LinearRecourse` will call `cvxpy` when available (recommended); otherwise a greedy fallback is used. Install `cvxpy` for exact convex solutions.
+- Actionability constraints and feature metadata live in `data_utils.py` — update constraints here to change allowable interventions.
+- SCMs: both hand-coded and learned SCM variants exist; `SCM_Trainer` can be used to fit structural equations from data.
 
-- `LinearRecourse`:
-  - solves constrained L1-minimization for linear classifiers.
-  - uses `cvxpy` when available.
-  - uses a deterministic greedy fallback solver when `cvxpy` is unavailable.
-- `DifferentiableRecourse`:
-  - gradient-based optimization of interventions for nonlinear models.
-  - supports robust recourse via inner uncertainty maximization.
-- `causal_recourse(...)`:
-  - searches across actionable intervention sets and keeps the minimum-cost valid action.
-
-### 5) End-to-end evaluation
-
-- `train_classifiers.py`: trains and saves models.
-- `evaluate_recourse.py`: computes recourse validity and cost.
-- `runner.py`: benchmark orchestration.
-- `main.py`: default HW entry point.
-
-## Quick run
-
-```bash
-cd HomeWorks/HW3/code/q5_codes
-python -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-python main.py --seed 0
-```
-
-## Useful direct commands
-
-Train a linear classifier on health data:
-
-```bash
-python train_classifiers.py --dataset health --model lin --trainer ERM --seed 0 --save_model
-```
-
-Evaluate recourse:
-
-```bash
-python evaluate_recourse.py --dataset health --model lin --trainer ERM --seed 0 --epsilon 0 --nexplain 10
-```
+---
 
 ## Outputs
+- Models: `models/<dataset>_<model>_*.pth`
+- SCMs: `scms/*.pth` and `.meta.json`
+- Results: `results/*.csv` and `.npy` with recourse statistics
 
-Depending on working directory, outputs are created under:
+---
 
-- `models/`
-- `results/`
-- `scms/`
+## Reproducibility & testing
+- Use `--seed` to fix randomness.
+- Scripts print summary `metrics.json`/CSV which are used by notebooks and the report.
 
-## Notebook Deliverable
+---
 
-End-to-end HW3 notebook (Q1-Q6):
+## Tips & extensions
+- Replace the default cost function in `recourse.py` to experiment with alternative user cost models.
+- Add a new SCM by subclassing the generic `SCM` and adding it to `scm.py`.
 
-- `HomeWorks/HW3/code/HW3_complete_assignment.ipynb`
+Want me to add explicit `--help` outputs or example CLI commands for each script documented above? I can also add `Makefile` targets to standardize runs.

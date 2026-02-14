@@ -1,97 +1,103 @@
-# HW1 Code Guide
+# HW1/code — Developer & Reproducibility Guide
 
-This folder contains the full implementation for HW1.
+This file documents the implementation, CLI, and reproducible experiment recipes for HW1 (image generalization & adversarial robustness).
 
-## Implemented methods
+---
 
-### 1) Model architecture
+## Contents & responsibilities
+- `train.py` — training loop, scheduler, checkpointing, optional adversarial training.
+- `eval.py` — evaluation utilities (UMAP, confusion, per-class metrics, calibration, robustness sweeps).
+- `run_report_pipeline.py` — convenience script that trains, evaluates, and copies figures into `../report/figures/`.
+- `attacks.py` — FGSM and PGD attack implementations used for evaluation and adversarial training.
+- `datasets.py` — transforms and dataloaders for `svhn`, `cifar10`, `mnist` (MNIST→RGB fallback).
+- `models/` — `resnet18_custom.py` (manual ResNet18 with optional BatchNorm and feature extraction).
+- `utils.py`, `trainers.py`, `runner.py` — helpers for seeding, checkpoint I/O, and small reusable training utilities.
 
-- `models/resnet18_custom.py`
-  - `BasicBlock`: residual block with optional BatchNorm.
-  - `ResNet` and `resnet18(...)`: full ResNet18 defined manually.
-  - Supports `return_features=True` for embedding extraction.
+---
 
-### 2) Losses
+## Environment & dependencies
+- Python 3.8+ recommended.
+- Install with:
+  ```bash
+  python -m venv .venv
+  source .venv/bin/activate
+  pip install -r requirements.txt
+  ```
+- For GPU acceleration install a PyTorch build that matches your CUDA version.
+- Optional: `umap-learn` for UMAP visualizations (fallback to PCA is automatic).
 
-- `losses.py`
-  - `LabelSmoothingCrossEntropy`: soft target distribution for improved generalization.
-  - `CircleLoss`: metric-learning style pair-similarity objective over normalized embeddings.
+---
 
-### 3) Adversarial methods
+## Key CLI examples (most-used scripts)
 
-- `attacks.py`
-  - `fgsm_attack(...)`: single-step sign-gradient perturbation with `epsilon`.
-  - `pgd_attack(...)`: iterative projected attack with `epsilon`, `alpha`, and `iters`.
+train.py (core training)
+- Purpose: train a ResNet18 baseline or adversarially-trained model.
+- Important flags:
+  - `--dataset` (svhn|cifar10|mnist)
+  - `--epochs`, `--batch-size`, `--lr`
+  - `--optimizer` (sgd|adam)
+  - `--use-bn` (true/false)
+  - `--label-smoothing` (float)
+  - `--adv-train` (enable adversarial training)
+  - `--attack` (fgsm|pgd)
+  - `--epsilon`, `--alpha`, `--iters` (attack params)
+  - `--save-dir` (checkpoint folder)
+  - `--demo` (reduced dataset/time for CI/demo)
 
-### 4) Data handling
-
-- `datasets.py`
-  - `get_transforms(...)`: resize, optional augmentation, normalization.
-  - `get_dataloaders(...)`: SVHN/MNIST/CIFAR10 loaders.
-  - MNIST is converted to RGB when needed.
-  - Includes offline fallback to `torchvision.datasets.FakeData`.
-
-### 5) Training/evaluation pipeline
-
-- `train.py`
-  - `train_one_epoch(...)`, `evaluate(...)`.
-  - Supports `SGD` or `Adam`.
-  - Uses `MultiStepLR` (milestones at 50% and 75% of epochs).
-  - Optional adversarial training (`--adv-train`) with FGSM/PGD.
-- `eval.py`
-  - `extract_features(...)`: gets penultimate features.
-  - `plot_umap(...)`: 2D UMAP of features.
-  - Optional sample-grid export for report figures.
-
-### 6) Utilities
-
-- `utils.py`: seed control and checkpoint I/O.
-- `trainers.py`: minimal reusable trainer helper.
-- `runner.py`: lightweight entry point that calls `train.main()`.
-
-## Quick run
-
-```bash
-cd HomeWorks/HW1/code
-python -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-```
-
-Baseline:
-
+Example — baseline:
 ```bash
 python train.py --dataset svhn --epochs 80 --batch-size 128 --optimizer sgd --save-dir checkpoints/svhn_baseline
 ```
 
-Adversarial training:
-
+Example — adversarial training (PGD):
 ```bash
 python train.py --dataset cifar10 --epochs 100 --adv-train --attack pgd --epsilon 8/255 --alpha 2/255 --iters 7 --save-dir checkpoints/cifar_adv
 ```
 
-Evaluation + UMAP:
 
+eval.py (evaluation & diagnostic figures)
+- Purpose: extract features, compute metrics (ECE, AURC), generate UMAP/UMAP fallback, confusion matrices, top-k, and robustness sweeps.
+- Notable flags: `--checkpoint`, `--umap`, `--save-grid`, `--save-confusion`, `--save-prf1`, `--save-calibration`, `--save-attack-sweep`, `--demo`.
+
+Example — generate UMAP & evaluation artifacts:
 ```bash
-python eval.py --dataset svhn --checkpoint checkpoints/svhn_baseline/best.pth --umap
+python eval.py --dataset svhn --checkpoint checkpoints/svhn_baseline/best.pth --umap --save-grid --save-confusion --save-prf1
 ```
 
-One-command report artifact generation (demo-safe):
+run_report_pipeline.py
+- Purpose: single-command experiment → evaluation → copy report-ready figures into `../report/figures/`.
+- Use `--full-run` to disable demo mode and run on the complete dataset.
 
+Example (demo):
 ```bash
-python run_report_pipeline.py --epochs 3
+python run_report_pipeline.py --dataset svhn --epochs 3 --save-dir checkpoints/svhn_demo
 ```
 
-Full dataset run (long):
+---
 
-```bash
-python run_report_pipeline.py --full-run --epochs 80 --dataset svhn
-```
+## Reproducibility & tips
+- Seed: pass `--seed` to `train.py` for deterministic splits and RNG seeding.
+- Deterministic PyTorch: if strict determinism is required, enable `torch.use_deterministic_algorithms(True)` in `utils.set_seed` (beware of slower kernels).
+- Checkpoint recovery: scripts save `{best.pth,last.pth}` and history files — re-run `eval.py` with `--checkpoint` to reproduce figures.
 
-## Outputs
+---
 
-- Checkpoints: `checkpoints/<experiment>/last.pth`, `best.pth`
-- TensorBoard logs: same `--save-dir`
-- UMAP figure: `<checkpoint>.umap.png`
-- Adversarial/noise figure: `<checkpoint>.grid.png`
-- Training curves + history: `<save-dir>/training_curves.png`, `training_history.{csv,json}`
+## Common troubleshooting
+- UMAP/numba import errors → `eval.py` falls back to PCA automatically.
+- CV memory / OOM → reduce `--batch-size`.
+- Missing torchvision datasets → run training with `--demo` or place dataset under `code/data/`.
+
+---
+
+## Development notes
+- Add new dataset: update `datasets.get_dataloaders()` and add normalization stats in `eval.py` (`_stats_for_dataset`).
+- Add new model: place model under `models/` and add CLI option in `train.py` / `runner.py` as needed.
+
+---
+
+## Expected artifacts
+- `checkpoints/<exp>/best.pth` — model weights
+- `checkpoints/<exp>/training_history.json|csv` — scalar histories
+- `<exp>.umap.png`, `<exp>.grid.png`, `<exp>.confusion.png` — evaluation figures
+
+If you want, I can add detailed `argparse` tables for each script or create runnable examples for each saved checkpoint.

@@ -1,66 +1,52 @@
-# HW4 Code Guide
+# HW4/code — Implementation & usage details
 
-This folder contains reference implementations for all HW4 questions.
+This document describes how to run the security, privacy, and fairness code, where test assets live, and how to reproduce the report figures.
 
-## Implemented methods
+---
 
-### 1) Security (`neural_cleanse.py`)
+## Key scripts & what they do
+- `neural_cleanse.py` — trigger optimization + MAD-based target detection + unlearning demo.
+- `privacy.py` — Laplace mechanism helpers and composition helpers used for assignment questions.
+- `fairness.py` — fairness metrics and a simple promotion/demotion mitigation routine.
+- `generate_report_figs.py` — builds PNG figures used in the LaTeX report.
+- `tests/` — unit tests for each sub-module (run with `pytest`).
 
-- `reconstruct_trigger(...)`
-  - Optimizes a trigger mask and pattern for each target label.
-  - Loss = classification to target label + L1(mask) + pattern regularization.
-- `detect_outlier_scales(...)`
-  - MAD-based anomaly score across reconstructed trigger scales.
-  - Returns the most suspicious target label.
-- `unlearn_by_retraining(...)`
-  - Applies trigger to a data fraction and retrains for one/few epochs.
-- `DemoConvNet` and `load_model(...)`
-  - Demo model path so the pipeline can run without external checkpoints.
+---
 
-### 2) Privacy (`privacy.py`)
+## Quick examples
+- Run unit tests:
+  ```bash
+  pytest tests
+  ```
 
-- `laplace_scale(...)`: computes `b = sensitivity / epsilon`.
-- `add_laplace_noise(...)`: sampled noisy response.
-- `laplace_cdf_threshold(...)`: probability query for noisy thresholds.
-- `compose_epsilons(...)`: basic sequential composition.
-- `average_income_scale(...)`: convenience helper for assignment-style examples.
+- Generate all report figures (includes Neural Cleanse demo and fairness bars):
+  ```bash
+  python generate_report_figs.py
+  ```
 
-### 3) Fairness (`fairness.py`)
+- Run Neural Cleanse pipeline on a supplied model:
+  ```py
+  # Example usage inside a Python session or script
+  from neural_cleanse import reconstruct_trigger, detect_outlier_scales
+  mask, pattern = reconstruct_trigger(model, data_loader)
+  outlier_label = detect_outlier_scales(scales)
+  ```
 
-- `accuracy(...)`: standard prediction accuracy.
-- `disparate_impact(...)`: ratio of positive prediction rates across groups.
-- `zemel_proxy_fairness(...)`: cluster-based fairness proxy (Zemel-inspired).
-- `train_baseline_model(...)`: scaled logistic regression baseline.
-- `apply_promotion_demotion(...)`: assignment rule for selecting label swaps.
-- `retrain_with_swapped_labels(...)`: retrains on debiased targets.
+---
 
-### 4) Reporting helper (`generate_report_figs.py`)
+## Model weights & poisoned examples
+- `model_weights/poisened_models/` contains example poisoned models used by unit tests — useful to validate the Neural Cleanse pipeline.
 
-- Generates fairness comparison bars, Neural Cleanse trigger figure, and prints privacy example values.
+---
 
-### 5) Tests (`tests/`)
+## Testing & validation
+- The test suite verifies basic numerical properties and shapes and serves as a quick smoke-check for pipeline changes.
+- Add tests in `tests/` when adding functionality; keep tests deterministic (fix seeds where randomness is used).
 
-- `test_fairness.py`: metric and promotion/demotion checks.
-- `test_privacy.py`: Laplace helper checks.
-- `test_neural_cleanse.py`: shape/outlier checks for security pipeline.
+---
 
-## Quick run
+## Notes & limitations
+- `neural_cleanse` is an educational implementation — results are illustrative and tuned for small demo models included in the repo.
+- Privacy helpers are calculators (Laplace) and not a full DP training stack.
 
-```bash
-cd HomeWorks/HW4/code
-python -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-pytest tests
-```
-
-Run figure generation:
-
-```bash
-python generate_report_figs.py
-```
-
-## Notes
-
-- For real backdoor analysis, load attacked weights through `load_model(path=...)`.
-- Demo mode in `neural_cleanse.py` is intended for workflow validation, not final accuracy claims.
+If you want, I can add CLI wrappers for `neural_cleanse` and `fairness` functions, or add example notebooks that step through the pipeline visually.

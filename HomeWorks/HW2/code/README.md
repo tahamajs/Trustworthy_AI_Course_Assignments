@@ -1,57 +1,53 @@
-# HW2 Code Guide
+# HW2/code — Detailed developer guide
 
-This directory contains all implementations for HW2.
+This document explains the code-level entry points, how to run experiments reproducibly, and where outputs are saved.
 
-## Implemented methods
+---
 
-### 1) Tabular models (`models.py`)
+## Primary scripts & purpose
+- `tabular.py` — training pipeline for Pima diabetes dataset (downloads fallback / synthetic if offline).
+- `models.py` — `MLPClassifier` and `NAMClassifier` used in experiments.
+- `interpretability.py` — LIME and SHAP wrappers for per-sample explanations.
+- `vision.py` — Grad-CAM, Guided Backprop, SmoothGrad, and activation maximization utilities.
+- `generate_report_plots.py` — convenience script to create PNGs used in the LaTeX report.
 
-- `MLPClassifier`
-  - Architecture: `8 -> 100 -> 50 -> 50 -> 20 -> 1`
-  - Uses BatchNorm, ReLU, Dropout.
-  - Trained with `BCEWithLogitsLoss`.
-- `NAMClassifier`
-  - One small subnetwork per feature (`Linear -> ReLU -> Linear`).
-  - Per-feature outputs are summed for interpretable additive effects.
+---
 
-### 2) Data + training pipeline (`tabular.py`)
+## How to reproduce the tabular baseline
+1. Create environment and install (see `requirements.txt`).
+2. Run:
+   ```bash
+   cd HomeWorks/HW2/code
+   python tabular.py
+   ```
+   - `tabular.py` uses local `diabetes.csv` if present, otherwise attempts to download; it falls back to a deterministic synthetic dataset when offline.
 
-- `load_diabetes(...)`: loads local CSV or downloads Pima dataset.
-- `preprocess(...)`: standard scaling.
-- `make_splits(...)`: stratified 70/10/20 train/val/test split.
-- `train_model(...)`: Adam optimizer + validation selection.
-- `evaluate_preds(...)`: accuracy, recall, F1, confusion matrix.
+3. Generated metrics are printed to stdout; use `generate_report_plots.py` to export figures.
 
-### 3) Tabular interpretability (`interpretability.py`)
+---
 
-- `lime_explain(...)`: local explanation per sample via LIME.
-- `shap_explain(...)`: SHAP values with KernelExplainer for selected samples.
+## Vision experiments & explanations
+- The notebook `../notebooks/HW2_solution.ipynb` demonstrates how to load models, compute Grad-CAM maps, combine Guided Backprop + Grad-CAM, and run activation maximization.
+- `vision.py` contains reusable functions so you can call them programmatically from other scripts/notebooks.
 
-### 4) Vision interpretability (`vision.py`)
+---
 
-- `get_vgg16(...)`: pretrained VGG16 (or fallback without pretrained weights).
-- `GradCAM`: class activation maps from feature gradients.
-- `GuidedBackprop`: ReLU backward hooks for positive-gradient saliency.
-- `smoothgrad(...)`: gradient averaging over noisy inputs.
-- `activation_maximization(...)`: gradient ascent on input image with TV regularization and jitter.
+## Notes on interpretability tools
+- LIME/SHAP can be slow for larger datasets; use `n_samples`/`nsamples` parameters to limit runtime.
+- SHAP `KernelExplainer` is model-agnostic but computationally expensive — use a small background subset for demos.
 
-## Quick run
+---
 
-```bash
-cd HomeWorks/HW2/code
-python -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-python tabular.py
-python generate_report_plots.py
-```
+## Expected outputs
+- `report/figures/` — standard plots used in the assignment report (saved by `generate_report_plots.py`).
+- Notebook cells include figure exports and the code used to generate them.
 
-Notebook workflow:
+---
 
-- Open `HomeWorks/HW2/notebooks/HW2_solution.ipynb` for full experiments and report plots.
+## Troubleshooting & tips
+- No internet: tabular dataset fallback ensures the notebook is runnable offline.
+- Pretrained weights unavailable: `vision.py` tries a non-pretrained fallback; visualizations still work but results differ.
 
-## Notes
+---
 
-- If internet is unavailable, `tabular.py` uses a synthetic fallback dataset.
-- If internet is unavailable, `vision.py` falls back to non-pretrained VGG16 weights.
-- Vision utilities are modular and can be imported independently into the notebook.
+If you want, I can add explicit CLI flags to `tabular.py` and `vision.py` for dataset path, device selection, and logging to make experiments even more reproducible. 

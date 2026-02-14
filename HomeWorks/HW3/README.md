@@ -1,33 +1,24 @@
-# HW3: Causal Recourse
+# HW3 — Causal Recourse (full-code + notebook)
 
-HW3 focuses on causal modeling and algorithmic recourse.
+This homework implements structural causal modeling, actionability constraints, and multiple recourse algorithms with evaluation on real datasets (Adult, COMPAS, Health, Loan).
 
-## Folders
+---
 
-- `code/q5_codes`: full implementation for training and recourse evaluation.
-- `dataset/diabetes.csv`: primary dataset used for health-related questions (Q4/Q5),
-  mapped to `age/insulin/blood_glucose/blood_pressure/category` in code.
-- `dataset`: additional dataset archives.
-- `description`: assignment statement.
-- `report`: report template.
+## High-level summary
+- Objective: produce actionable recourse (minimal-cost interventions) under *actionability constraints* and evaluate validity under causal models.
+- Implemented recourse: linear constrained recourse, differentiable (gradient-based) recourse, and causal counterfactual evaluation via SCMs.
 
-## Methods used in this project
+---
 
-- **Data processing and constraints**:
-  dataset-specific preprocessing + actionability constraints (`data_utils.py`).
-- **Predictive models**:
-  logistic regression and MLP classifiers with threshold calibration by MCC (`trainers.py`).
-- **Training strategies**:
-  ERM, actionable-feature masking (AF), ALLR/LLR-style regularization, Ross regularizer.
-- **Causal modeling**:
-  structural causal model base class + dataset SCMs (Loan, Adult, COMPAS, Health).
-- **Recourse methods**:
-  linear recourse via constrained optimization and differentiable recourse via iterative gradient-based optimization.
-- **Causal recourse evaluation**:
-  validity and cost metrics over negatively classified instances.
+## Important locations
+- `code/q5_codes/` — core implementation (training, SCMs, recourse algorithms, evaluation).
+- `code/HW3_complete_assignment.ipynb` — full notebook covering Q1–Q6 and report artifact generation.
+- `models/` (top-level) — pre-trained model weights included for quick evaluation.
+- `results/` — CSV / .npy outputs from previous runs (validity/cost profiles).
 
-## Quick start
+---
 
+## Quick start (run the Q5 pipeline)
 ```bash
 cd HomeWorks/HW3/code/q5_codes
 python -m venv .venv
@@ -35,28 +26,37 @@ source .venv/bin/activate
 pip install -r requirements.txt
 python main.py --seed 0
 ```
+- Use `--dataset health|adult|loan|compas` where supported by the script flags.
+- Save/load models are written under `models/` and evaluation artifacts under `results/`.
 
-Detailed method-level documentation is in:
+---
 
-- `HomeWorks/HW3/code/README.md`
+## Reproducibility & analysis
+- Seed support: pass `--seed` to training/evaluation scripts.
+- CVXPy: `LinearRecourse` prefers `cvxpy` for exact convex solves; a greedy fallback is implemented when `cvxpy` is unavailable.
+- SCMs: `scm.py` contains both hand-coded and learned SCM variants; `SCM_Trainer` can fit structural equations from data.
 
-## Complete Notebook
+---
 
-A full notebook that covers all HW3 parts (Q1-Q6), including runnable Q5 causal recourse pipeline on the provided dataset folder, is available at:
+## Evaluation metrics
+- Recourse validity: proportion of previously-negative instances for which an action changes the classifier's decision under the SCM.
+- Cost: L1-style or user-defined cost aggregated per instance and summarized by quantiles/means.
+- Additional model metrics: MCC thresholding, AUROC, calibration where appropriate.
 
-- `HomeWorks/HW3/code/HW3_complete_assignment.ipynb`
-- `HomeWorks/HW3/output/jupyter-notebook/hw3_complete_assignment.ipynb`
+---
 
-## Clean PDF Export
-
-Use the helper script below to build a clean PDF from the notebook with
-XeLaTeX-safe font and Unicode patching:
-
+## Notebook → PDF
+To export a report-quality PDF (XeLaTeX compatible):
 ```bash
 cd HomeWorks/HW3
 ./scripts/export_notebook_pdf.sh
+# Result: output/pdf/hw3_complete_assignment.pdf
 ```
 
-Default output:
+---
 
-- `HomeWorks/HW3/output/pdf/hw3_complete_assignment.pdf`
+## Next steps / extensions
+- Add domain-specific constraints to the `data_utils` actionability sets.
+- Replace learned SCMs with richer structural estimators and compare recourse validity.
+
+If you want, I can expand the `code/q5_codes/README.md` with a CLI reference for every script and example reproduce commands for the provided `models/` and `results/` artifacts.
