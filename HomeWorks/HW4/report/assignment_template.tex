@@ -431,6 +431,14 @@ $P(\tilde{q} > 505)$ (base / seq. / unb.) & \QTwoProbBase{} / \QTwoProbSequentia
 \end{tabular}
 \end{table}
 
+\subsection{Assignment Questions (Q3 Fairness)}
+\begin{itemize}
+    \item \textbf{Does removing the sensitive feature help?} The no-gender model has accuracy \QThreeNoGenderAcc{} and DI \QThreeNoGenderDi{}, versus baseline accuracy \QThreeBaseAcc{} and DI \QThreeBaseDi{}. Removing gender improves parity (DI moves toward 1) but can reduce accuracy slightly; it is effective for fairness at a small utility cost.
+    \item \textbf{Which model is more accurate / fair?} In this run, the baseline has the highest accuracy (\QThreeBaseAcc{}); the fairest model by DI is group-thresholds (DI \QThreeGroupThrDi{}). Promotion/demotion and reweighed models trade some accuracy for improved parity (Table~\ref{tab:final_metrics}).
+    \item \textbf{Relationship between accuracy and fairness?} There is a tradeoff: models that improve DI (e.g., no-gender, reweighed, group-thresholds) often have slightly lower accuracy. No single model dominates on both dimensions; the tradeoff map (Figure~\ref{fig:fairness_tradeoff}) makes this explicit.
+    \item \textbf{Another method to make the classifier fair:} Reweighing (sample weights by group-label marginals) and group-threshold post-processing are implemented as bonus methods. Reweighing gives accuracy \QThreeReweighedAcc{} and DI \QThreeReweighedDi{}; group thresholds give \QThreeGroupThrAcc{} and DI \QThreeGroupThrDi{}. Group thresholds are effective because they optimize parity at decision time with explicit thresholds (\QThreeGroupThrZero{} / \QThreeGroupThrOne{}) per group, trading a controlled amount of accuracy for DI close to 1.
+\end{itemize}
+
 \section{Uncertainty, Decision Risk, and Policy Interpretation}
 \subsection{Security Uncertainty and Claim Strength}
 Security conclusions are tied to two probability-like quantities: attack success rate and clean accuracy. For a Bernoulli rate estimate $\hat{p}=m/n$, standard error scales as

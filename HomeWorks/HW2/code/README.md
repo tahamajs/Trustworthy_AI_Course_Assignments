@@ -34,6 +34,7 @@ This document explains the code-level entry points, how to run experiments repro
 
 - The notebook `../notebooks/HW2_solution.ipynb` demonstrates how to load models, compute Grad-CAM maps, combine Guided Backprop + Grad-CAM, and run activation maximization.
 - `vision.py` contains reusable functions so you can call them programmatically from other scripts/notebooks.
+- **Custom six-image set:** to use your own images for the vision six-image analysis, pass `custom_image_paths=[...]` to `generate_vision_figures()` in `generate_report_plots.py`, or set the env var `HW2_VISION_IMAGES` (comma-separated paths or URLs). See the main HW2 README for details.
 
 ---
 

@@ -37,9 +37,29 @@ def test_apply_promotion_demotion():
     sensitive = np.array([1, 1, 1, 0, 0, 0])
     mask = apply_promotion_demotion(y_proba, y_pred, sensitive, k=1)
     assert mask.dtype == bool
-    # promotion candidate index 0, demotion candidate index 3
+    # promotion candidate index 0, demotion candidate index 3 (prediction-based)
     assert mask.sum() == 2
     assert mask[0]
+    assert mask[3]
+
+
+def test_apply_promotion_demotion_true_labels():
+    # Assignment-compliant: CP = men with y_true=1, CD = women with y_true=0
+    # Men (s=1): indices 0,1,2. Women (s=0): indices 3,4,5.
+    # y_true: 0,1,1,0,0,1  -> CP = men with 1: indices 1,2; CD = women with 0: indices 3,4
+    y_proba = np.array([0.1, 0.3, 0.9, 0.8, 0.2, 0.6])
+    y_pred = np.array([0, 0, 1, 1, 0, 1])
+    sensitive = np.array([1, 1, 1, 0, 0, 0])
+    y_true = np.array([0, 1, 1, 0, 0, 1])
+    mask = apply_promotion_demotion(
+        y_proba, y_pred, sensitive, k=1,
+        y_true=y_true, use_true_labels_for_cohorts=True,
+    )
+    assert mask.dtype == bool
+    # CP: men with true 1 -> indices 1,2; ascending proba -> 1 (0.3), 2 (0.9); top 1 = index 1
+    # CD: women with true 0 -> indices 3,4; descending proba -> 3 (0.8), 4 (0.2); top 1 = index 3
+    assert mask.sum() == 2
+    assert mask[1]
     assert mask[3]
 
 

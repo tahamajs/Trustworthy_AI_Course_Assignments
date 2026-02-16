@@ -13,6 +13,7 @@ This homework implements structural causal modeling, actionability constraints, 
 
 ## Important locations
 
+- `dataset/` — place or extract the health data as `dataset/diabetes.csv` (or set `HW3_HEALTH_DATA` to your CSV path).
 - `code/q5_codes/` — core implementation (training, SCMs, recourse algorithms, evaluation).
 - `code/HW3_complete_assignment.ipynb` — full notebook covering Q1–Q6 and report artifact generation.
 - `models/` (top-level) — pre-trained model weights included for quick evaluation.
@@ -32,6 +33,7 @@ python main.py --seed 0
 
 - Use `--dataset health|adult|loan|compas` where supported by the script flags.
 - Save/load models are written under `models/` and evaluation artifacts under `results/`.
+- **Q3 (airline):** The notebook uses provided airline data if a CSV with the expected columns exists in `dataset/`; otherwise it uses a synthetic SCM-based dataset so all Q3 parts run. To generate a reusable synthetic file: `python scripts/generate_airline_synthetic.py`.
 
 ---
 

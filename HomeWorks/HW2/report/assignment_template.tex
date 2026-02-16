@@ -94,7 +94,7 @@ LIME and SHAP on three samples + comparison & Figs.~\ref{fig:lime_shap_0}--\ref{
 Correlation linkage with explanations & Fig.~\ref{fig:corr_vs_shap} and its dedicated interpretation subsection. \\
 NAM analysis and interpretability tradeoff & Methods (NAM additive model), Fig.~\ref{fig:nam_functions}, Tables I--II, and its dedicated interpretation subsection. \\
 Bonus GRACE contrastive sample analysis & Fig.~\ref{fig:grace_counterfactual}, Table VI, and the GRACE interpretation subsection. \\
-Vision explainability (Grad-CAM, Guided Backprop, Guided Grad-CAM, SmoothGrad) & Methods (Vision), Code Walkthrough (vision module), and Figs.~\ref{fig:gradcam_demo}--\ref{fig:smoothgrad_convergence_metrics}. \\
+Vision explainability (Grad-CAM, Guided Backprop, Guided Grad-CAM, SmoothGrad, SmoothGrad+Guided BP, SmoothGrad+Guided Grad-CAM) & Methods (Vision), Code Walkthrough (vision module), and Figs.~\ref{fig:gradcam_demo}--\ref{fig:smoothgrad_convergence_metrics}, \ref{fig:smoothgrad_guided_backprop}, \ref{fig:smoothgrad_guided_gradcam}. \\
 Adversarial perturbation and saliency comparison & Fig.~\ref{fig:adversarial_compare} and the adversarial interpretation subsection. \\
 Activation maximization (Hen) with TV and random shifts & Fig.~\ref{fig:featvis_hen}, Methods (feature visualization objective), and Appendix B-G. \\
 \bottomrule
@@ -313,7 +313,7 @@ NAMClassifier & 0.6957 & 0.5702 & 0.2021 \\
 \end{table}
 
 \begin{table}[H]
-\caption{Top Two Absolute Correlation Pairs (Excluding Outcome)}
+\caption{Top Two Absolute Correlation Pairs (Excluding Outcome). Values are produced by the pipeline and written to \texttt{report/figures/metrics\_summary.json} under \texttt{top\_correlation\_pairs}; the table here can be updated from that JSON for consistency.}
 \label{tab:top_corr_pairs}
 \centering
 \begin{tabular}{lc}
@@ -635,6 +635,24 @@ The Guided Grad-CAM example demonstrates the expected complementarity in which G
 \label{fig:smoothgrad_guided}
 \end{figure}
 The SmoothGrad comparison plot shows that averaging gradients over noisy perturbations suppresses high-frequency variance while preserving salient regions, and when contrasted with absolute Guided Backprop and Guided Grad-CAM it reveals a principled bias-variance tradeoff in saliency estimation: SmoothGrad is most stable but less edge-sharp, Guided Backprop is most detailed but noisier, and Guided Grad-CAM sits between them by adding localization priors from class-activation weighting; estimator-wise, increasing \(K\) in SmoothGrad reduces attribution variance roughly by averaging independent perturbation noise, at the cost of some detail attenuation, which matches the observed smoother appearance.
+
+\subsection{SmoothGrad + Guided Backpropagation}
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.75\columnwidth]{figures/smoothgrad_guided_backprop.png}
+\caption{Saliency map from SmoothGrad combined with Guided Backpropagation (average over \(K\) noisy inputs).}
+\label{fig:smoothgrad_guided_backprop}
+\end{figure}
+SmoothGrad + Guided Backpropagation averages Guided Backprop gradient maps over \(K\) Gaussian-perturbed copies of the input, yielding a denoised, edge-sensitive saliency map that retains the high-resolution detail of Guided Backprop while reducing variance; this directly implements the assignment requirement to combine the SmoothGrad idea with Guided Backpropagation.
+
+\subsection{SmoothGrad + Guided Grad-CAM}
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.75\columnwidth]{figures/smoothgrad_guided_gradcam.png}
+\caption{Saliency map from SmoothGrad combined with Guided Grad-CAM (average of Guided Grad-CAM over \(K\) noisy inputs).}
+\label{fig:smoothgrad_guided_gradcam}
+\end{figure}
+SmoothGrad + Guided Grad-CAM computes Guided Grad-CAM (Grad-CAM heatmap times Guided Backprop magnitude) for each of \(K\) noisy inputs and averages the resulting maps, fusing class-localization with fine-grained gradient detail in a variance-reduced form; this satisfies the assignment requirement to combine SmoothGrad with Guided Grad-CAM.
 
 \subsection{SmoothGrad Sample-Sweep Plot}
 \begin{figure}[H]

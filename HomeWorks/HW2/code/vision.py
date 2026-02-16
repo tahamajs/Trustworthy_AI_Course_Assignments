@@ -141,6 +141,62 @@ def smoothgrad(model, input_tensor, target_class=None, n_samples=25, stdev=0.15)
     return avg_grad
 
 
+def smoothgrad_guided_backprop(
+    model,
+    input_tensor,
+    target_class=None,
+    n_samples=25,
+    stdev=0.15,
+):
+    """SmoothGrad with Guided Backpropagation: average Guided Backprop maps over K noisy inputs."""
+    model.eval()
+    if target_class is None:
+        with torch.no_grad():
+            target_class = model(input_tensor).argmax(dim=1).item()
+    gb = GuidedBackprop(model)
+    accum = None
+    for _ in range(n_samples):
+        noise = torch.randn_like(input_tensor, device=input_tensor.device) * stdev
+        noisy = (input_tensor + noise).detach().clone()
+        noisy.requires_grad_(True)
+        grad_map = gb.generate(noisy, target_class=target_class)
+        if accum is None:
+            accum = np.zeros_like(grad_map)
+        accum += grad_map
+    accum = accum / n_samples
+    return accum
+
+
+def smoothgrad_guided_gradcam(
+    model,
+    target_layer,
+    input_tensor,
+    target_class=None,
+    n_samples=25,
+    stdev=0.15,
+):
+    """SmoothGrad + Guided Grad-CAM: average Guided Grad-CAM maps over K noisy inputs."""
+    model.eval()
+    if target_class is None:
+        with torch.no_grad():
+            target_class = model(input_tensor).argmax(dim=1).item()
+    accum = None
+    for _ in range(n_samples):
+        noise = torch.randn_like(input_tensor, device=input_tensor.device) * stdev
+        noisy = (input_tensor + noise).detach().clone()
+        cam = GradCAM(model, target_layer)
+        heat = cam(noisy, class_idx=target_class)
+        cam.close()
+        gb = GuidedBackprop(model)
+        gb_grad = gb.generate(noisy, target_class=target_class)
+        guided_cam = heat * np.abs(gb_grad).max(axis=0)
+        if accum is None:
+            accum = np.zeros_like(guided_cam)
+        accum += guided_cam
+    accum = accum / n_samples
+    return accum
+
+
 # Activation maximization (simple gradient ascent on input)
 def activation_maximization(
     model,

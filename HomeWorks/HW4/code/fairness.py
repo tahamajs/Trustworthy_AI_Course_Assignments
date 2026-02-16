@@ -100,23 +100,39 @@ def apply_promotion_demotion(
     y_pred: np.ndarray,
     sensitive: np.ndarray,
     k: int,
+    y_true: np.ndarray | None = None,
+    use_true_labels_for_cohorts: bool = False,
 ) -> np.ndarray:
-    """Prediction-based Promotion/Demotion index selection.
+    """Promotion/Demotion index selection for label swapping before retraining.
 
-    Locked rule:
+    By default (prediction-based):
     - Promotion (CP): men with predicted label 0, ranked by ascending P(y=1).
     - Demotion  (CD): women with predicted label 1, ranked by descending P(y=1).
+
+    When use_true_labels_for_cohorts=True (assignment-compliant):
+    - CP: men with true income >50k (y_true==1), ranked by ascending P(y=1).
+    - CD: women with true income <=50k (y_true==0), ranked by descending P(y=1).
     """
     if k < 0:
         raise ValueError("k must be non-negative")
     n = y_proba.shape[0]
     if y_pred.shape[0] != n or sensitive.shape[0] != n:
         raise ValueError("y_proba, y_pred, and sensitive must have the same length")
+    if use_true_labels_for_cohorts:
+        if y_true is None or y_true.shape[0] != n:
+            raise ValueError("y_true must be provided and match length when use_true_labels_for_cohorts=True")
 
     men_mask = sensitive == 1
     women_mask = sensitive == 0
-    prom_cand = np.where(men_mask & (y_pred == 0))[0]
-    dem_cand = np.where(women_mask & (y_pred == 1))[0]
+
+    if use_true_labels_for_cohorts and y_true is not None:
+        # Assignment: CP = men with income >50k, CD = women with income <=50k
+        prom_cand = np.where(men_mask & (y_true == 1))[0]
+        dem_cand = np.where(women_mask & (y_true == 0))[0]
+    else:
+        # Prediction-based (original behavior)
+        prom_cand = np.where(men_mask & (y_pred == 0))[0]
+        dem_cand = np.where(women_mask & (y_pred == 1))[0]
 
     prom_scores = y_proba[prom_cand]
     dem_scores = y_proba[dem_cand]

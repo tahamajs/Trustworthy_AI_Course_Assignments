@@ -45,6 +45,20 @@ jupyter-notebook ../notebooks/HW2_solution.ipynb
 
 ---
 
+## Custom images for the six-image vision set
+
+The assignment asks for 6 images from different classes that the model classifies correctly. By default, the pipeline uses deterministic synthetic/demo images so it runs offline. To use your own images (files or URLs):
+
+- **Environment variable:** set `HW2_VISION_IMAGES` to a comma-separated list of paths or URLs, then run `generate_report_plots.py` (or the notebook). Example:
+  ```bash
+  export HW2_VISION_IMAGES="path/to/img1.jpg,path/to/img2.png,https://example.com/img3.jpg"
+  python code/generate_report_plots.py
+  ```
+- **CLI:** run `python code/generate_report_plots.py --images path1.jpg path2.png ...` with at least 6 paths or URLs.
+- **Programmatic:** call `generate_vision_figures(custom_image_paths=["path1.jpg", "path2.png", ...])` with at least 6 paths or URLs. If you provide fewer than 6, the rest are filled with the default synthetic set.
+
+---
+
 ## Reproducibility & notes
 
 - The tabular loader saves a local copy `diabetes.csv` after download.

@@ -436,6 +436,25 @@ def save_example_grid(model, loader, device, dataset_name, save_path, attack='fg
     plt.close(fig)
 
 
+@torch.no_grad()
+def evaluate(model, loader, device, loss_fn):
+    """Return (mean_loss, accuracy_percent)."""
+    model.eval()
+    running_loss = 0.0
+    correct = 0
+    total = 0
+    for x, y in loader:
+        x = x.to(device)
+        y = y.to(device)
+        logits = model(x)
+        loss = loss_fn(logits, y)
+        running_loss += loss.item() * x.size(0)
+        pred = logits.argmax(dim=1)
+        correct += pred.eq(y).sum().item()
+        total += x.size(0)
+    return running_loss / max(total, 1), 100.0 * correct / max(total, 1)
+
+
 def evaluate_accuracy_under_attack(model, loader, device, attack='clean', epsilon=8 / 255, alpha=2 / 255, iters=7, max_batches=None):
     model.eval()
     total = 0
@@ -589,20 +608,52 @@ def parse_args():
     p.add_argument('--metrics-path', type=str, default=None)
     p.add_argument('--demo', action='store_true')
     p.add_argument('--batch-size', type=int, default=256)
+    # Cross-domain: evaluate one checkpoint on multiple test sets (e.g. svhn,mnist)
+    p.add_argument('--eval-datasets', type=str, default=None, help='Comma-separated list, e.g. svhn,mnist')
+    p.add_argument('--cross-eval-csv', type=str, default=None, help='Output CSV path for cross-domain accuracies')
+    p.add_argument('--pretrained', action='store_true', help='Use ImageNet-pretrained ResNet18 (for loading checkpoint)')
     return p.parse_args()
 
 
 def main():
     args = parse_args()
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    _, test_loader, num_classes, in_channels = get_dataloaders(args.dataset, batch_size=args.batch_size, demo=args.demo)
-    model = resnet18(num_classes=num_classes, in_channels=in_channels)
     ck = load_checkpoint(args.checkpoint, device)
-    model.load_state_dict(ck['state_dict'])
+    num_classes = int(ck.get('num_classes', 10))
+    in_channels = int(ck.get('in_channels', 3))
+    use_pretrained = args.pretrained or ck.get('pretrained', False)
+
+    if use_pretrained:
+        from models.resnet18_pretrained import resnet18_imagenet
+        model = resnet18_imagenet(num_classes=num_classes, in_channels=in_channels, freeze_backbone=False, pretrained=False)
+    else:
+        model = resnet18(num_classes=num_classes, in_channels=in_channels)
+    model.load_state_dict(ck['state_dict'], strict=False)
     model.to(device)
+
+    _, test_loader, _, _ = get_dataloaders(args.dataset, batch_size=args.batch_size, demo=args.demo)
     epsilon = str_to_ratio(args.epsilon)
     alpha = str_to_ratio(args.alpha)
     metrics = {}
+    loss_fn = nn.CrossEntropyLoss()
+
+    # Cross-domain evaluation: run on multiple datasets and write CSV
+    if args.eval_datasets:
+        names = [s.strip().lower() for s in args.eval_datasets.split(',') if s.strip()]
+        rows = [('eval_dataset', 'accuracy')]
+        for dname in names:
+            _, loader, _, _ = get_dataloaders(dname, batch_size=args.batch_size, demo=args.demo)
+            _, acc = evaluate(model, loader, device, loss_fn)
+            rows.append((dname, f'{acc:.4f}'))
+            print(f'  {dname}: {acc:.2f}%')
+        csv_path = args.cross_eval_csv or (args.checkpoint.rstrip('/') + '.cross_eval.csv')
+        os.makedirs(os.path.dirname(csv_path) or '.', exist_ok=True)
+        with open(csv_path, 'w', newline='', encoding='utf-8') as f:
+            import csv as csv_module
+            w = csv_module.writer(f)
+            w.writerows(rows)
+        print(f'Saved cross-domain eval to: {csv_path}')
+        metrics['cross_eval'] = dict(rows[1:])
 
     if args.umap:
         feats, labels = extract_features(model, test_loader, device)

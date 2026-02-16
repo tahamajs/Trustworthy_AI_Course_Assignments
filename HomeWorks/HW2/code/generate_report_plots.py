@@ -2,12 +2,17 @@
 
 Usage:
     python code/generate_report_plots.py
+    python code/generate_report_plots.py --images img1.jpg img2.png ...
+    HW2_VISION_IMAGES="path1,path2,..." python code/generate_report_plots.py
 """
 from __future__ import annotations
 
+import argparse
 import json
+import os
 import random
 from pathlib import Path
+from urllib.request import urlopen
 
 import matplotlib
 
@@ -51,6 +56,8 @@ from vision import (
     get_vgg16,
     preprocess_image,
     smoothgrad,
+    smoothgrad_guided_backprop,
+    smoothgrad_guided_gradcam,
 )
 
 
@@ -380,7 +387,23 @@ def _plot_permutation_importance(
     print(f"[tabular] saved {out}")
 
 
-def _plot_eda_figures(df) -> None:
+def _top_correlation_pairs(df, feat_cols: list[str], top_n: int = 2) -> list[dict[str, str | float]]:
+    """Top off-diagonal feature pairs by absolute correlation (excluding Outcome)."""
+    corr_feat = df[feat_cols].corr()
+    pairs: list[tuple[str, str, float]] = []
+    for i in range(len(feat_cols)):
+        for j in range(i + 1, len(feat_cols)):
+            a, b = feat_cols[i], feat_cols[j]
+            r = float(corr_feat.loc[a, b])
+            pairs.append((a, b, abs(r)))
+    pairs.sort(key=lambda x: -x[2])
+    out = []
+    for a, b, abs_rho in pairs[:top_n]:
+        out.append({"pair": f"{a} -- {b}", "abs_rho": round(abs_rho, 4)})
+    return out
+
+
+def _plot_eda_figures(df) -> list[dict[str, str | float]]:
     feat_cols = [c for c in df.columns if c != "Outcome"]
 
     corr = df[feat_cols + ["Outcome"]].corr()
@@ -415,6 +438,10 @@ def _plot_eda_figures(df) -> None:
     fig.savefig(out, dpi=150)
     plt.close(fig)
     print(f"[tabular] saved {out}")
+
+    top_pairs = _top_correlation_pairs(df, feat_cols, top_n=2)
+    print("[tabular] Top two correlation pairs (excluding Outcome):", top_pairs)
+    return top_pairs
 
 
 def _plot_corr_vs_shap_alignment(
@@ -584,7 +611,7 @@ def generate_tabular_figures() -> dict[str, float]:
     X, y, _ = preprocess(df)
     X_train, X_val, X_test, y_train, y_val, y_test = make_splits(X, y, seed=SEED)
     feature_names = df.columns[:-1].tolist()
-    _plot_eda_figures(df)
+    top_correlation_pairs = _plot_eda_figures(df)
 
     plt.figure(figsize=(6, 4))
     sns.countplot(x="Outcome", data=df)
@@ -726,6 +753,7 @@ def generate_tabular_figures() -> dict[str, float]:
             "nam_accuracy_drop": perm_imp_nam.tolist(),
         },
         "grace_counterfactual": grace_summary,
+        "top_correlation_pairs": top_correlation_pairs,
     }
     return summary
 
@@ -753,6 +781,25 @@ def _predict_top(model: torch.nn.Module, input_tensor: torch.Tensor, categories:
         conf = float(probs[idx].item())
     name = categories[idx] if idx < len(categories) else f"class_{idx}"
     return idx, name, conf
+
+
+def _load_images_from_paths(paths: list[str]) -> list[Image.Image]:
+    """Load PIL Images from file paths or URLs (e.g. for HW2 six-image set)."""
+    imgs: list[Image.Image] = []
+    for p in paths:
+        p = p.strip()
+        if not p:
+            continue
+        try:
+            if p.startswith("http://") or p.startswith("https://"):
+                with urlopen(p, timeout=15) as resp:
+                    img = Image.open(resp).convert("RGB")
+            else:
+                img = Image.open(p).convert("RGB")
+            imgs.append(img)
+        except Exception as exc:
+            print(f"[vision] Skipping {p[:60]}...: {exc}")
+    return imgs
 
 
 def _build_demo_images() -> list[Image.Image]:
@@ -824,10 +871,19 @@ def _make_candidate_image(rng: np.random.Generator, idx: int) -> Image.Image:
     return img
 
 
-def _plot_vgg16_image_set(model: torch.nn.Module, categories: list[str]) -> tuple[list[dict[str, float | str]], Image.Image]:
-    seed_imgs = _build_demo_images()
-    rng = np.random.default_rng(SEED)
-    candidates = seed_imgs + [_make_candidate_image(rng, i) for i in range(30)]
+def _plot_vgg16_image_set(
+    model: torch.nn.Module,
+    categories: list[str],
+    custom_images: list[Image.Image] | None = None,
+) -> tuple[list[dict[str, float | str]], Image.Image]:
+    if custom_images and len(custom_images) >= 6:
+        candidates = custom_images
+    else:
+        seed_imgs = _build_demo_images()
+        rng = np.random.default_rng(SEED)
+        candidates = (
+            (custom_images or []) + seed_imgs + [_make_candidate_image(rng, i) for i in range(30)]
+        )
 
     selected_imgs: list[Image.Image] = []
     rows: list[dict[str, float | str]] = []
@@ -972,12 +1028,28 @@ def _plot_feature_visualization_hen(model: torch.nn.Module, categories: list[str
     return {"hen_class_idx": int(hen_idx), "n_regularized_images": 5}
 
 
-def generate_vision_figures() -> dict[str, float]:
+def generate_vision_figures(
+    custom_image_paths: list[str] | None = None,
+) -> dict[str, float]:
+    """Generate all vision figures. Optionally use custom images for the six-image set.
+
+    Custom images can be provided via:
+      - custom_image_paths: list of file paths or URLs (at least 6 for full replacement)
+      - Environment HW2_VISION_IMAGES: comma-separated paths or URLs
+    If fewer than 6 custom images are given, fallback synthetic/demo images are used to fill.
+    """
     print("[vision] building model...")
     model = get_vgg16(device="cpu", prefer_pretrained=True)
     categories = _imagenet_categories()
 
-    six_rows, attack_image = _plot_vgg16_image_set(model, categories)
+    custom_images: list[Image.Image] | None = None
+    if custom_image_paths:
+        custom_images = _load_images_from_paths(custom_image_paths)
+    else:
+        env_paths = os.environ.get("HW2_VISION_IMAGES")
+        if env_paths:
+            custom_images = _load_images_from_paths([p.strip() for p in env_paths.split(",")])
+    six_rows, attack_image = _plot_vgg16_image_set(model, categories, custom_images=custom_images)
 
     img_gradcam = Image.new("RGB", (224, 224), color=(100, 140, 200))
     inp_gradcam = preprocess_image(img_gradcam)
@@ -1061,6 +1133,34 @@ def generate_vision_figures() -> dict[str, float]:
     plt.close(fig)
     print(f"[vision] saved {out}")
 
+    sg_guided_bp = smoothgrad_guided_backprop(
+        model, inp_sg, n_samples=25, stdev=0.12
+    )
+    sg_guided_bp_vis = _normalize_map(np.abs(sg_guided_bp).max(axis=0))
+    fig, ax = plt.subplots(1, 1, figsize=(5, 5))
+    ax.imshow(sg_guided_bp_vis, cmap="inferno")
+    ax.set_title("SmoothGrad + Guided Backpropagation")
+    ax.axis("off")
+    fig.tight_layout()
+    out = FIG_DIR / "smoothgrad_guided_backprop.png"
+    fig.savefig(out, dpi=150)
+    plt.close(fig)
+    print(f"[vision] saved {out}")
+
+    sg_guided_gcam = smoothgrad_guided_gradcam(
+        model, model.features[28], inp_sg, n_samples=25, stdev=0.12
+    )
+    sg_guided_gcam_vis = _normalize_map(sg_guided_gcam)
+    fig, ax = plt.subplots(1, 1, figsize=(5, 5))
+    ax.imshow(sg_guided_gcam_vis, cmap="inferno")
+    ax.set_title("SmoothGrad + Guided Grad-CAM")
+    ax.axis("off")
+    fig.tight_layout()
+    out = FIG_DIR / "smoothgrad_guided_gradcam.png"
+    fig.savefig(out, dpi=150)
+    plt.close(fig)
+    print(f"[vision] saved {out}")
+
     smoothgrad_counts = [5, 10, 20, 50]
     sweep_maps = []
     for n_samples in smoothgrad_counts:
@@ -1112,10 +1212,18 @@ def generate_vision_figures() -> dict[str, float]:
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser(description="Generate HW2 report figures (tabular + vision).")
+    parser.add_argument(
+        "--images",
+        nargs="*",
+        default=None,
+        help="Paths or URLs for the six-image vision set (at least 6 for full set). Overrides HW2_VISION_IMAGES.",
+    )
+    args = parser.parse_args()
     _set_seed()
     _ensure_dirs()
     tabular_summary = generate_tabular_figures()
-    vision_summary = generate_vision_figures()
+    vision_summary = generate_vision_figures(custom_image_paths=args.images)
     combined_summary = {"tabular": tabular_summary, "vision": vision_summary}
     METRICS_JSON.write_text(json.dumps(combined_summary, indent=2), encoding="utf-8")
     print(f"[done] saved summary metrics at {METRICS_JSON}")

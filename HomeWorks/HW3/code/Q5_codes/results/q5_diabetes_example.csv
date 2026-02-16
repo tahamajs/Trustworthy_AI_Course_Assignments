@@ -1,3 +1,3 @@
 method,example_local_index,instance_row_in_test,valid,cost,intervened_features,action_age,action_insulin,action_blood_glucose,action_blood_pressure
-nearest_counterfactual_scm_off,0,50,True,0.25547493156748635,blood_glucose,0.0,0.0,-0.25547493156748635,0.0
-causal_recourse_scm_on,0,50,True,0.24817375987818988,insulin,0.0,-0.24817375987818988,0.0,0.0
+nearest_counterfactual_scm_off,0,50,True,0.25547493202740434,blood_glucose,-1.1382742536802963e-15,2.1744767901842247e-10,-0.255474931809955,4.905416469796031e-16
+causal_recourse_scm_on,0,50,True,0.24817375910864556,insulin,-8.898896218557062e-16,-0.24817375910864364,-8.784890338857399e-16,1.3799740814825293e-16

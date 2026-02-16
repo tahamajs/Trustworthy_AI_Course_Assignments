@@ -507,12 +507,14 @@ def run_fairness(args: argparse.Namespace, paths: Dict[str, Path]) -> Tuple[Dict
     fairness_metrics["baseline"] = compute_fairness_metrics(Xs_test_base, y_test, pred_test_base, sens_test)
     model_preds["baseline"] = pred_test_base
 
-    # Assignment mitigation (promotion/demotion)
+    # Assignment mitigation (promotion/demotion): CP = men with income >50k, CD = women with income <=50k
     swap_mask = apply_promotion_demotion(
         y_proba=proba_train_base,
         y_pred=pred_train_base,
         sensitive=sens_train,
         k=args.swap_k,
+        y_true=y_train,
+        use_true_labels_for_cohorts=True,
     )
     clf_swap = retrain_with_swapped_labels(X_train, y_train, swap_mask)
     Xs_test_swap = clf_swap._scaler.transform(X_test)
@@ -628,6 +630,8 @@ def run_fairness(args: argparse.Namespace, paths: Dict[str, Path]) -> Tuple[Dict
             y_pred=pred_train_base,
             sensitive=sens_train,
             k=k,
+            y_true=y_train,
+            use_true_labels_for_cohorts=True,
         )
         clf_k = retrain_with_swapped_labels(X_train, y_train, swap_mask_k)
         pred_k = (clf_k.predict_proba(clf_k._scaler.transform(X_test))[:, 1] >= 0.5).astype(int)

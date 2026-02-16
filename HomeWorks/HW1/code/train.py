@@ -11,9 +11,9 @@ from torch.utils.tensorboard import SummaryWriter
 
 from datasets import get_dataloaders
 from models.resnet18_custom import resnet18
-from losses import LabelSmoothingCrossEntropy
+from losses import LabelSmoothingCrossEntropy, CircleLoss
 from attacks import fgsm_attack, pgd_attack
-from utils import set_seed, save_checkpoint
+from utils import set_seed, save_checkpoint, load_checkpoint
 
 
 def save_training_history(save_dir, history):
@@ -71,24 +71,29 @@ def save_training_plot(save_dir, history):
     plt.close(fig)
 
 
-def train_one_epoch(model, loader, optimizer, device, epoch, loss_fn, adv_attack=None, adv_params=None):
+def train_one_epoch(model, loader, optimizer, device, epoch, loss_fn, adv_attack=None, adv_params=None, use_circle_loss=False, ce_for_adv=None):
     model.train()
     running_loss = 0.0
     correct = 0
     total = 0
+    # For adversarial attack we need a loss on logits (CE); circle_loss is on embeddings
+    attack_loss_fn = ce_for_adv if (adv_attack and use_circle_loss) else loss_fn
     pbar = tqdm(loader, desc=f"Train E{epoch}")
     for x, y in pbar:
         x = x.to(device)
         y = y.to(device)
         optimizer.zero_grad()
         if adv_attack is not None and torch.rand(1).item() < adv_params.get('prob', 1.0):
-            # generate adversarial example on the fly
             if adv_attack == 'fgsm':
-                x = fgsm_attack(model, x, y, adv_params['epsilon'], loss_fn=loss_fn, device=device)
+                x = fgsm_attack(model, x, y, adv_params['epsilon'], loss_fn=attack_loss_fn, device=device)
             elif adv_attack == 'pgd':
-                x = pgd_attack(model, x, y, adv_params['epsilon'], adv_params['alpha'], adv_params['iters'], loss_fn=loss_fn, device=device)
-        logits = model(x)
-        loss = loss_fn(logits, y)
+                x = pgd_attack(model, x, y, adv_params['epsilon'], adv_params['alpha'], adv_params['iters'], loss_fn=attack_loss_fn, device=device)
+        if use_circle_loss:
+            logits, feat = model(x, return_features=True)
+            loss = loss_fn(feat, y)
+        else:
+            logits = model(x)
+            loss = loss_fn(logits, y)
         loss.backward()
         optimizer.step()
         running_loss += loss.item() * x.size(0)
@@ -153,6 +158,18 @@ def parse_args():
     parser.add_argument('--save-dir', type=str, default='checkpoints/exp')
     parser.add_argument('--demo', action='store_true')
     parser.add_argument('--seed', type=int, default=42)
+    # Pretrained ImageNet and augmentation
+    parser.add_argument('--pretrained', type=str, default=None, choices=[None, 'imagenet'], help='Use ImageNet-pretrained ResNet18 (imagenet)')
+    parser.add_argument('--freeze-backbone', action='store_true', help='Freeze backbone when using --pretrained imagenet')
+    parser.add_argument('--augment-preset', type=str, default='default', choices=['default', 'digits_safe'])
+    parser.add_argument('--cifar-split', type=float, default=None, help='CIFAR10 train ratio (e.g. 0.2 for 20%% train / 80%% val), stratified')
+    # Fine-tuning: load from checkpoint, train only classifier on small SVHN subset
+    parser.add_argument('--finetune-from', type=str, default=None)
+    parser.add_argument('--finetune-dataset', type=str, default='svhn')
+    parser.add_argument('--finetune-samples', type=int, default=750)
+    parser.add_argument('--freeze-conv', action='store_true', help='Freeze conv layers (only train classifier); use with --finetune-from')
+    # Loss: ce (default), circle
+    parser.add_argument('--loss', type=str, default='ce', choices=['ce', 'circle'])
     args = parser.parse_args()
     return args
 
@@ -169,22 +186,69 @@ def main():
     set_seed(args.seed)
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     os.makedirs(args.save_dir, exist_ok=True)
-    train_loader, test_loader, num_classes, in_channels = get_dataloaders(args.dataset, batch_size=args.batch_size, augment=True, demo=args.demo)
 
-    model = resnet18(num_classes=num_classes, in_channels=in_channels, use_bn=args.use_bn)
+    # Dataset for fine-tuning: cap samples and use finetune-dataset
+    use_finetune = args.finetune_from is not None
+    train_dataset = args.finetune_dataset if use_finetune else args.dataset
+    max_train_samples = args.finetune_samples if use_finetune else None
+    cifar_ratio = args.cifar_split if train_dataset.lower() == 'cifar10' else None
+    if use_finetune:
+        args.epochs = min(args.epochs, 20)  # typical fine-tuning length
+
+    train_loader, test_loader, num_classes, in_channels = get_dataloaders(
+        train_dataset,
+        batch_size=args.batch_size,
+        augment=True,
+        demo=args.demo,
+        augmentation_preset=args.augment_preset,
+        cifar10_train_ratio=cifar_ratio,
+        max_train_samples=max_train_samples,
+        seed=args.seed,
+    )
+
+    use_pretrained = args.pretrained == 'imagenet'
+    if use_pretrained:
+        from models.resnet18_pretrained import resnet18_imagenet
+        model = resnet18_imagenet(num_classes=num_classes, in_channels=in_channels, freeze_backbone=args.freeze_backbone, pretrained=True)
+    else:
+        model = resnet18(num_classes=num_classes, in_channels=in_channels, use_bn=args.use_bn)
+
+    # Load checkpoint for fine-tuning
+    if use_finetune:
+        ck = load_checkpoint(args.finetune_from, device)
+        model.load_state_dict(ck['state_dict'], strict=False)
+        if args.freeze_conv:
+            for name, param in model.named_parameters():
+                if use_pretrained:
+                    if 'backbone.fc' not in name:
+                        param.requires_grad = False
+                else:
+                    if 'fc' not in name:
+                        param.requires_grad = False
+            trainable = sum(p.numel() for p in model.parameters() if p.requires_grad)
+            print(f'[Finetune] Frozen conv; training {trainable} parameters')
+
     model = model.to(device)
 
-    if args.label_smoothing > 0:
+    if args.loss == 'circle':
+        loss_fn = CircleLoss(m=0.25, gamma=256)
+        ce_for_adv = nn.CrossEntropyLoss()
+    elif args.label_smoothing > 0:
         loss_fn = LabelSmoothingCrossEntropy(args.label_smoothing)
+        ce_for_adv = None
     else:
         loss_fn = nn.CrossEntropyLoss()
+        ce_for_adv = None
 
+    # Validation uses CE on logits for scalar reporting (same for circle training)
+    eval_loss_fn = nn.CrossEntropyLoss()
+
+    params = [p for p in model.parameters() if p.requires_grad]
     if args.optimizer == 'sgd':
-        optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay)
+        optimizer = optim.SGD(params, lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay)
     else:
-        optimizer = optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
+        optimizer = optim.Adam(params, lr=args.lr, weight_decay=args.weight_decay)
 
-    # lr schedule: simple step-down at 50% and 75%
     scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=[int(args.epochs*0.5), int(args.epochs*0.75)], gamma=0.1)
 
     writer = SummaryWriter(log_dir=args.save_dir)
@@ -195,9 +259,16 @@ def main():
 
     adv_params = {'epsilon': epsilon, 'alpha': alpha, 'iters': args.iters, 'prob': 0.5}
 
-    for epoch in range(1, args.epochs+1):
-        train_loss, train_acc = train_one_epoch(model, train_loader, optimizer, device, epoch, loss_fn, adv_attack=(args.attack if args.adv_train else None), adv_params=adv_params)
-        val_loss, val_acc = evaluate(model, test_loader, device, loss_fn)
+    for epoch in range(1, args.epochs + 1):
+        train_loss, train_acc = train_one_epoch(
+            model, train_loader, optimizer, device, epoch, loss_fn,
+            adv_attack=(args.attack if args.adv_train else None),
+            adv_params=adv_params,
+            use_circle_loss=(args.loss == 'circle'),
+            ce_for_adv=ce_for_adv,
+        )
+        val_loss, val_acc = evaluate(model, test_loader, device, eval_loss_fn)
+
         scheduler.step()
 
         writer.add_scalar('train/loss', train_loss, epoch)
@@ -212,7 +283,16 @@ def main():
 
         is_best = val_acc > best_acc
         best_acc = max(val_acc, best_acc)
-        save_checkpoint({'epoch': epoch, 'state_dict': model.state_dict(), 'optimizer': optimizer.state_dict(), 'best_acc': best_acc}, is_best, args.save_dir)
+        ckpt = {
+            'epoch': epoch,
+            'state_dict': model.state_dict(),
+            'optimizer': optimizer.state_dict(),
+            'best_acc': best_acc,
+            'num_classes': num_classes,
+            'in_channels': in_channels,
+            'pretrained': use_pretrained,
+        }
+        save_checkpoint(ckpt, is_best, args.save_dir)
 
         print(f"Epoch {epoch}  Train Loss {train_loss:.4f}  Train Acc {train_acc:.2f}%  Val Loss {val_loss:.4f}  Val Acc {val_acc:.2f}%  Best {best_acc:.2f}%")
 

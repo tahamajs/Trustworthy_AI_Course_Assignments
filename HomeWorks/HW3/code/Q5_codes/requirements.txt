@@ -8,3 +8,4 @@ scipy
 cvxpy
 scikit-learn
 tensorboard
+networkx
