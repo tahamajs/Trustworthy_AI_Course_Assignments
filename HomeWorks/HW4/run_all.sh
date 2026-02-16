@@ -14,7 +14,13 @@ cd ..
 echo ""
 echo "=== Step 2: Generate report figures and macros ==="
 cd code
-python generate_report_figs.py --student-id 810101504 --security-profile fast-smoke
+PYTHON=python3
+if [[ -f .venv/bin/python ]]; then
+  PYTHON=".venv/bin/python"
+elif command -v python &>/dev/null; then
+  PYTHON=python
+fi
+$PYTHON generate_report_figs.py --student-id 810101504 --security-profile fast-smoke
 cd ..
 
 echo ""

@@ -32,7 +32,7 @@ From `HomeWorks/HW4/`, run the full pipeline to validate tests, generate figures
 ./run_all.sh
 ```
 
-This script: (1) runs `pytest tests`, (2) runs `generate_report_figs.py` with your student ID, (3) builds the report with `make pdf`, and (4) validates that figures and PDF exist. If security assets (poisoned models, MNIST) are missing, Q2 and Q3 artifacts are still generated and the report builds with Q1 placeholders.
+This script: (1) runs `pytest tests`, (2) runs `generate_report_figs.py` with your student ID, (3) builds the report with `make pdf`, and (4) validates that figures and PDF exist. If security assets (poisoned models, MNIST) are missing, Q2 and Q3 artifacts are still generated and the report builds with Q1 placeholders. Ensure dependencies are installed (`pip install -r code/requirements.txt`) and use a Python environment that has them (e.g. activate `code/.venv` if you created it).
 
 ---
 
