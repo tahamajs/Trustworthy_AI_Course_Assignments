@@ -13,6 +13,11 @@ How to use
 4. Insert code snippets with `\begin{lstlisting}...\end{lstlisting}` or include a whole file with `\lstinputlisting{path/to/file.py}`.
 5. Build: `make pdf` (requires `pdflatex` + `bibtex` or `latexmk`)
 
+Build report
+- **Build PDF only** (requires figures already generated): `make pdf` from `report/`.
+- **Full build** (generates figures then PDF): `./build_report.sh` from HW3 root. This runs `generate_report_artifacts.py` then `make pdf`.
+- **Prerequisites**: Python venv with `torch`, `pandas`, `numpy`, `matplotlib`, `seaborn`, `scikit-learn`; models and `.npy` results in `code/q5_codes/`.
+
 Notes & tips
 - For syntax-highlighting using Pygments, consider replacing `listings` with `minted` (requires `-shell-escape`).
 - If you prefer XeLaTeX for special fonts: change documentclass options and compile with `xelatex`.

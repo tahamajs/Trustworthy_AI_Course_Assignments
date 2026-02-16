@@ -282,9 +282,9 @@ Reproducibility and artifact completeness & Run commands, aggregate/per-run/inst
 \subsection{Environment and Reproducibility}
 All runs use:
 \begin{itemize}
-  \item Python environment: \texttt{/Users/tahamajs/Documents/uni/venv/bin/activate}
-  \item Code root: \texttt{HomeWorks/HW3/code/q5\_codes}
-  \item Report root: \texttt{HomeWorks/HW3/report}
+  \item Python: activate your virtualenv (e.g., \texttt{source venv/bin/activate})
+  \item Code root: \texttt{HW3/code/q5\_codes}
+  \item Report root: \texttt{HW3/report}
 \end{itemize}
 
 \subsection{Evaluated Configurations}
@@ -586,14 +586,12 @@ For differentiable recourse, the optimized objective per instance is
 and under robust mode the loss is evaluated on adversarially perturbed counterfactuals within an $\epsilon$-ball approximation. Because $x^{cf}(\delta)$ passes through nonlinear classifier and possibly SCM transformations, $\mathcal{L}$ is generally non-convex and non-smooth (L1 term). Consequently, first-order optimization guarantees stationarity of local points rather than global optimality. This theoretical fact explains empirical behavior where validity can improve while mean cost worsens: optimization may reach feasible but non-minimal local basins. Practical mitigation includes multi-start optimization, adaptive step-size schedules, and reporting dispersion statistics (already included via distribution plots and appendix CSV traces).
 
 \section{Reproducibility Commands}
-\begin{lstlisting}[caption={Exact commands used for the final report build}]
-cd /Users/tahamajs/Documents/uni/truthlyAI/HomeWorks/HW3/code/q5_codes
-source /Users/tahamajs/Documents/uni/venv/bin/activate
-
-python main.py --seed 0
+\begin{lstlisting}[caption={Commands for report build (run from HW3 root)}]
+cd <HW3_ROOT>/code/q5_codes
+source <venv_path>/bin/activate  # or: pip install -r requirements.txt
 python generate_report_artifacts.py
 
-cd /Users/tahamajs/Documents/uni/truthlyAI/HomeWorks/HW3/report
+cd <HW3_ROOT>/report
 make pdf
 \end{lstlisting}
 

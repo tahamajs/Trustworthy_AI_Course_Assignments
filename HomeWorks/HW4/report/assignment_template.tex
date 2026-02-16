@@ -24,6 +24,14 @@
     \newcommand{\QOneAsrBefore}{-1}
     \newcommand{\QOneCleanAccAfter}{-1}
     \newcommand{\QOneAsrAfter}{-1}
+    \newcommand{\QTwoBAvg}{-1}
+    \newcommand{\QTwoBTotal}{-1}
+    \newcommand{\QTwoNoisyAvg}{-1}
+    \newcommand{\QTwoNoisyTotal}{-1}
+    \newcommand{\QTwoBAvgSplit}{-1}
+    \newcommand{\QTwoBTotalSplit}{-1}
+    \newcommand{\QTwoNoisyAvgSplit}{-1}
+    \newcommand{\QTwoNoisyTotalSplit}{-1}
     \newcommand{\QTwoBBase}{-1}
     \newcommand{\QTwoBSequential}{-1}
     \newcommand{\QTwoBUnbounded}{-1}
@@ -340,6 +348,24 @@ Figure~\ref{fig:security_before_after} shows a strong post-unlearning ASR reduct
     \label{fig:security_unlearning_sweep}
 \end{figure}
 Figure~\ref{fig:security_unlearning_sweep} quantifies sensitivity of mitigation strength to the retraining exposure ratio. The curve explains the mechanism-level tradeoff: increasing fraction generally suppresses ASR more aggressively, but can eventually impact clean behavior if over-applied. In this run, the best ASR point occurs around fraction \QOneBestFrac{} with ASR \QOneBestFracASR{} and clean accuracy \QOneBestFracAcc{}, providing an interpretable operating point rather than a single hard-coded choice.
+
+\subsection{Q2 Part 1: Income Queries (Laplace Mechanism)}
+For average income (sensitivity 5000) and total income (sensitivity 50000) with $\epsilon=0.1$, the Laplace scale is $b=\Delta f/\epsilon$. With given noise samples (2000 for avg, 5000 for total), the privacy-preserving reported values are shown in Table~\ref{tab:q2_part1}. Under composition with $\varepsilon_1=\varepsilon_2=0.05$, the per-query scale doubles and the reported values change accordingly.
+\begin{table}[!t]
+\centering
+\caption{Q2 Part 1: Income query scale $b$ and privacy-preserving values}
+\label{tab:q2_part1}
+\begin{tabular}{lcc}
+\toprule
+Quantity & Avg income & Total income \\
+\midrule
+Scale $b$ ($\varepsilon=0.1$) & \QTwoBAvg{} & \QTwoBTotal{} \\
+Privacy-preserving value & \QTwoNoisyAvg{} & \QTwoNoisyTotal{} \\
+Scale $b$ (split $\varepsilon_1=\varepsilon_2=0.05$) & \QTwoBAvgSplit{} & \QTwoBTotalSplit{} \\
+Reported value (split) & \QTwoNoisyAvgSplit{} & \QTwoNoisyTotalSplit{} \\
+\bottomrule
+\end{tabular}
+\end{table}
 
 \subsection{Privacy Scales, Point Probabilities, and Tail Curves}
 \begin{figure}[!t]

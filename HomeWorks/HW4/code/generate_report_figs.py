@@ -15,6 +15,7 @@ from torch.utils.data import DataLoader, Subset
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+from matplotlib.patches import Patch
 
 from fairness import (
     apply_group_thresholds,
@@ -214,8 +215,8 @@ def run_security(
     if expected_label is not None:
         ax_scale.legend(
             handles=[
-                plt.Rectangle((0, 0), 1, 1, color="#e15759", label=f"Detected={attacked_label}"),
-                plt.Rectangle((0, 0), 1, 1, color="#f28e2c", label=f"Expected={expected_label}"),
+                Patch(facecolor="#e15759", label=f"Detected={attacked_label}"),
+                Patch(facecolor="#f28e2c", label=f"Expected={expected_label}"),
             ],
             loc="upper right",
             fontsize=8,
@@ -705,6 +706,14 @@ def write_results(paths: Dict[str, Path], payload: Dict) -> Tuple[str, str]:
         "\\newcommand{\\QOneAsrBefore}{" + f"{float(sec.get('asr_before', -1.0)):.4f}" + "}",
         "\\newcommand{\\QOneCleanAccAfter}{" + f"{float(sec.get('clean_accuracy_after', -1.0)):.4f}" + "}",
         "\\newcommand{\\QOneAsrAfter}{" + f"{float(sec.get('asr_after', -1.0)):.4f}" + "}",
+        "\\newcommand{\\QTwoBAvg}{" + f"{float(prv.get('income', {}).get('b_avg', -1.0)):.4f}" + "}",
+        "\\newcommand{\\QTwoBTotal}{" + f"{float(prv.get('income', {}).get('b_total', -1.0)):.4f}" + "}",
+        "\\newcommand{\\QTwoNoisyAvg}{" + f"{float(prv.get('income', {}).get('noisy_avg', -1.0)):.4f}" + "}",
+        "\\newcommand{\\QTwoNoisyTotal}{" + f"{float(prv.get('income', {}).get('noisy_total', -1.0)):.4f}" + "}",
+        "\\newcommand{\\QTwoBAvgSplit}{" + f"{float(prv.get('income', {}).get('b_avg_split', -1.0)):.4f}" + "}",
+        "\\newcommand{\\QTwoBTotalSplit}{" + f"{float(prv.get('income', {}).get('b_total_split', -1.0)):.4f}" + "}",
+        "\\newcommand{\\QTwoNoisyAvgSplit}{" + f"{float(prv.get('income', {}).get('noisy_avg_split', -1.0)):.4f}" + "}",
+        "\\newcommand{\\QTwoNoisyTotalSplit}{" + f"{float(prv.get('income', {}).get('noisy_total_split', -1.0)):.4f}" + "}",
         "\\newcommand{\\QTwoBBase}{" + f"{float(prv.get('counting', {}).get('b_base', -1.0)):.4f}" + "}",
         "\\newcommand{\\QTwoBSequential}{" + f"{float(prv.get('counting', {}).get('b_sequential', -1.0)):.4f}" + "}",
         "\\newcommand{\\QTwoBUnbounded}{" + f"{float(prv.get('counting', {}).get('b_unbounded', -1.0)):.4f}" + "}",
@@ -784,10 +793,11 @@ def main() -> None:
         print(f"Saved {key}: {fig_path}")
 
     if security_error is not None:
-        raise SystemExit(
-            "Security pipeline failed. " + security_error + "\n"
-            "Fairness/privacy artifacts were generated. "
-            "Provide local MNIST files or allow download and rerun."
+        print(
+            "[WARNING] Security pipeline failed:", security_error,
+            "\nFairness and privacy artifacts were generated. Security figures will show placeholders.",
+            "\nTo fix: place poisened_models.rar in code/ (or extract poisened_model_0.pth ... poisened_model_9.pth into model_weights/poisened_models/) and ensure MNIST is available.",
+            sep="\n",
         )
 
 

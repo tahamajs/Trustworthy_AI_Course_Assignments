@@ -712,7 +712,8 @@ All generated figures are explained individually in dedicated one-paragraph inte
 \appendices
 \section{Reproduction Commands}
 \begin{lstlisting}[language=bash,caption={Commands used to regenerate plots and PDF}]
-source /Users/tahamajs/Documents/uni/venv/bin/activate
+# Activate your project venv (e.g. source .venv/bin/activate from code/)
+cd HomeWorks/HW2
 MPLCONFIGDIR=/tmp/mpl python code/generate_report_plots.py
 cd report
 make pdf

@@ -566,6 +566,38 @@ def make_figures(
     fig.savefig(REPORT_FIG_DIR / "classifier_metrics.png", dpi=220)
     plt.close(fig)
 
+    # Per-instance recourse costs (representative config: lin-ERM, eps=0.1, seed=0; fallback to first available).
+    if not instance_costs.empty:
+        rec = instance_costs[
+            (instance_costs["model"] == "lin")
+            & (instance_costs["trainer"] == "ERM")
+            & (np.isclose(instance_costs["epsilon"], 0.1))
+            & (instance_costs["seed"] == 0)
+        ].sort_values("instance_id")
+        if rec.empty:
+            first_row = instance_costs.iloc[0]
+            rec = instance_costs[
+                (instance_costs["model"] == first_row["model"])
+                & (instance_costs["trainer"] == first_row["trainer"])
+                & (np.isclose(instance_costs["epsilon"], first_row["epsilon"]))
+                & (instance_costs["seed"] == first_row["seed"])
+            ].sort_values("instance_id")
+        if not rec.empty:
+            fig, ax = plt.subplots(figsize=(7.2, 4.2))
+            colors = np.where(rec["valid"].astype(bool), "#2A9D8F", "#E76F51")
+            ax.bar(rec["instance_id"], rec["cost"], color=colors, edgecolor="#1f2933")
+            if rec["valid"].any():
+                mean_cost = float(rec.loc[rec["valid"], "cost"].mean())
+                ax.axhline(mean_cost, linestyle="--", linewidth=1.5, color="#264653", label=f"Mean valid cost: {mean_cost:.3f}")
+                ax.legend(frameon=False)
+            ax.set_title("Recourse Cost per Explained Instance (health, lin, ERM)")
+            ax.set_xlabel("Explained Instance Index")
+            ax.set_ylabel("L1 Recourse Cost")
+            ax.grid(axis="y", alpha=0.25)
+            fig.tight_layout()
+            fig.savefig(REPORT_FIG_DIR / "recourse_costs.png", dpi=220)
+            plt.close(fig)
+
     fig, ax = plt.subplots(figsize=(7.8, 4.2))
     melt = nearest_vs_causal.melt(id_vars=["method"], value_vars=["valid_rate", "valid_cost"], var_name="metric", value_name="value")
     sns.barplot(data=melt, x="method", y="value", hue="metric", ax=ax)

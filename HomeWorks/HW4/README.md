@@ -24,6 +24,18 @@ pytest tests
 
 ---
 
+## Run-all validation (tests + figures + report)
+
+From `HomeWorks/HW4/`, run the full pipeline to validate tests, generate figures/macros, and build the report PDF:
+
+```bash
+./run_all.sh
+```
+
+This script: (1) runs `pytest tests`, (2) runs `generate_report_figs.py` with your student ID, (3) builds the report with `make pdf`, and (4) validates that figures and PDF exist. If security assets (poisoned models, MNIST) are missing, Q2 and Q3 artifacts are still generated and the report builds with Q1 placeholders.
+
+---
+
 ## Q1: Poisoned model setup (Security)
 
 The security pipeline needs the attacked MNIST checkpoints. The **model index is chosen from the last digit of your student ID** (e.g. student ID `810101504` → model index **4** → `poisened_model_4.pth`).
